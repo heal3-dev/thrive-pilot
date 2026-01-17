@@ -10,6 +10,7 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // Step 1: Get auth token (Supabase access token)
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.slice("Bearer ".length)
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing or invalid auth token" }, { status: 401 });
   }
 
+  // Step 2: Validate request body
   let payload: z.infer<typeof requestSchema>;
   try {
     payload = requestSchema.parse(await request.json());
@@ -26,6 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
+  // Step 3: Verify required environment variables
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -43,6 +46,7 @@ export async function POST(request: Request) {
     );
   }
 
+  // Step 4: Create Supabase client scoped to the caller (RLS enforced via Bearer token)
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: {
       headers: {
@@ -51,11 +55,25 @@ export async function POST(request: Request) {
     },
   });
 
+  // Step 5: Get authenticated user (validates token)
   const { data: userData, error: userError } = await supabase.auth.getUser(token);
   if (userError || !userData?.user) {
     return NextResponse.json({ error: "Invalid auth token" }, { status: 401 });
   }
 
+  // Step 6: ⭐ CRITICAL: Look up mentor primary key (mentors.id), not auth.users.id.
+  // Our RLS policies for sms_messages expect sms_messages.mentor_id = mentors.id.
+  const { data: mentor, error: mentorError } = await supabase
+    .from("mentors")
+    .select("id")
+    .eq("user_id", userData.user.id)
+    .single();
+
+  if (mentorError || !mentor?.id) {
+    return NextResponse.json({ error: "Mentor record not found" }, { status: 404 });
+  }
+
+  // Step 7: Fetch participant phone number (RLS should ensure mentor is assigned)
   const { data: participant, error: participantError } = await supabase
     .from("participants")
     .select("id, phone_number")
@@ -66,6 +84,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Participant not found" }, { status: 404 });
   }
 
+  // Step 8: Send SMS via Twilio, then persist message record
   try {
     const message = await twilioClient.messages.create({
       to: participant.phone_number,
@@ -75,7 +94,7 @@ export async function POST(request: Request) {
 
     const { error: insertError } = await supabase.from("sms_messages").insert({
       participant_id: payload.participantId,
-      mentor_id: userData.user.id,
+      mentor_id: mentor.id,
       direction: "outbound",
       message_body: payload.messageBody,
       twilio_sid: message.sid,
