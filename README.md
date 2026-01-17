@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Thrive Pilot
+
+Next.js app with Supabase + Twilio integration.
 
 ## Getting Started
 
-First, run the development server:
+- **Install deps**
+
+```bash
+npm install
+```
+
+- **Run the dev server**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` with:
 
-## Learn More
+- **Supabase**
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- **Twilio**
+  - `TWILIO_ACCOUNT_SID`
+  - `TWILIO_AUTH_TOKEN`
+  - `TWILIO_PHONE_NUMBER`
 
-To learn more about Next.js, take a look at the following resources:
+Note: `src/lib/twilio.ts` requires `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` at runtime.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### `POST /api/sms/send`
 
-## Deploy on Vercel
+Send an outbound SMS message to an assigned participant.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Auth**: requires `Authorization: Bearer <SUPABASE_ACCESS_TOKEN>`
+- **Body**:
+  - `participantId` (string, required)
+  - `messageBody` (string, required, max 1600 chars)
+- **Behavior**:
+  - Validates request body
+  - Uses Supabase RLS to ensure the mentor can access the participant + insert an outbound message
+  - Sends SMS via Twilio
+  - Persists record to `sms_messages` with:
+    - `participant_id`
+    - `mentor_id` (mentor primary key from `mentors.id`)
+    - `direction = 'outbound'`
+    - `message_body`
+    - `twilio_sid`
+    - `twilio_status`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+#### Example `curl`
+
+```bash
+curl -X POST "http://localhost:3000/api/sms/send" \
+  -H "Authorization: Bearer YOUR_SUPABASE_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "participantId": "YOUR_PARTICIPANT_UUID",
+    "messageBody": "Test message"
+  }'
+```
+
+#### Success Response
+
+```json
+{ "messageId": "SMxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "status": "queued" }
+```
+
+#### Error Responses
+
+- **401**: missing/invalid token
+- **400**: invalid request body
+- **404**: mentor record not found OR participant not found / not accessible (RLS)
+- **500**: failed to persist `sms_messages` record
+- **502**: Twilio API request failed
+
+## Notes
+
+- **Assignment enforcement**: the route relies on Supabase RLS policies (participants + sms_messages) to ensure mentors can only message assigned participants.
+
