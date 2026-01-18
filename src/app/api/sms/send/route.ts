@@ -96,6 +96,7 @@ export async function POST(request: Request) {
       participant_id: payload.participantId,
       mentor_id: mentor.id,
       direction: "outbound",
+      message_type: "mentor_message",
       message_body: payload.messageBody,
       phone_number: participant.phone_number,
       twilio_sid: message.sid,
