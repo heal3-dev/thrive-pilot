@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     .single();
 
   if (participantError || !participant?.phone_number) {
-    return NextResponse.json({ error: "Participant not found" }, { status: 404 });
+    return NextResponse.json({ error: "Participant not found", details: participantError  }, { status: 404 });
   }
 
   // Step 8: Send SMS via Twilio, then persist message record
@@ -97,10 +97,10 @@ export async function POST(request: Request) {
       mentor_id: mentor.id,
       direction: "outbound",
       message_body: payload.messageBody,
+      phone_number: participant.phone_number,
       twilio_sid: message.sid,
       twilio_status: message.status,
     });
-
     if (insertError) {
       return NextResponse.json(
         { error: "Failed to store message record" },
