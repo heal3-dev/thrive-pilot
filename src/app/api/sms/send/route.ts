@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
 
 import { twilioClient, TWILIO_PHONE_NUMBER } from "@/lib/twilio";
+import { createSupabaseClientWithAuth } from "@/lib/supabase";
 
 const requestSchema = z.object({
   participantId: z.string().min(1),
@@ -29,16 +29,6 @@ export async function POST(request: Request) {
   }
 
   // Step 3: Verify required environment variables
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.json(
-      { error: "Supabase environment variables are missing" },
-      { status: 500 }
-    );
-  }
-
   if (!TWILIO_PHONE_NUMBER) {
     return NextResponse.json(
       { error: "TWILIO_PHONE_NUMBER is missing" },
@@ -47,13 +37,7 @@ export async function POST(request: Request) {
   }
 
   // Step 4: Create Supabase client scoped to the caller (RLS enforced via Bearer token)
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  });
+  const supabase = createSupabaseClientWithAuth(token);
 
   // Step 5: Get authenticated user (validates token)
   const { data: userData, error: userError } = await supabase.auth.getUser(token);
@@ -113,7 +97,7 @@ export async function POST(request: Request) {
       messageId: message.sid,
       status: message.status,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Twilio API request failed" },
       { status: 502 }

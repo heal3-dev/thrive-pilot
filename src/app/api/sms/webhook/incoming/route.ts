@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 
 import { verifyTwilioSignature } from "@/lib/twilio";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 function buildTwilioSignatureUrl(request: Request): string {
   // Twilio signs the *public* URL it requests (e.g. your ngrok URL).
@@ -83,17 +83,7 @@ export async function POST(request: Request) {
   const messageType = classifyInboundMessageType(body);
 
   // Step 4: Create Supabase service-role client (Twilio webhooks are unauthenticated)
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json(
-      { error: "Supabase service role environment variables are missing" },
-      { status: 500 }
-    );
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = getSupabaseAdmin();
 
   // Step 5: Find participant by phone number
   const { data: participant, error: participantError } = await supabase

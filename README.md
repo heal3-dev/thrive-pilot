@@ -112,6 +112,27 @@ Inbound messages are tagged as:
 - `user_command` for common keywords (e.g. `STOP`, `HELP`, `START`, `TEST`)
 - `user_message` otherwise
 
+#### ⚠️ Twilio compliance keyword quirk (HELP/INFO/STOP/START)
+
+Twilio may treat some inbound keywords as **compliance commands** and handle them before they reach your app (this can vary based on Messaging Service / number settings):
+
+| Type | Keywords | Auto-Reply |
+|------|----------|------------|
+| Opt-Out | `STOP`, `STOPALL`, `UNSUBSCRIBE`, `CANCEL`, `END`, `QUIT`, `OPTOUT`, `REVOKE` | "You have successfully been unsubscribed..." |
+| Opt-In | `START`, `YES`, `UNSTOP` | "You have successfully been re-subscribed..." |
+| Help | `HELP`, `INFO` | "Reply STOP to unsubscribe..." |
+
+**What this means:**
+- The inbound webhook (`/api/sms/webhook/incoming`) may **not receive** the participant command and/or the auto-reply.
+- The status webhook (`/api/sms/webhook/status`) may still fire for Twilio’s auto-reply message.
+- During local testing, `HELP`/`INFO` can appear to “skip” the inbound webhook even though an auto-reply is sent.
+
+**How we handle it:**
+The status webhook (`/api/sms/webhook/status`) detects unknown `MessageSid`s from auto-replies and fetches the message details from Twilio to store them as `system_auto_reply`. This helps preserve conversation history even when the inbound webhook doesn’t receive the auto-reply.
+
+**If you need to capture opt-out keywords:**
+You can disable Advanced Opt-Out in Twilio Console → Messaging → Services → your service → Opt-Out Management, then handle keywords manually in your incoming webhook. However, this makes you responsible for TCPA/carrier compliance.
+
 ### `POST /api/sms/webhook/status`
 
 Twilio status callback webhook to update delivery state for outbound messages in `sms_messages`.
