@@ -1,0 +1,29 @@
+"use client";
+
+import { useDashboard } from "./layout";
+import { MentorInbox } from "@/components/MentorInbox";
+import { AdminPanel } from "@/components/AdminPanel";
+
+export default function DashboardPage() {
+  const { mentor } = useDashboard();
+  const isAdmin = mentor.role === "admin";
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Page Header */}
+      <div className="mb-8">
+        <h1 className="font-clash text-3xl font-bold text-slate-900">
+          {isAdmin ? "Admin Panel" : "Inbox"}
+        </h1>
+        <p className="mt-2 text-base text-slate-500">
+          {isAdmin
+            ? "Manage mentors, participants, and system settings."
+            : "View and respond to your participant conversations."}
+        </p>
+      </div>
+
+      {/* Role-based Content */}
+      {isAdmin ? <AdminPanel /> : <MentorInbox />}
+    </div>
+  );
+}
