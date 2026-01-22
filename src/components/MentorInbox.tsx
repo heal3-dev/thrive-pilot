@@ -25,7 +25,37 @@ export function MentorInbox() {
   const [error, setError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [showTemplates, setShowTemplates] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Message templates
+  const messageTemplates = [
+    {
+      id: "checkin",
+      label: "Weekly Check-in",
+      message: "Hi! Just checking in to see how you're doing this week. How are things going?"
+    },
+    {
+      id: "followup",
+      label: "Follow-up",
+      message: "Following up on our last conversation. Do you have any updates or questions I can help with?"
+    },
+    {
+      id: "encouragement",
+      label: "Encouragement",
+      message: "You're doing great! Keep up the good work. I'm here if you need any support."
+    },
+    {
+      id: "reminder",
+      label: "Appointment Reminder",
+      message: "Just a friendly reminder about our upcoming session. Looking forward to connecting with you!"
+    },
+    {
+      id: "resources",
+      label: "Share Resources",
+      message: "I wanted to share some helpful resources with you. Let me know if you'd like to discuss any of them."
+    }
+  ];
 
   // Scroll to bottom of messages
   const scrollToBottom = useCallback(() => {
@@ -526,34 +556,76 @@ export function MentorInbox() {
                   </p>
                 </div>
               )}
-              <div className="flex gap-3">
-                <Input
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type a message..."
-                  disabled={isSending}
-                  className="flex-1"
-                />
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={!messageInput.trim() || isSending}
-                  className="bg-teal-500 hover:bg-teal-600 text-white px-6"
-                >
-                  {isSending ? (
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              <div className="flex flex-col gap-3">
+                {/* Templates dropdown */}
+                {showTemplates && (
+                  <div className="bg-slate-50 rounded-lg border border-slate-200 p-2 space-y-1">
+                    <div className="flex items-center justify-between px-2 py-1">
+                      <span className="text-xs font-semibold text-slate-600 uppercase">Quick Templates</span>
+                      <button
+                        onClick={() => setShowTemplates(false)}
+                        className="text-slate-400 hover:text-slate-600"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    {messageTemplates.map((template) => (
+                      <button
+                        key={template.id}
+                        onClick={() => {
+                          setMessageInput(template.message);
+                          setShowTemplates(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-md hover:bg-white hover:shadow-sm transition-all text-sm"
+                      >
+                        <div className="font-medium text-slate-700">{template.label}</div>
+                        <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{template.message}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Input and buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowTemplates(!showTemplates)}
+                    className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center"
+                    title="Message templates"
+                  >
+                    <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </button>
+                  <Input
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Type a message..."
+                    disabled={isSending}
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!messageInput.trim() || isSending}
+                    className="bg-teal-500 hover:bg-teal-600 text-white px-6"
+                  >
+                    {isSending ? (
+                      <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
-                      Send
-                    </>
-                  )}
-                </Button>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                        Send
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </>
