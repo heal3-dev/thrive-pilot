@@ -420,10 +420,10 @@ export function MentorInbox() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={`font-semibold text-sm truncate ${unreadCount > 0 ? 'text-slate-900' : 'text-slate-900'}`}>
-                      {formatPhone(participant.phone_number)}
+                      {participant.name || "Unnamed"}
                     </p>
                     <p className="text-xs text-slate-500 truncate">
-                      {participant.email || "No email"}
+                      {formatPhone(participant.phone_number)}
                     </p>
                   </div>
                 </div>
@@ -444,8 +444,8 @@ export function MentorInbox() {
                   {getInitials(selectedParticipant.name, selectedParticipant.email, selectedParticipant.phone_number)}
                 </div>
                 <div>
-                  <p className="font-bold text-slate-900">{formatPhone(selectedParticipant.phone_number)}</p>
-                  <p className="text-xs text-slate-500">{selectedParticipant.email || "Participant"}</p>
+                  <p className="font-bold text-slate-900">{selectedParticipant.name || "Unnamed"}</p>
+                  <p className="text-xs text-slate-500">{formatPhone(selectedParticipant.phone_number)}</p>
                 </div>
               </div>
             </div>
