@@ -17,6 +17,7 @@ export function MentorInbox() {
   const [participants, setParticipants] = useState<ParticipantWithAssignment[]>([]);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantWithAssignment | null>(null);
   const [messages, setMessages] = useState<SMSMessage[]>([]);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -90,6 +91,7 @@ export function MentorInbox() {
   const fetchMessages = useCallback(async (participantId: string) => {
     setIsLoadingMessages(true);
     setSendError(null);
+    setMessagesError(null);
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -112,10 +114,16 @@ export function MentorInbox() {
       }
 
       const { messages: fetchedMessages } = await response.json();
-      setMessages(fetchedMessages || []);
+      const sorted = [...(fetchedMessages || [])].sort((a: SMSMessage, b: SMSMessage) => {
+        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return at - bt;
+      });
+      setMessages(sorted);
     } catch (err) {
       console.error("Fetch messages error:", err);
       setMessages([]);
+      setMessagesError(err instanceof Error ? err.message : "Failed to fetch messages");
     } finally {
       setIsLoadingMessages(false);
     }
@@ -160,6 +168,23 @@ export function MentorInbox() {
               ...prev,
               [newMessage.participant_id]: (prev[newMessage.participant_id] || 0) + 1
             }));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "sms_messages",
+        },
+        (payload) => {
+          // Status callbacks update existing rows (e.g. queued -> delivered)
+          const updatedMessage = payload.new as SMSMessage;
+          const isOurParticipant = participants.some(p => p.id === updatedMessage.participant_id);
+          if (!isOurParticipant) return;
+          if (updatedMessage.participant_id === selectedParticipant?.id) {
+            fetchMessages(selectedParticipant.id);
           }
         }
       )
@@ -376,7 +401,14 @@ export function MentorInbox() {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {isLoadingMessages ? (
+              {messagesError ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center max-w-sm">
+                    <p className="text-slate-900 font-semibold mb-1">Couldn&apos;t load messages</p>
+                    <p className="text-sm text-slate-500">{messagesError}</p>
+                  </div>
+                </div>
+              ) : isLoadingMessages ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center gap-2 text-slate-500">
                     <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -416,6 +448,8 @@ export function MentorInbox() {
                         <p className={`text-xs mt-1 ${
                           message.direction === "outbound" ? "text-teal-100" : "text-slate-400"
                         }`}>
+                          <span className="capitalize">{message.direction}</span>
+                          <span className="mx-2">•</span>
                           {formatTime(message.created_at)}
                           {message.direction === "outbound" && message.twilio_status && (
                             <span className="ml-2 capitalize">• {message.twilio_status}</span>
