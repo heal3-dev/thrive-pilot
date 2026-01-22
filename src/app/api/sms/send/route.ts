@@ -85,6 +85,7 @@ export async function POST(request: Request) {
       phone_number: participant.phone_number,
       twilio_sid: message.sid,
       twilio_status: message.status,
+      created_at: new Date().toISOString(), // Explicit UTC timestamp
     });
     if (insertError) {
       return NextResponse.json(

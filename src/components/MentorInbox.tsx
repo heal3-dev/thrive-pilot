@@ -47,6 +47,7 @@ export function MentorInbox() {
             participant_id,
             participants (
               id,
+              name,
               phone_number,
               email,
               is_active,
@@ -251,17 +252,40 @@ export function MentorInbox() {
     }
   };
 
-  // Format timestamp for display
+  // Format timestamp for display (converts UTC to user's local timezone)
   const formatTime = (timestamp: string | undefined) => {
     if (!timestamp) return "";
-    const date = new Date(timestamp);
+    // If timestamp doesn't end with 'Z', append it to treat as UTC
+    const utcTimestamp = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
+    const date = new Date(utcTimestamp);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) return "";
+    
     const now = new Date();
     const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
 
     if (isToday) {
-      return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      // Today: show time only with AM/PM
+      return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    } else if (isYesterday) {
+      // Yesterday: show "Yesterday" + time
+      return "Yesterday, " + date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    } else {
+      // Older: show full date + time with year if different year
+      const showYear = date.getFullYear() !== now.getFullYear();
+      return date.toLocaleDateString("en-US", { 
+        month: "short", 
+        day: "numeric",
+        ...(showYear ? { year: "numeric" } : {}),
+        hour: "numeric", 
+        minute: "2-digit",
+        hour12: true 
+      });
     }
-    return date.toLocaleDateString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   };
 
   // Format phone number for display
@@ -274,6 +298,33 @@ export function MentorInbox() {
       return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
     }
     return phone;
+  };
+
+  // Get initials from name or fallback to email/phone
+  const getInitials = (name: string | null | undefined, email: string | null | undefined, phone: string) => {
+    if (name) {
+      // Split by spaces
+      const parts = name.trim().split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        // First letter of first and last name
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      } else if (parts.length === 1 && parts[0].length >= 1) {
+        // Just first letter of single name
+        return parts[0][0].toUpperCase();
+      }
+    }
+    // Fallback to email username
+    if (email) {
+      const username = email.split("@")[0];
+      const parts = username.split(/[-_.]+/).filter(Boolean);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      } else if (parts.length === 1 && parts[0].length >= 2) {
+        return parts[0].slice(0, 2).toUpperCase();
+      }
+    }
+    // Fallback to last 2 digits of phone
+    return phone.replace(/\D/g, "").slice(-2);
   };
 
   // Loading state for participants
@@ -359,7 +410,7 @@ export function MentorInbox() {
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${
                       selectedParticipant?.id === participant.id ? "bg-teal-500" : "bg-slate-400"
                     }`}>
-                      {participant.phone_number.slice(-2)}
+                      {getInitials(participant.name, participant.email, participant.phone_number)}
                     </div>
                     {unreadCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
@@ -390,7 +441,7 @@ export function MentorInbox() {
             <div className="p-4 border-b-2 border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold text-sm">
-                  {selectedParticipant.phone_number.slice(-2)}
+                  {getInitials(selectedParticipant.name, selectedParticipant.email, selectedParticipant.phone_number)}
                 </div>
                 <div>
                   <p className="font-bold text-slate-900">{formatPhone(selectedParticipant.phone_number)}</p>

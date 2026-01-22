@@ -7,8 +7,14 @@ export interface Mentor {
   id: string;
   /** Foreign key to auth.users.id */
   user_id: string;
+  /** Mentor's display name */
+  name?: string | null;
+  /** Mentor's email address */
+  email?: string | null;
   /** Role for access control (e.g. 'admin') */
   role?: "admin" | "mentor" | string;
+  /** Whether the mentor is currently active */
+  is_active?: boolean;
   /** Timestamp when the mentor was created */
   created_at?: string;
   /** Timestamp when the mentor was last updated */
@@ -22,6 +28,8 @@ export interface Mentor {
 export interface Participant {
   /** Primary key (UUID) */
   id: string;
+  /** Participant's name */
+  name?: string | null;
   /** Participant's phone number for SMS communication */
   phone_number: string;
   /** Participant's email address */
@@ -116,6 +124,8 @@ export interface MentorAssignment {
   participant_id: string;
   /** Timestamp when the assignment was created */
   assigned_at?: string;
+  /** Timestamp when the assignment was ended (null = active) */
+  unassigned_at?: string | null;
 }
 
 /**

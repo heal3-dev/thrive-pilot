@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useDashboard } from "@/app/dashboard/layout";
 import { Button } from "@/components/ui/button";
+import { MentorManagement } from "@/components/admin/MentorManagement";
+import { AssignmentManagement } from "@/components/admin/AssignmentManagement";
+import { ParticipantManagement } from "./admin/ParticipantManagement";
 
 type AdminTab = "dashboard" | "mentors" | "participants" | "assignments";
 
@@ -175,13 +178,13 @@ export function AdminPanel() {
   return (
     <div className="space-y-6">
       {/* Tab Navigation */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-1.5 overflow-x-auto">
-        <div className="inline-flex gap-1 min-w-max">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-3">
+        <div className="flex gap-3">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            className={`inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-sm font-semibold transition-colors flex-1 ${
               activeTab === tab.id
                 ? "bg-teal-500 text-white shadow-md shadow-teal-500/25"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
@@ -198,9 +201,9 @@ export function AdminPanel() {
       {activeTab === "dashboard" && (
         <DashboardTab stats={stats} isLoading={isLoading} error={error} />
       )}
-      {activeTab === "mentors" && <PlaceholderTab title="Mentors" ticketNumber="15B" />}
-      {activeTab === "participants" && <PlaceholderTab title="Participants" ticketNumber="15C" />}
-      {activeTab === "assignments" && <PlaceholderTab title="Assignments" ticketNumber="15B" />}
+      {activeTab === "mentors" && <MentorManagement />}
+      {activeTab === "participants" && <ParticipantManagement />}
+      {activeTab === "assignments" && <AssignmentManagement />}
     </div>
   );
 }
@@ -339,26 +342,6 @@ function DashboardTab({
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * Placeholder Tab for features coming in other tickets
- */
-function PlaceholderTab({ title, ticketNumber }: { title: string; ticketNumber: string }) {
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 p-12 text-center">
-      <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-        <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-        </svg>
-      </div>
-      <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{title} Management</h2>
-      <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-        This section will be implemented in <span className="font-semibold text-teal-600">TICKET #{ticketNumber}</span>.
-        Check back soon for full {title.toLowerCase()} management features.
-      </p>
     </div>
   );
 }

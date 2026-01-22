@@ -129,6 +129,7 @@ export async function POST(request: Request) {
       phone_number: normalizedFrom,
       twilio_sid: messageSid,
       twilio_status: "received",
+      created_at: new Date().toISOString(), // Explicit UTC timestamp
     },
     {
       onConflict: "twilio_sid,direction",

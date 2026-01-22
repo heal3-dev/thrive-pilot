@@ -104,7 +104,7 @@ Twilio webhook to receive inbound SMS and store them in `sms_messages`.
 
 #### Phone number matching note
 
-The webhook matches `participants.phone_number` against Twilio’s `From`. For best reliability, store phone numbers in **E.164** format (e.g. `+16045551234`). The webhook normalizes the incoming `From` by stripping formatting characters.
+The webhook matches `participants.phone_number` against Twilio’s `From`. For best reliability, store phone numbers in **E.164** format (e.g. `+15551234567`). The webhook normalizes the incoming `From` by stripping formatting characters.
 
 #### `message_type` note
 
