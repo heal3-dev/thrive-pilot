@@ -143,9 +143,10 @@ export async function POST(request: Request) {
 
   if (shouldSendInvite) {
     try {
-      const origin = request.headers.get("origin");
+        // Prefer explicit SITE_URL env var over origin header to avoid localhost in production
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-      const baseUrl = origin || siteUrl || "";
+      const origin = request.headers.get("origin");
+      const baseUrl = siteUrl || origin || "";
       const redirectTo = baseUrl ? `${baseUrl}/invite/consent` : undefined;
 
       const { error: authError } = await admin.auth.admin.inviteUserByEmail(payload.email, {
