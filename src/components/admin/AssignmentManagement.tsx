@@ -240,7 +240,7 @@ export function AssignmentManagement() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
                   filter === f
                     ? "bg-teal-500 text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"

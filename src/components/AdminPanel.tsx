@@ -184,7 +184,7 @@ export function AdminPanel() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-sm font-semibold transition-colors flex-1 ${
+            className={`inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-sm font-semibold transition-colors flex-1 cursor-pointer ${
               activeTab === tab.id
                 ? "bg-teal-500 text-white shadow-md shadow-teal-500/25"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
@@ -199,7 +199,7 @@ export function AdminPanel() {
 
       {/* Tab Content */}
       {activeTab === "dashboard" && (
-        <DashboardTab stats={stats} isLoading={isLoading} error={error} />
+        <DashboardTab stats={stats} isLoading={isLoading} error={error} onNavigate={setActiveTab} />
       )}
       {activeTab === "mentors" && <MentorManagement />}
       {activeTab === "participants" && <ParticipantManagement />}
@@ -215,10 +215,12 @@ function DashboardTab({
   stats,
   isLoading,
   error,
+  onNavigate,
 }: {
   stats: Stats | null;
   isLoading: boolean;
   error: string | null;
+  onNavigate: (tab: AdminTab) => void;
 }) {
   if (error) {
     return (
@@ -309,6 +311,7 @@ function DashboardTab({
               </svg>
             }
             color="teal"
+            onClick={() => onNavigate("mentors")}
           />
           <QuickAction
             title="Add Participant"
@@ -319,6 +322,7 @@ function DashboardTab({
               </svg>
             }
             color="blue"
+            onClick={() => onNavigate("participants")}
           />
           <QuickAction
             title="Create Assignment"
@@ -329,6 +333,7 @@ function DashboardTab({
               </svg>
             }
             color="amber"
+            onClick={() => onNavigate("assignments")}
           />
           <QuickAction
             title="View Messages"
@@ -396,11 +401,13 @@ function QuickAction({
   description,
   icon,
   color,
+  onClick,
 }: {
   title: string;
   description: string;
   icon: React.ReactNode;
   color: "teal" | "blue" | "purple" | "amber";
+  onClick?: () => void;
 }) {
   const colorClasses = {
     teal: "bg-teal-50 text-teal-600 group-hover:bg-teal-100",
@@ -410,7 +417,10 @@ function QuickAction({
   };
 
   return (
-    <button className="group p-4 rounded-xl bg-slate-50 hover:bg-slate-100 text-left transition-colors">
+    <button 
+      onClick={onClick}
+      className="group p-4 rounded-xl bg-slate-50 hover:bg-slate-100 text-left transition-colors cursor-pointer"
+    >
       <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 transition-colors ${colorClasses[color]}`}>
         {icon}
       </div>
