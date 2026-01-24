@@ -33,25 +33,24 @@ export default function ConsentPage() {
         return;
       }
 
-      // Update consent in participants table
-      const { error: updateError } = await supabase
-        .from("participants")
-        .update({
-          consent_given: true,
-          consent_timestamp: new Date().toISOString(),
-        })
-        .eq("email", session.user.email);
+      // Call API to update consent (uses admin client to bypass RLS)
+      const response = await fetch("/api/invite/consent", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
 
-      if (updateError) {
-        console.error("Consent update error:", updateError);
-        // Continue anyway - participant might not exist yet
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "Failed to record consent");
       }
 
       // Redirect to success page
       router.push("/invite/success");
     } catch (err) {
       console.error("Consent error:", err);
-      setError("Something went wrong. Please try again.");
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
