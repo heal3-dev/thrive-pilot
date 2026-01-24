@@ -36,16 +36,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // Prevent duplicate email
-  const { data: existing } = await guard.admin
+  // Prevent duplicate email in mentors table
+  const { data: existingMentor } = await guard.admin
     .from("mentors")
     .select("id")
     .eq("email", payload.email)
     .limit(1)
     .maybeSingle();
 
-  if (existing?.id) {
-    return NextResponse.json({ error: "Mentor email already exists" }, { status: 409 });
+  if (existingMentor?.id) {
+    return NextResponse.json({ error: "This email is already registered as a mentor" }, { status: 409 });
+  }
+
+  // Check if email exists in participants table
+  const { data: existingParticipant } = await guard.admin
+    .from("participants")
+    .select("id")
+    .eq("email", payload.email)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingParticipant?.id) {
+    return NextResponse.json({ error: "This email is already registered as a participant" }, { status: 409 });
   }
 
   const { data, error } = await guard.admin

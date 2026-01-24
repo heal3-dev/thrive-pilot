@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // Check for duplicate email
+  // Check for duplicate email in participants
   if (payload.email) {
     const { data: existingEmail } = await admin
       .from("participants")
@@ -97,7 +97,19 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (existingEmail?.id) {
-      return NextResponse.json({ error: "A participant with this email already exists" }, { status: 409 });
+      return NextResponse.json({ error: "This email is already registered as a participant" }, { status: 409 });
+    }
+
+    // Check if email exists in mentors table
+    const { data: existingMentor } = await admin
+      .from("mentors")
+      .select("id")
+      .eq("email", payload.email)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingMentor?.id) {
+      return NextResponse.json({ error: "This email is already registered as a mentor" }, { status: 409 });
     }
   }
 
