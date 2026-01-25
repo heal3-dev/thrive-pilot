@@ -205,12 +205,8 @@ export function MentorInbox() {
         (payload) => {
           const newMessage = payload.new as SMSMessage;
 
-          // Hide noisy Twilio auto-replies in the UI (e.g. compliance responses like "OK")
-          if (
-            newMessage.message_type === "system_auto_reply" ||
-            (newMessage.message_body?.trim().toUpperCase() === "OK" &&
-              newMessage.message_type !== "mentor_message")
-          ) {
+          // Hide noisy Twilio auto-replies in the UI
+          if (newMessage.message_type === "system_auto_reply") {
             return;
           }
 
@@ -246,11 +242,7 @@ export function MentorInbox() {
           // Status callbacks update existing rows (e.g. queued -> delivered)
           const updatedMessage = payload.new as SMSMessage;
 
-          if (
-            updatedMessage.message_type === "system_auto_reply" ||
-            (updatedMessage.message_body?.trim().toUpperCase() === "OK" &&
-              updatedMessage.message_type !== "mentor_message")
-          ) {
+          if (updatedMessage.message_type === "system_auto_reply") {
             return;
           }
 
@@ -589,14 +581,7 @@ export function MentorInbox() {
                   </div>
                 </div>
               ) : messages
-                  .filter((m) => m.message_type !== "system_auto_reply")
-                  .filter(
-                    (m) =>
-                      !(
-                        m.message_body?.trim().toUpperCase() === "OK" &&
-                        m.message_type !== "mentor_message"
-                      )
-                  ).length === 0 ? (
+                  .filter((m) => m.message_type !== "system_auto_reply").length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-slate-100 flex items-center justify-center">
@@ -612,13 +597,6 @@ export function MentorInbox() {
                 <>
                   {messages
                     .filter((m) => m.message_type !== "system_auto_reply")
-                    .filter(
-                      (m) =>
-                        !(
-                          m.message_body?.trim().toUpperCase() === "OK" &&
-                          m.message_type !== "mentor_message"
-                        )
-                    )
                     .map((message) => (
                     <div
                       key={message.id}
