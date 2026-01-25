@@ -599,9 +599,6 @@ export function MentorInbox() {
                           message.direction === "outbound" ? "text-teal-100" : "text-slate-400"
                         }`}>
                           {formatTime(message.created_at)}
-                          {message.direction === "outbound" && message.twilio_status && (
-                            <span className="ml-1 capitalize">• {message.twilio_status}</span>
-                          )}
                         </p>
                       </div>
                     </div>
