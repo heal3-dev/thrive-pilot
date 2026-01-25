@@ -27,6 +27,7 @@ export function MentorInbox() {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [showTemplates, setShowTemplates] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<string | null>(null);
 
   // Message templates
   const messageTemplates = [
@@ -169,30 +170,53 @@ export function MentorInbox() {
     }
   }, [selectedParticipant, fetchMessages]);
 
-  // Realtime updates for ALL assigned participants (uses RLS)
+  // Realtime updates for assigned participants
+  // NOTE: Requires Realtime enabled on sms_messages table in Supabase Dashboard
   useEffect(() => {
     if (participants.length === 0) return;
 
+    // Get participant IDs for filtering
+    const participantIds = participants.map((p) => p.id);
+    const participantFilter =
+      participantIds.length > 0
+        ? `participant_id=in.(${participantIds.map((id) => `"${id}"`).join(",")})`
+        : undefined;
+
+    // Create subscription with explicit filter for our participants
+    // This is more reliable than relying purely on RLS for realtime
     const channel = supabase
-      .channel('inbox-all-messages')
+      .channel("inbox-messages")
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'sms_messages',
-          // No filter - RLS ensures we only receive messages for our assigned participants
+          ...(participantFilter ? { filter: participantFilter } : {}),
         },
         (payload) => {
           const newMessage = payload.new as SMSMessage;
-          
-          // Check if this message is for one of our participants
-          const isOurParticipant = participants.some(p => p.id === newMessage.participant_id);
-          if (!isOurParticipant) return;
 
-          // If it's for the currently selected participant, refresh the thread
+          // Hide noisy Twilio auto-replies in the UI (e.g. compliance responses like "OK")
+          if (
+            newMessage.message_type === "system_auto_reply" ||
+            (newMessage.message_body?.trim().toUpperCase() === "OK" &&
+              newMessage.message_type !== "mentor_message")
+          ) {
+            return;
+          }
+
+          // If it's for the currently selected participant, append immediately (avoid refetch)
           if (newMessage.participant_id === selectedParticipant?.id) {
-            fetchMessages(selectedParticipant.id);
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMessage.id)) return prev;
+              const next = [...prev, newMessage].sort((a, b) => {
+                const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+                const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+                return at - bt;
+              });
+              return next;
+            });
           } else if (newMessage.direction === 'inbound') {
             // Only count inbound messages as unread
             setUnreadCounts(prev => ({
@@ -208,23 +232,50 @@ export function MentorInbox() {
           event: "UPDATE",
           schema: "public",
           table: "sms_messages",
+          ...(participantFilter ? { filter: participantFilter } : {}),
         },
         (payload) => {
           // Status callbacks update existing rows (e.g. queued -> delivered)
           const updatedMessage = payload.new as SMSMessage;
-          const isOurParticipant = participants.some(p => p.id === updatedMessage.participant_id);
-          if (!isOurParticipant) return;
+
+          if (
+            updatedMessage.message_type === "system_auto_reply" ||
+            (updatedMessage.message_body?.trim().toUpperCase() === "OK" &&
+              updatedMessage.message_type !== "mentor_message")
+          ) {
+            return;
+          }
+
           if (updatedMessage.participant_id === selectedParticipant?.id) {
-            fetchMessages(selectedParticipant.id);
+            setMessages((prev) => {
+              const idx = prev.findIndex((m) => m.id === updatedMessage.id);
+              if (idx === -1) return prev;
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...updatedMessage };
+              return next;
+            });
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        setRealtimeStatus(status);
+      });
 
     return () => {
       void supabase.removeChannel(channel);
     };
   }, [participants, selectedParticipant, fetchMessages]);
+
+  // Poll as a fallback (in case Realtime isn't enabled / deliverable for sms_messages)
+  useEffect(() => {
+    const id = selectedParticipant?.id;
+    if (!id) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void fetchMessages(id);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [selectedParticipant?.id, fetchMessages]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -469,13 +520,25 @@ export function MentorInbox() {
           <>
             {/* Header */}
             <div className="p-4 border-b-2 border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold text-sm">
-                  {getInitials(selectedParticipant.name, selectedParticipant.email, selectedParticipant.phone_number)}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold text-sm">
+                    {getInitials(selectedParticipant.name, selectedParticipant.email, selectedParticipant.phone_number)}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900">{selectedParticipant.name || "Unnamed"}</p>
+                    <p className="text-xs text-slate-500">{formatPhone(selectedParticipant.phone_number)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-slate-900">{selectedParticipant.name || "Unnamed"}</p>
-                  <p className="text-xs text-slate-500">{formatPhone(selectedParticipant.phone_number)}</p>
+
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                      realtimeStatus === "SUBSCRIBED" ? "bg-green-500" : "bg-slate-300"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span>{realtimeStatus === "SUBSCRIBED" ? "Live" : "Syncing"}</span>
                 </div>
               </div>
             </div>
@@ -499,7 +562,15 @@ export function MentorInbox() {
                     <span className="text-sm">Loading messages...</span>
                   </div>
                 </div>
-              ) : messages.length === 0 ? (
+              ) : messages
+                  .filter((m) => m.message_type !== "system_auto_reply")
+                  .filter(
+                    (m) =>
+                      !(
+                        m.message_body?.trim().toUpperCase() === "OK" &&
+                        m.message_type !== "mentor_message"
+                      )
+                  ).length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-slate-100 flex items-center justify-center">
@@ -513,7 +584,16 @@ export function MentorInbox() {
                 </div>
               ) : (
                 <>
-                  {messages.map((message) => (
+                  {messages
+                    .filter((m) => m.message_type !== "system_auto_reply")
+                    .filter(
+                      (m) =>
+                        !(
+                          m.message_body?.trim().toUpperCase() === "OK" &&
+                          m.message_type !== "mentor_message"
+                        )
+                    )
+                    .map((message) => (
                     <div
                       key={message.id}
                       className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
@@ -529,11 +609,9 @@ export function MentorInbox() {
                         <p className={`text-xs mt-1 ${
                           message.direction === "outbound" ? "text-teal-100" : "text-slate-400"
                         }`}>
-                          <span className="capitalize">{message.direction}</span>
-                          <span className="mx-2">•</span>
                           {formatTime(message.created_at)}
                           {message.direction === "outbound" && message.twilio_status && (
-                            <span className="ml-2 capitalize">• {message.twilio_status}</span>
+                            <span className="ml-1 capitalize">• {message.twilio_status}</span>
                           )}
                         </p>
                       </div>
