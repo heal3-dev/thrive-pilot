@@ -479,7 +479,7 @@ export function MentorInbox() {
                     return updated;
                   });
                 }}
-                className={`w-full p-4 text-left border-b border-slate-50 transition-colors ${
+                className={`w-full p-4 text-left border-b border-slate-50 transition-colors cursor-pointer ${
                   selectedParticipant?.id === participant.id
                     ? "bg-teal-50 border-l-4 border-l-teal-500"
                     : "hover:bg-slate-50 border-l-4 border-l-transparent"
@@ -628,7 +628,7 @@ export function MentorInbox() {
                       <span className="text-xs font-semibold text-slate-600 uppercase">Quick Templates</span>
                       <button
                         onClick={() => setShowTemplates(false)}
-                        className="text-slate-400 hover:text-slate-600"
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -642,7 +642,7 @@ export function MentorInbox() {
                           setMessageInput(template.message);
                           setShowTemplates(false);
                         }}
-                        className="w-full text-left px-3 py-2 rounded-md hover:bg-white hover:shadow-sm transition-all text-sm"
+                        className="w-full text-left px-3 py-2 rounded-md hover:bg-white hover:shadow-sm transition-all text-sm cursor-pointer"
                       >
                         <div className="font-medium text-slate-700">{template.label}</div>
                         <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{template.message}</div>
@@ -655,7 +655,7 @@ export function MentorInbox() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowTemplates(!showTemplates)}
-                    className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center"
+                    className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer"
                     title="Message templates"
                   >
                     <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -673,7 +673,7 @@ export function MentorInbox() {
                   <Button
                     onClick={handleSendMessage}
                     disabled={!messageInput.trim() || isSending}
-                    className="bg-teal-500 hover:bg-teal-600 text-white px-6"
+                    className="bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer"
                   >
                     {isSending ? (
                       <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
