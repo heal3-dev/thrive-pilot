@@ -153,6 +153,6 @@ export async function POST(request: Request) {
   }
 
   // Step 8: Return 200 OK to Twilio
-  return new Response("OK", { status: 200 });
+  return new Response("", { status: 200 });
 }
 
