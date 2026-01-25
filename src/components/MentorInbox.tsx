@@ -120,8 +120,9 @@ export function MentorInbox() {
   }, []);
 
   // Fetch messages when participant is selected
-  const fetchMessages = useCallback(async (participantId: string) => {
-    setIsLoadingMessages(true);
+  // silent: true skips the loading state (used for background polling)
+  const fetchMessages = useCallback(async (participantId: string, silent = false) => {
+    if (!silent) setIsLoadingMessages(true);
     setSendError(null);
     setMessagesError(null);
 
@@ -267,12 +268,13 @@ export function MentorInbox() {
   }, [participants, selectedParticipant, fetchMessages]);
 
   // Poll as a fallback (in case Realtime isn't enabled / deliverable for sms_messages)
+  // Uses silent=true to avoid showing loading spinner during background refresh
   useEffect(() => {
     const id = selectedParticipant?.id;
     if (!id) return;
     const interval = setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      void fetchMessages(id);
+      void fetchMessages(id, true); // silent poll - no loading spinner
     }, 15000);
     return () => clearInterval(interval);
   }, [selectedParticipant?.id, fetchMessages]);
