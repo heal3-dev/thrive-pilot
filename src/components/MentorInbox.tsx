@@ -27,7 +27,6 @@ export function MentorInbox() {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [showTemplates, setShowTemplates] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [realtimeStatus, setRealtimeStatus] = useState<string | null>(null);
 
   // Message templates
   const messageTemplates = [
@@ -258,9 +257,7 @@ export function MentorInbox() {
           }
         }
       )
-      .subscribe((status) => {
-        setRealtimeStatus(status);
-      });
+      .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
@@ -531,16 +528,6 @@ export function MentorInbox() {
                     <p className="font-bold text-slate-900">{selectedParticipant.name || "Unnamed"}</p>
                     <p className="text-xs text-slate-500">{formatPhone(selectedParticipant.phone_number)}</p>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full ${
-                      realtimeStatus === "SUBSCRIBED" ? "bg-green-500" : "bg-slate-300"
-                    }`}
-                    aria-hidden="true"
-                  />
-                  <span>{realtimeStatus === "SUBSCRIBED" ? "Live" : "Syncing"}</span>
                 </div>
               </div>
             </div>
