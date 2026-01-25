@@ -28,6 +28,14 @@ export function MentorInbox() {
   const [showTemplates, setShowTemplates] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Extend SMSMessage for optimistic UI
+  type OptimisticSMSMessage = SMSMessage & {
+    status?: "sending" | "error";
+    error?: string;
+  };
+
+  const [optimisticMessages, setOptimisticMessages] = useState<OptimisticSMSMessage[]>([]);
+
   // Message templates
   const messageTemplates = [
     {
@@ -285,16 +293,35 @@ export function MentorInbox() {
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedParticipant || isSending) return;
 
-    setIsSending(true);
+    const currentInput = messageInput.trim();
+    const tempId = `temp-${Date.now()}`;
+    const now = new Date().toISOString();
+
+    // Create optimistic message
+    const optimisticMsg: OptimisticSMSMessage = {
+      id: tempId,
+      participant_id: selectedParticipant.id,
+      mentor_id: "", // Will be filled by server
+      direction: "outbound",
+      message_type: "mentor_message",
+      message_body: currentInput,
+      phone_number: selectedParticipant.phone_number,
+      created_at: now,
+      status: "sending",
+    };
+
+    // Update UI immediately
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setMessageInput("");
     setSendError(null);
+    setIsSending(true);
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
 
       if (!token) {
-        setSendError("Authentication required");
-        return;
+        throw new Error("Authentication required");
       }
 
       const response = await fetch("/api/sms/send", {
@@ -305,7 +332,7 @@ export function MentorInbox() {
         },
         body: JSON.stringify({
           participantId: selectedParticipant.id,
-          messageBody: messageInput.trim(),
+          messageBody: currentInput,
         }),
       });
 
@@ -314,11 +341,21 @@ export function MentorInbox() {
         throw new Error(errorData.error || "Failed to send message");
       }
 
-      // Clear input and refresh messages
-      setMessageInput("");
-      await fetchMessages(selectedParticipant.id);
+      // Success - message will be updated via Realtime or next poll
+      // However, we can replace the temp message with the actual one from response if provided
+      const responseData = await response.json();
+      if (responseData.message) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tempId ? { ...responseData.message, status: undefined } : m))
+        );
+      }
     } catch (err) {
-      setSendError(err instanceof Error ? err.message : "Failed to send message");
+      const errorMsg = err instanceof Error ? err.message : "Failed to send message";
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId ? { ...m, status: "error", error: errorMsg } : m
+        )
+      );
     } finally {
       setIsSending(false);
     }
@@ -588,18 +625,28 @@ export function MentorInbox() {
                       className={`flex ${message.direction === "outbound" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
+                        className={`max-w-[75%] rounded-2xl px-4 py-2.5 relative ${
                           message.direction === "outbound"
-                            ? "bg-teal-500 text-white rounded-br-md"
+                            ? `${(message as any).status === 'error' ? 'bg-slate-300' : 'bg-teal-500'} text-white rounded-br-md`
                             : "bg-slate-100 text-slate-900 rounded-bl-md"
-                        }`}
+                        } ${(message as any).status === 'sending' ? 'opacity-70' : ''}`}
                       >
                         <p className="text-sm whitespace-pre-wrap break-words">{message.message_body}</p>
-                        <p className={`text-xs mt-1 ${
-                          message.direction === "outbound" ? "text-teal-100" : "text-slate-400"
-                        }`}>
-                          {formatTime(message.created_at)}
-                        </p>
+                        <div className="flex items-center justify-between gap-4 mt-1">
+                          <p className={`text-xs ${
+                            message.direction === "outbound" ? "text-teal-100" : "text-slate-400"
+                          } ${(message as any).status === 'error' ? 'text-slate-500' : ''}`}>
+                            {formatTime(message.created_at)}
+                          </p>
+                          {(message as any).status === 'error' && (
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-white/90 px-1.5 py-0.5 rounded shadow-sm">
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                              <span>Something went wrong</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -667,27 +714,17 @@ export function MentorInbox() {
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Type a message..."
-                    disabled={isSending}
                     className="flex-1"
                   />
                   <Button
                     onClick={handleSendMessage}
-                    disabled={!messageInput.trim() || isSending}
+                    disabled={!messageInput.trim()}
                     className="bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer"
                   >
-                    {isSending ? (
-                      <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                        Send
-                      </>
-                    )}
+                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    Send
                   </Button>
                 </div>
               </div>
