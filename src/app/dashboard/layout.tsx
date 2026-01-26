@@ -108,7 +108,9 @@ export default function DashboardLayout({
 
   return (
     <DashboardContext.Provider value={{ user, mentor }}>
-      <div className="min-h-screen bg-slate-50">
+      {/* Lock dashboard to viewport height; prevent page-level scrolling.
+          All scrolling should happen inside panels (e.g. inbox list / message thread). */}
+      <div className="h-[100dvh] bg-slate-50 overflow-hidden">
         {/* Header */}
         <header className="bg-white border-b-2 border-slate-100 sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -185,7 +187,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Main Content */}
-        <main>{children}</main>
+        <main className="h-[calc(100dvh-4rem)] overflow-hidden">{children}</main>
       </div>
     </DashboardContext.Provider>
   );

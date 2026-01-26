@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
 
 import { createSupabaseClientWithAuth, getSupabaseAdmin } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
 export type MentorGuardResult =
-  | { ok: true; mentor: any; user: any; admin: ReturnType<typeof getSupabaseAdmin> }
+  | {
+      ok: true;
+      mentor: {
+        id: string;
+        role: string | null;
+        name: string | null;
+        email: string | null;
+        is_active: boolean | null;
+      };
+      user: User;
+      admin: ReturnType<typeof getSupabaseAdmin>;
+    }
   | { ok: false; response: NextResponse };
 
 export function getBearerToken(request: Request): string | null {

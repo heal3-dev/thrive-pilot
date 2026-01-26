@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { MentorManagement } from "@/components/admin/MentorManagement";
 import { AssignmentManagement } from "@/components/admin/AssignmentManagement";
 import { ParticipantManagement } from "./admin/ParticipantManagement";
+import { MessageViewer } from "./admin/MessageViewer";
 
-type AdminTab = "dashboard" | "mentors" | "participants" | "assignments";
+type AdminTab = "dashboard" | "mentors" | "participants" | "assignments" | "messages";
 
 type Stats = {
   totalMentors: number;
@@ -154,6 +155,15 @@ export function AdminPanel() {
         </svg>
       ),
     },
+    {
+      id: "messages",
+      label: "Messages",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      ),
+    },
   ];
 
   if (!isAdmin) {
@@ -176,7 +186,7 @@ export function AdminPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 flex flex-col gap-6">
       {/* Tab Navigation */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-3">
         <div className="flex gap-3">
@@ -198,12 +208,19 @@ export function AdminPanel() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === "dashboard" && (
-        <DashboardTab stats={stats} isLoading={isLoading} error={error} onNavigate={setActiveTab} />
-      )}
-      {activeTab === "mentors" && <MentorManagement />}
-      {activeTab === "participants" && <ParticipantManagement />}
-      {activeTab === "assignments" && <AssignmentManagement />}
+      <div
+        className={`flex-1 min-h-0 ${
+          activeTab === "messages" ? "overflow-hidden" : "overflow-y-auto"
+        }`}
+      >
+        {activeTab === "dashboard" && (
+          <DashboardTab stats={stats} isLoading={isLoading} error={error} onNavigate={setActiveTab} />
+        )}
+        {activeTab === "mentors" && <MentorManagement />}
+        {activeTab === "participants" && <ParticipantManagement />}
+        {activeTab === "assignments" && <AssignmentManagement />}
+        {activeTab === "messages" && <MessageViewer onBack={() => setActiveTab("dashboard")} />}
+      </div>
     </div>
   );
 }
@@ -344,6 +361,7 @@ function DashboardTab({
               </svg>
             }
             color="purple"
+            onClick={() => onNavigate("messages")}
           />
         </div>
       </div>

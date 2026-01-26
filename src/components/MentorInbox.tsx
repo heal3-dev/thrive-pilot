@@ -10,13 +10,18 @@ type ParticipantWithAssignment = Participant & {
   assignment_id: string;
 };
 
+type OptimisticSMSMessage = SMSMessage & {
+  status?: "sending" | "error";
+  error?: string;
+};
+
 /**
  * MentorInbox - Displays participant conversations for mentors
  */
 export function MentorInbox() {
   const [participants, setParticipants] = useState<ParticipantWithAssignment[]>([]);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantWithAssignment | null>(null);
-  const [messages, setMessages] = useState<SMSMessage[]>([]);
+  const [messages, setMessages] = useState<OptimisticSMSMessage[]>([]);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
@@ -27,14 +32,6 @@ export function MentorInbox() {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [showTemplates, setShowTemplates] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Extend SMSMessage for optimistic UI
-  type OptimisticSMSMessage = SMSMessage & {
-    status?: "sending" | "error";
-    error?: string;
-  };
-
-  const [optimisticMessages, setOptimisticMessages] = useState<OptimisticSMSMessage[]>([]);
 
   // Message templates
   const messageTemplates = [
@@ -100,13 +97,14 @@ export function MentorInbox() {
         }
 
         // Transform data to flat structure
-        const participantList: ParticipantWithAssignment[] = (data || [])
-          .filter((assignment) => assignment.participants)
-          .map((assignment) => ({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ...(assignment.participants as any),
-            assignment_id: assignment.id,
-          }));
+        type AssignmentRow = { id: string; participant_id: string; participants: unknown };
+        const participantList: ParticipantWithAssignment[] = ((data || []) as unknown as AssignmentRow[])
+          .map((assignment) => {
+            if (!assignment.participants || typeof assignment.participants !== "object") return null;
+            const participant = assignment.participants as Participant;
+            return { ...participant, assignment_id: assignment.id };
+          })
+          .filter((p): p is ParticipantWithAssignment => Boolean(p));
 
         setParticipants(participantList);
 
@@ -454,7 +452,7 @@ export function MentorInbox() {
   // Error state
   if (error) {
     return (
-      <div className="bg-white rounded-2xl border-2 border-slate-100 h-[600px] flex items-center justify-center">
+      <div className="bg-white rounded-2xl border-2 border-slate-100 h-full min-h-0 flex items-center justify-center overflow-hidden">
         <div className="text-center">
           <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center">
             <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -471,7 +469,7 @@ export function MentorInbox() {
   // No participants state
   if (participants.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border-2 border-slate-100 h-[600px] flex items-center justify-center">
+      <div className="bg-white rounded-2xl border-2 border-slate-100 h-full min-h-0 flex items-center justify-center overflow-hidden">
         <div className="text-center max-w-sm">
           <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-slate-100 flex items-center justify-center">
             <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -486,14 +484,15 @@ export function MentorInbox() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border-2 border-slate-100 h-[calc(100vh-14rem)] min-h-[520px] max-h-[760px] flex flex-col md:flex-row overflow-hidden">
+    // Fill the available dashboard content height; scroll only inside panels.
+    <div className="bg-white rounded-2xl border-2 border-slate-100 h-full min-h-0 flex flex-col md:flex-row overflow-hidden">
       {/* Sidebar - Participant List */}
-      <div className="w-full md:w-72 md:border-r-2 border-slate-100 flex flex-col shrink-0">
+      <div className="w-full md:w-72 md:border-r-2 border-slate-100 flex flex-col shrink-0 min-h-0">
         <div className="p-4 border-b-2 border-slate-100">
           <h2 className="font-bold text-slate-900">Participants</h2>
           <p className="text-xs text-slate-500 mt-0.5">{participants.length} assigned</p>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {participants.map((participant) => {
             const unreadCount = unreadCounts[participant.id] || 0;
             return (
@@ -605,18 +604,18 @@ export function MentorInbox() {
                       <div
                         className={`max-w-[75%] rounded-2xl px-4 py-2.5 relative ${
                           message.direction === "outbound"
-                            ? `${(message as any).status === 'error' ? 'bg-slate-300' : 'bg-teal-500'} text-white rounded-br-md`
+                            ? `${message.status === "error" ? "bg-slate-300" : "bg-teal-500"} text-white rounded-br-md`
                             : "bg-slate-100 text-slate-900 rounded-bl-md"
-                        } ${(message as any).status === 'sending' ? 'opacity-70' : ''}`}
+                        } ${message.status === "sending" ? "opacity-70" : ""}`}
                       >
                         <p className="text-sm whitespace-pre-wrap break-words">{message.message_body}</p>
                         <div className="flex items-center justify-between gap-4 mt-1">
                           <p className={`text-xs ${
                             message.direction === "outbound" ? "text-teal-100" : "text-slate-400"
-                          } ${(message as any).status === 'error' ? 'text-slate-500' : ''}`}>
+                          } ${message.status === "error" ? "text-slate-500" : ""}`}>
                             {formatTime(message.created_at)}
                           </p>
-                          {(message as any).status === 'error' && (
+                          {message.status === "error" && (
                             <div className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-white/90 px-1.5 py-0.5 rounded shadow-sm">
                               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
