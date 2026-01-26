@@ -12,6 +12,7 @@ type StatusFilter = "all" | "active" | "inactive";
 type MentorFormData = {
   name: string;
   email: string;
+  password?: string;
   role: string;
 };
 
@@ -103,7 +104,7 @@ export function MentorManagement() {
     return matchesSearch && matchesStatus;
   });
 
-  // Add mentor
+  // Add mentor (direct creation with password)
   const handleAddMentor = async (formData: MentorFormData) => {
     setIsSaving(true);
     setFormError(null);
@@ -115,6 +116,7 @@ export function MentorManagement() {
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
+          password: formData.password,
           role: formData.role || "mentor",
         }),
       });
@@ -231,19 +233,28 @@ export function MentorManagement() {
               <option value="inactive">Inactive</option>
             </select>
           </div>
-          <Button size="sm" onClick={() => setIsAddModalOpen(true)} className="bg-teal-500 hover:bg-teal-600 text-white">
-            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Mentor
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => setIsAddModalOpen(true)} className="bg-teal-500 hover:bg-teal-600 text-white cursor-pointer">
+              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Mentor
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Mentors Table */}
       <div className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full table-fixed">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[28%]" />
+              <col className="w-[15%]" />
+              <col className="w-[15%]" />
+              <col className="w-[20%]" />
+            </colgroup>
             <thead className="bg-slate-100 border-b border-slate-100">
               <tr>
                 <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Name</th>
@@ -309,10 +320,11 @@ export function MentorManagement() {
         </div>
       </div>
 
-      {/* Add Mentor Modal */}
+      {/* Add Mentor Modal (direct creation with password) */}
       {isAddModalOpen && (
         <MentorModal
           title="Add New Mentor"
+          mode="create"
           onClose={() => { setIsAddModalOpen(false); setFormError(null); }}
           onSubmit={handleAddMentor}
           isSaving={isSaving}
@@ -324,6 +336,7 @@ export function MentorManagement() {
       {editingMentor && (
         <MentorModal
           title="Edit Mentor"
+          mode="edit"
           mentor={editingMentor}
           onClose={() => { setEditingMentor(null); setFormError(null); }}
           onSubmit={handleEditMentor}
@@ -340,6 +353,7 @@ export function MentorManagement() {
  */
 function MentorModal({
   title,
+  mode,
   mentor,
   onClose,
   onSubmit,
@@ -347,6 +361,7 @@ function MentorModal({
   error,
 }: {
   title: string;
+  mode: "create" | "edit";
   mentor?: Mentor;
   onClose: () => void;
   onSubmit: (data: MentorFormData) => Promise<void>;
@@ -355,11 +370,24 @@ function MentorModal({
 }) {
   const [name, setName] = useState(mentor?.name || "");
   const [email, setEmail] = useState(mentor?.email || "");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState(mentor?.role || "mentor");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit({ name, email, role });
+    await onSubmit({ 
+      name, 
+      email, 
+      password: mode === "create" ? password : undefined,
+      role,
+    });
+  };
+
+  const getButtonText = () => {
+    if (isSaving) {
+      return mode === "create" ? "Creating..." : "Saving...";
+    }
+    return mode === "create" ? "Add Mentor" : "Save Changes";
   };
 
   return (
@@ -367,7 +395,7 @@ function MentorModal({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -401,8 +429,28 @@ function MentorModal({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="john@example.com"
               required
+              disabled={mode === "edit"}
             />
+            {mode === "edit" && (
+              <p className="text-xs text-slate-400">Email cannot be changed</p>
+            )}
           </div>
+
+          {mode === "create" && (
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min 6 characters"
+                minLength={6}
+                required
+              />
+              <p className="text-xs text-slate-400">Mentor will use this password to log in</p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="role">Role</Label>
@@ -410,18 +458,18 @@ function MentorModal({
               id="role"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm"
+              className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm cursor-pointer"
             >
               <option value="mentor">Mentor</option>
             </select>
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1 cursor-pointer">
               Cancel
             </Button>
-            <Button type="submit" disabled={isSaving} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white">
-              {isSaving ? "Saving..." : mentor ? "Save Changes" : "Add Mentor"}
+            <Button type="submit" disabled={isSaving} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white cursor-pointer">
+              {getButtonText()}
             </Button>
           </div>
         </form>

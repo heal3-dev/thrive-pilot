@@ -393,7 +393,15 @@ export function ParticipantManagement() {
 
       <div className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full table-fixed">
+            <colgroup>
+              <col className="w-[15%]" />
+              <col className="w-[15%]" />
+              <col className="w-[20%]" />
+              <col className="w-[20%]" />
+              <col className="w-[12%]" />
+              <col className="w-[18%]" />
+            </colgroup>
             <thead className="bg-slate-100 border-b border-slate-100">
               <tr>
                 <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Name</th>

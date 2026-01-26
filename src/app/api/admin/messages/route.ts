@@ -107,7 +107,7 @@ export async function GET(request: Request) {
     }
 
     // Enrich participants with stats and mentor info
-    let enrichedParticipants = (participants || []).map((p) => {
+    const enrichedParticipants = (participants || []).map((p) => {
       const stats = participantStats.get(p.id);
       const currentMentorId = participantMentorMap.get(p.id);
       return {

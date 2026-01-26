@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       participant_id,
       assigned_at,
       unassigned_at,
-      participants ( id, phone_number, email, is_active ),
+      participants ( id, name, phone_number, email, is_active ),
       mentors ( id, name, email, role, is_active )
     `
     )

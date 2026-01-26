@@ -11,12 +11,7 @@ const inviteParticipantSchema = z.object({
 /**
  * POST /api/admin/participants/invite
  * Send email invitation to a new participant
- * 
- * NOTE: This is a placeholder implementation.
- * In production, integrate with:
- * - Supabase Edge Functions for email sending
- * - External email service (SendGrid, Resend, etc.)
- * - Generate secure invite token with expiration
+ * Creates both an Auth user and a participant database record
  */
 export async function POST(request: Request) {
   const guard = await requireAdmin(request);
@@ -31,58 +26,70 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // Check for duplicate email
-  const { data: existingEmail } = await admin
+  // Check for duplicate email in participants table
+  const { data: existingParticipant } = await admin
     .from("participants")
     .select("id")
     .eq("email", payload.email)
     .limit(1)
     .maybeSingle();
 
-  if (existingEmail?.id) {
+  if (existingParticipant?.id) {
     return NextResponse.json({ error: "A participant with this email already exists" }, { status: 409 });
   }
 
-  // Generate invite token (in production, store this securely with expiration)
-  const inviteToken = crypto.randomUUID();
+  // Invite user - Supabase will send email using your custom invite template
+  const { data: authUser, error: authError } = await admin.auth.admin.inviteUserByEmail(
+    payload.email,
+    {
+      data: {
+        name: payload.name || null,
+      },
+    }
+  );
 
-  // Create participant record with pending status
-  const { data: participant, error: createError } = await admin
+  if (authError) {
+    console.error("Auth invite error:", authError);
+    return NextResponse.json(
+      { error: "Failed to invite user: " + authError.message },
+      { status: 500 }
+    );
+  }
+
+  // Create participant record with only email, name, phone
+  const { data: participant, error: participantError } = await admin
     .from("participants")
     .insert({
+      id: authUser.user.id, // Link to auth user
       email: payload.email,
       name: payload.name || null,
       phone_number: "", // Will be filled during onboarding
-      is_active: true, // Active but incomplete profile
+      is_active: true,
     })
-    .select("id, email, name")
+    .select("id, email, name, phone_number")
     .single();
 
-  if (createError) {
-    return NextResponse.json({ error: "Failed to create participant" }, { status: 500 });
+  if (participantError) {
+    console.error("Participant creation error:", participantError);
+    return NextResponse.json(
+      { error: "Failed to create participant: " + participantError.message },
+      { status: 500 }
+    );
   }
 
-  // TODO: In production, implement actual email sending here
-  // Example with Resend/SendGrid:
-  // await sendEmail({
-  //   to: payload.email,
-  //   subject: "Welcome to Thrive Pilot",
-  //   html: `
-  //     <h1>You've been invited to Thrive Pilot!</h1>
-  //     <p>Click the link below to complete your registration:</p>
-  //     <a href="${process.env.NEXT_PUBLIC_APP_URL}/onboard?token=${inviteToken}">
-  //       Complete Registration
-  //     </a>
-  //   `
-  // });
+  // TODO: Send email with:
+  // - Consent/disclaimer to read
+  // - Magic link or direct login link to /invite/consent
+  // The link should auto-login them (since password is random, use magic link)
+  // After they accept consent, redirect to complete onboarding
 
-  // For now, log the invite details
-  console.log(`[INVITE] Email invite generated for ${payload.email}`);
-  console.log(`[INVITE] Token: ${inviteToken}`);
+  console.log(`[INVITE] Created participant ${participant.id} for ${payload.email}`);
 
-  return NextResponse.json({
-    participant,
-    inviteToken, // In production, don't expose this - just confirm email was sent
-    message: `Invitation sent to ${payload.email}`,
-  }, { status: 201 });
+  return NextResponse.json(
+    {
+      participant,
+      message: `Participant created. Email sending not implemented yet.`,
+    },
+    { status: 201 }
+  );
 }

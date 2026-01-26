@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -81,7 +81,6 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
   const [expandedMentors, setExpandedMentors] = useState<Set<string>>(new Set());
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [threadData, setThreadData] = useState<ThreadData | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -93,6 +92,9 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
 
   // Mobile sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Refs
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Debounced search
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -267,6 +269,11 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
     return groups;
   }, [threadData?.messages]);
 
+  // Auto-scroll to bottom when messages load
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+  }, [threadData?.messages]);
+
   // Get initials
   const getInitials = (name: string | null | undefined, email: string | null | undefined, fallback: string) => {
     if (name) {
@@ -332,10 +339,16 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
               )}
             </div>
             <p className="text-xs text-slate-500 truncate">{formatPhone(participant.phone_number)}</p>
-            {showMentor && participant.currentMentorId && (
-              <p className="text-xs text-teal-600 dark:text-teal-400 mt-0.5">
-                {allMentors.find((m) => m.id === participant.currentMentorId)?.name || "Unknown mentor"}
-              </p>
+            {showMentor && (
+              participant.currentMentorId ? (
+                <p className="text-xs text-teal-600 dark:text-teal-400 mt-0.5">
+                  {allMentors.find((m) => m.id === participant.currentMentorId)?.name || "Unknown mentor"}
+                </p>
+              ) : (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                  Unassigned
+                </p>
+              )
             )}
             {participant.lastMessage && (
               <p className="text-xs text-slate-400 mt-1 truncate">
@@ -698,51 +711,9 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
                         </span>
                       </div>
                     )}
-                    {/* Assignment history button */}
-                    {threadData.assignmentHistory.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowHistory(!showHistory)}
-                        className="cursor-pointer"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                      </Button>
-                    )}
                   </div>
                 </div>
 
-                {/* Assignment history panel */}
-                {showHistory && threadData.assignmentHistory.length > 0 && (
-                  <div className="mt-4 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <h4 className="text-xs font-semibold text-slate-900 dark:text-white mb-2">Assignment History</h4>
-                    <div className="space-y-2">
-                      {threadData.assignmentHistory.map((a) => (
-                        <div key={a.id} className="flex items-center justify-between text-xs">
-                          <span className="text-slate-700 dark:text-slate-300">
-                            {a.mentor?.name || a.mentor?.email || "Unknown"}
-                          </span>
-                          <span className="text-slate-400">
-                            {new Date(a.assignedAt).toLocaleDateString()}
-                            {a.unassignedAt ? ` - ${new Date(a.unassignedAt).toLocaleDateString()}` : " (current)"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Messages */}
@@ -812,6 +783,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
                     </div>
                   ))
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               {/* Read-only notice */}

@@ -28,11 +28,12 @@ export function AssignmentManagement() {
   const [activeMentors, setActiveMentors] = useState<Mentor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<AssignmentFilter>("active");
+  const [filter, setFilter] = useState<AssignmentFilter>("all");
 
   // Modal states
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [reassigningAssignment, setReassigningAssignment] = useState<AssignmentWithDetails | null>(null);
+  const [unassigningAssignment, setUnassigningAssignment] = useState<AssignmentWithDetails | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -100,7 +101,7 @@ export function AssignmentManagement() {
   // Filter assignments
   const filteredAssignments = assignments.filter((assignment) => {
     if (filter === "active") return !assignment.unassigned_at;
-    if (filter === "unassigned") return false; // Unassigned participants shown separately
+    if (filter === "unassigned") return !!assignment.unassigned_at; // Show ended/unassigned
     return true;
   });
 
@@ -156,21 +157,26 @@ export function AssignmentManagement() {
   };
 
   // Unassign mentor
-  const handleUnassign = async (assignment: AssignmentWithDetails) => {
-    if (!confirm("Are you sure you want to unassign this mentor?")) return;
+  const handleUnassign = async () => {
+    if (!unassigningAssignment) return;
+    setIsSaving(true);
+    setFormError(null);
 
     try {
-      await adminFetch(`/api/admin/assignments/${assignment.id}`, {
+      await adminFetch(`/api/admin/assignments/${unassigningAssignment.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
 
+      setUnassigningAssignment(null);
       setSuccessMessage("Mentor unassigned successfully");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error("Error unassigning mentor:", err);
-      setError(err instanceof Error ? err.message : "Failed to unassign mentor");
+      setFormError(err instanceof Error ? err.message : "Failed to unassign mentor");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -236,11 +242,11 @@ export function AssignmentManagement() {
       <div className="bg-white rounded-2xl border-2 border-slate-100 p-4">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           <div className="flex gap-1.5">
-            {(["active", "all", "unassigned"] as AssignmentFilter[]).map((f) => (
+            {(["all", "active", "unassigned"] as AssignmentFilter[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+                className={`h-10 px-4 rounded-lg text-base font-bold transition-colors cursor-pointer ${
                   filter === f
                     ? "bg-teal-500 text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -264,56 +270,18 @@ export function AssignmentManagement() {
         </div>
       </div>
 
-      {/* Unassigned Participants Section */}
-      {filter === "unassigned" && (
-        <div className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden">
-          <div className="p-4 border-b border-slate-100 bg-amber-50">
-            <h3 className="font-bold text-slate-900">Unassigned Participants ({unassignedParticipants.length})</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-100 border-b border-slate-100">
-                <tr>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase">Phone</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase">Email</th>
-                  <th className="text-right px-6 py-4 text-xs font-bold text-slate-700 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {unassignedParticipants.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
-                      All participants are assigned
-                    </td>
-                  </tr>
-                ) : (
-                  unassignedParticipants.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4 font-semibold text-slate-900">{formatPhone(p.phone_number)}</td>
-                      <td className="px-6 py-4 text-slate-600">{p.email || "—"}</td>
-                      <td className="px-6 py-4 text-right">
-                        <Button
-                          size="sm"
-                          onClick={() => setIsAssignModalOpen(true)}
-                          className="bg-teal-500 hover:bg-teal-600 text-white"
-                        >
-                          Assign
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Assignments Table */}
-      {filter !== "unassigned" && (
+      {(
         <div className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[25%]" />
+                <col className="w-[25%]" />
+                <col className="w-[15%]" />
+                <col className="w-[18%]" />
+                <col className="w-[17%]" />
+              </colgroup>
               <thead className="bg-slate-100 border-b border-slate-100">
                 <tr>
                   <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase">Participant</th>
@@ -335,7 +303,10 @@ export function AssignmentManagement() {
                     <tr key={assignment.id} className="hover:bg-slate-50">
                       <td className="px-6 py-4">
                         <p className="font-semibold text-slate-900">
-                          {assignment.participant ? formatPhone(assignment.participant.phone_number) : "—"}
+                          {assignment.participant?.name || "—"}
+                        </p>
+                        <p className="text-sm text-slate-600">
+                          {assignment.participant ? formatPhone(assignment.participant.phone_number) : ""}
                         </p>
                         <p className="text-xs text-slate-500">{assignment.participant?.email || ""}</p>
                       </td>
@@ -356,26 +327,26 @@ export function AssignmentManagement() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {!assignment.unassigned_at && (
-                          <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setReassigningAssignment(assignment)}
+                            className="text-slate-600 hover:text-slate-900"
+                          >
+                            Reassign
+                          </Button>
+                          {!assignment.unassigned_at && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setReassigningAssignment(assignment)}
-                              className="text-slate-600 hover:text-slate-900"
-                            >
-                              Reassign
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleUnassign(assignment)}
+                              onClick={() => setUnassigningAssignment(assignment)}
                               className="text-red-600 hover:text-red-700"
                             >
                               Unassign
                             </Button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -405,6 +376,17 @@ export function AssignmentManagement() {
           mentors={activeMentors}
           onClose={() => { setReassigningAssignment(null); setFormError(null); }}
           onSubmit={handleReassign}
+          isSaving={isSaving}
+          error={formError}
+        />
+      )}
+
+      {/* Unassign Modal */}
+      {unassigningAssignment && (
+        <UnassignModal
+          assignment={unassigningAssignment}
+          onClose={() => { setUnassigningAssignment(null); setFormError(null); }}
+          onConfirm={handleUnassign}
           isSaving={isSaving}
           error={formError}
         />
@@ -538,8 +520,10 @@ function ReassignModal({
 }) {
   const [newMentorId, setNewMentorId] = useState("");
 
-  // Filter out current mentor
-  const availableMentors = mentors.filter((m) => m.id !== assignment.mentor_id);
+  // Filter out current mentor (only if assignment is still active)
+  const availableMentors = assignment.unassigned_at
+    ? mentors
+    : mentors.filter((m) => m.id !== assignment.mentor_id);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -568,7 +552,9 @@ function ReassignModal({
           )}
 
           <div className="p-4 rounded-xl bg-slate-50">
-            <p className="text-sm text-slate-500 mb-1">Current Mentor</p>
+            <p className="text-sm text-slate-500 mb-1">
+              {assignment.unassigned_at ? "Previous Mentor" : "Current Mentor"}
+            </p>
             <p className="font-semibold text-slate-900">{assignment.mentor?.name || assignment.mentor?.email || "Unknown"}</p>
           </div>
 
@@ -592,7 +578,9 @@ function ReassignModal({
 
           <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
             <p className="text-sm text-amber-700">
-              This will end the current assignment and create a new one with the selected mentor.
+              {assignment.unassigned_at
+                ? "This will create a new assignment with the selected mentor."
+                : "This will end the current assignment and create a new one with the selected mentor."}
             </p>
           </div>
 
@@ -605,6 +593,92 @@ function ReassignModal({
             </Button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Unassign Mentor Confirmation Modal
+ */
+function UnassignModal({
+  assignment,
+  onClose,
+  onConfirm,
+  isSaving,
+  error,
+}: {
+  assignment: AssignmentWithDetails;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+  isSaving: boolean;
+  error: string | null;
+}) {
+  const formatPhone = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, "");
+    if (cleaned.length >= 10) {
+      return `+1 (${cleaned.slice(-10, -7)}) ${cleaned.slice(-7, -4)}-${cleaned.slice(-4)}`;
+    }
+    return phone;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <h2 className="text-lg font-bold text-slate-900">Unassign Mentor</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+
+          <p className="text-slate-600">
+            Are you sure you want to unassign this mentor from the participant?
+          </p>
+
+          <div className="p-4 rounded-xl bg-slate-50 space-y-3">
+            <div>
+              <p className="text-xs text-slate-500 mb-0.5">Participant</p>
+              <p className="font-semibold text-slate-900">{assignment.participant?.name || "—"}</p>
+              <p className="text-sm text-slate-600">
+                {assignment.participant ? formatPhone(assignment.participant.phone_number) : ""}
+              </p>
+            </div>
+            <div className="border-t border-slate-200 pt-3">
+              <p className="text-xs text-slate-500 mb-0.5">Current Mentor</p>
+              <p className="font-semibold text-slate-900">{assignment.mentor?.name || assignment.mentor?.email || "Unknown"}</p>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+            <p className="text-sm text-amber-700">
+              This will end the current assignment. The participant will no longer be assigned to any mentor.
+            </p>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Cancel
+            </Button>
+            <Button 
+              type="button" 
+              onClick={onConfirm} 
+              disabled={isSaving} 
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+            >
+              {isSaving ? "Unassigning..." : "Confirm Unassign"}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
