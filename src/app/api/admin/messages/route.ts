@@ -118,32 +118,48 @@ export async function GET(request: Request) {
       };
     });
 
-    // Apply search filter
+    // Build mentor name lookup for search
+    const mentorNameMap = new Map(
+      (mentors || []).map((m) => [m.id, (m.name?.toLowerCase() || "") + " " + (m.email?.toLowerCase() || "")])
+    );
+
+    // Apply search filter - check if search matches mentor OR participant
+    let filteredParticipants = enrichedParticipants;
     if (search) {
-      const mentorNameMap = new Map((mentors || []).map(m => [m.id, m.name?.toLowerCase() || m.email?.toLowerCase() || ""]));
-      enrichedParticipants = enrichedParticipants.filter((p) => {
+      filteredParticipants = enrichedParticipants.filter((p) => {
+        // Check if participant matches
         const participantMatch =
           p.name?.toLowerCase().includes(search) ||
           p.email?.toLowerCase().includes(search) ||
           p.phone_number?.includes(search);
-        const mentorName = p.currentMentorId ? mentorNameMap.get(p.currentMentorId) : "";
-        const mentorMatch = mentorName?.includes(search);
+        // Check if participant's mentor matches
+        const mentorText = p.currentMentorId ? mentorNameMap.get(p.currentMentorId) || "" : "";
+        const mentorMatch = mentorText.includes(search);
         return participantMatch || mentorMatch;
       });
     }
 
-    // Group participants by mentor
-    const mentorGroups = (mentors || []).map((mentor) => {
-      const mentorParticipants = enrichedParticipants.filter((p) => p.currentMentorId === mentor.id);
-      return {
-        mentor,
-        participants: mentorParticipants,
-        totalMessages: mentorParticipants.reduce((sum, p) => sum + p.messageCount, 0),
-      };
-    });
+    // Group participants by mentor and filter mentors by search
+    const mentorGroups = (mentors || [])
+      .filter((mentor) => {
+        // If no search, show all mentors
+        if (!search) return true;
+        // Filter mentors by name/email matching search
+        const mentorName = mentor.name?.toLowerCase() || "";
+        const mentorEmail = mentor.email?.toLowerCase() || "";
+        return mentorName.includes(search) || mentorEmail.includes(search);
+      })
+      .map((mentor) => {
+        const mentorParticipants = filteredParticipants.filter((p) => p.currentMentorId === mentor.id);
+        return {
+          mentor,
+          participants: mentorParticipants,
+          totalMessages: mentorParticipants.reduce((sum, p) => sum + p.messageCount, 0),
+        };
+      });
 
     // Add unassigned participants group
-    const unassignedParticipants = enrichedParticipants.filter((p) => !p.currentMentorId);
+    const unassignedParticipants = filteredParticipants.filter((p) => !p.currentMentorId);
     const unassignedGroup = {
       mentor: null,
       participants: unassignedParticipants,
@@ -153,7 +169,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       mentorGroups,
       unassignedGroup,
-      allParticipants: enrichedParticipants,
+      allParticipants: filteredParticipants,
       allMentors: mentors || [],
     });
   } catch (err) {
