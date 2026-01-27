@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireAdmin } from "../../_utils";
+import { getInviteRedirect, requireAdmin } from "../../_utils";
 
 const inviteParticipantSchema = z.object({
   email: z.string().email(),
@@ -38,6 +38,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A participant with this email already exists" }, { status: 409 });
   }
 
+  const { redirectTo, source } = getInviteRedirect(request);
+
   // Invite user - Supabase will send email using your custom invite template
   const { data: authUser, error: authError } = await admin.auth.admin.inviteUserByEmail(
     payload.email,
@@ -45,11 +47,17 @@ export async function POST(request: Request) {
       data: {
         name: payload.name || null,
       },
+      ...(redirectTo ? { redirectTo } : {}),
     }
   );
 
   if (authError) {
-    console.error("Auth invite error:", authError);
+    console.error("Auth invite error:", {
+      email: payload.email,
+      redirectTo,
+      redirectSource: source,
+      error: authError,
+    });
     return NextResponse.json(
       { error: "Failed to invite user: " + authError.message },
       { status: 500 }
@@ -85,10 +93,18 @@ export async function POST(request: Request) {
 
   console.log(`[INVITE] Created participant ${participant.id} for ${payload.email}`);
 
+  console.info("[INVITE] Supabase invite created", {
+    email: payload.email,
+    redirectTo,
+    redirectSource: source,
+    userId: authUser?.user?.id ?? null,
+  });
+
   return NextResponse.json(
     {
       participant,
-      message: `Participant created. Email sending not implemented yet.`,
+      inviteSent: true,
+      message: "Participant created. Invite email requested.",
     },
     { status: 201 }
   );

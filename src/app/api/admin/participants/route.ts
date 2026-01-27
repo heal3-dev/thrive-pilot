@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireAdmin } from "../_utils";
+import { getInviteRedirect, requireAdmin } from "../_utils";
 
 const createParticipantSchema = z.object({
   email: z.string().email(),
@@ -152,31 +152,54 @@ export async function POST(request: Request) {
   // Email invitation (best-effort): relies on Supabase Auth email settings.
   let inviteSent = false;
   let inviteError: string | null = null;
+  let inviteErrorStatus: number | null = null;
 
   if (shouldSendInvite) {
+    const { redirectTo, source } = getInviteRedirect(request);
     try {
-        // Prefer explicit SITE_URL env var over origin header to avoid localhost in production
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-      const origin = request.headers.get("origin");
-      const baseUrl = siteUrl || origin || "";
-      const redirectTo = baseUrl ? `${baseUrl}/invite/consent` : undefined;
-
-      const { error: authError } = await admin.auth.admin.inviteUserByEmail(payload.email, {
-        ...(redirectTo ? { redirectTo } : {}),
-      });
+      const { data: inviteData, error: authError } = await admin.auth.admin.inviteUserByEmail(
+        payload.email,
+        {
+          ...(redirectTo ? { redirectTo } : {}),
+        }
+      );
 
       if (authError) {
+        console.error("[INVITE] Supabase invite failed", {
+          email: payload.email,
+          redirectTo,
+          redirectSource: source,
+          error: authError,
+        });
         inviteError = authError.message;
+        inviteErrorStatus = authError.status ?? null;
       } else {
         inviteSent = true;
+        console.info("[INVITE] Supabase invite created", {
+          email: payload.email,
+          redirectTo,
+          redirectSource: source,
+          userId: inviteData?.user?.id ?? null,
+        });
       }
     } catch (e) {
+      console.error("[INVITE] Supabase invite threw", {
+        email: payload.email,
+        redirectTo,
+        redirectSource: source,
+        error: e,
+      });
       inviteError = e instanceof Error ? e.message : "Failed to send invite";
     }
   }
 
   return NextResponse.json(
-    { participant: data, inviteSent, ...(inviteError ? { inviteError } : {}) },
+    {
+      participant: data,
+      inviteSent,
+      ...(inviteError ? { inviteError } : {}),
+      ...(inviteErrorStatus ? { inviteErrorStatus } : {}),
+    },
     { status: 201 }
   );
 }
