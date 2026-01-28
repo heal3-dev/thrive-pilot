@@ -25,12 +25,150 @@ Create a `.env.local` with:
 - **Supabase**
   - `NEXT_PUBLIC_SUPABASE_URL`
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `NEXT_PUBLIC_SITE_URL` (used for invite redirect URLs)
 - **Twilio**
   - `TWILIO_ACCOUNT_SID`
   - `TWILIO_AUTH_TOKEN`
   - `TWILIO_PHONE_NUMBER`
 
 Note: `src/lib/twilio.ts` requires `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` at runtime.
+
+## Email Configuration (SMTP via Resend)
+
+Invite emails are sent through Supabase Auth using a custom SMTP provider. We use **Resend** as the SMTP service.
+
+### Current Settings (configured in Supabase Dashboard → Auth → SMTP Settings)
+
+| Setting | Value |
+|---------|-------|
+| Host | `smtp.resend.com` |
+| Port | `465` |
+| Username | `resend` |
+| Sender Email | `dev@heal-3.com` |
+| Sender Name | `Thrive Pilot` |
+| Min Interval | 60 seconds |
+
+### How it works
+
+1. **Supabase Auth** calls `inviteUserByEmail()` which triggers an invite email
+2. **Supabase** sends the email through the configured Resend SMTP server
+3. **Resend** delivers the email to the participant
+
+### Resend Setup
+
+To configure Resend SMTP in a new environment:
+
+1. Create a Resend account at [resend.com](https://resend.com)
+2. Add and verify your sending domain
+3. Generate an API key (used as the SMTP password)
+4. In Supabase Dashboard → Auth → Email Templates → SMTP Settings:
+   - Enable "Custom SMTP"
+   - Host: `smtp.resend.com`
+   - Port: `465`
+   - Username: `resend`
+   - Password: Your Resend API key
+
+## Participant Invite Flow
+
+The invite flow allows admins to invite participants via email. Participants receive a magic link, accept consent terms, and are then ready to receive SMS messages from their mentor.
+
+### Flow Diagram
+
+```
+Admin                          Supabase                        Participant
+  │                               │                                │
+  │ POST /api/admin/participants/invite                            │
+  │ ─────────────────────────────>│                                │
+  │                               │                                │
+  │                               │ Create Auth user               │
+  │                               │ Send invite email (via Resend) │
+  │                               │ ───────────────────────────────>│
+  │                               │                                │
+  │ <── 201 Created ──────────────│                                │
+  │     (participant record)      │                                │
+  │                               │                                │
+  │                               │        Clicks magic link       │
+  │                               │ <───────────────────────────────│
+  │                               │                                │
+  │                               │ Redirect to /invite/consent    │
+  │                               │ ───────────────────────────────>│
+  │                               │                                │
+  │                               │    Accepts consent (POST)      │
+  │                               │ <───────────────────────────────│
+  │                               │                                │
+  │                               │ Update participant record      │
+  │                               │ (consent_given = true)         │
+  │                               │                                │
+  │                               │ Redirect to /invite/success    │
+  │                               │ ───────────────────────────────>│
+```
+
+### API Endpoints
+
+#### `POST /api/admin/participants/invite`
+
+Send an email invitation to a new participant.
+
+- **Auth**: requires admin-level mentor (via Bearer token)
+- **Body**:
+  - `email` (string, required) - participant's email address
+  - `name` (string, optional) - participant's display name
+- **Behavior**:
+  1. Validates admin permissions
+  2. Checks for duplicate email in `participants` table
+  3. Calls `supabase.auth.admin.inviteUserByEmail()` to create Auth user and send invite
+  4. Creates a `participants` record linked to the Auth user
+  5. The invite email contains a magic link to `/invite/consent`
+
+**Response**:
+
+```json
+{
+  "participant": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "name": "John Doe",
+    "phone_number": ""
+  },
+  "inviteSent": true,
+  "message": "Participant created. Invite email requested."
+}
+```
+
+**Errors**:
+- `400` - Invalid request body
+- `401` - Missing or invalid auth token
+- `403` - Admin access required
+- `409` - Participant with this email already exists
+- `500` - Failed to invite or create participant
+
+#### `POST /api/invite/consent`
+
+Called when a participant accepts consent terms after clicking the invite link.
+
+- **Auth**: requires valid session (from magic link)
+- **Behavior**:
+  1. Validates the user's session
+  2. Looks up participant by email
+  3. Updates `consent_given = true` and `consent_timestamp`
+  4. If participant record doesn't exist, creates one (fallback for edge cases)
+
+### Pages
+
+| Route | Purpose |
+|-------|---------|
+| `/invite/consent` | Consent form shown after clicking invite link |
+| `/invite/success` | Confirmation page after accepting consent |
+
+### Redirect URL Resolution
+
+The invite redirect URL is determined in order of priority:
+
+1. `NEXT_PUBLIC_SITE_URL` environment variable (recommended for production)
+2. `Origin` header from the request
+3. `X-Forwarded-Host` header (for proxied requests)
+
+Always set `NEXT_PUBLIC_SITE_URL` in production to ensure consistent redirect URLs.
 
 ## API
 
