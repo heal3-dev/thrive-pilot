@@ -1,12 +1,120 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Mentor, Participant } from "@/types";
+
+// Debounced uniqueness check hook
+type FieldErrors = {
+  email?: string;
+  phone_number?: string;
+};
+
+function useUniquenessCheck(getAccessToken: () => Promise<string | null>) {
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [isChecking, setIsChecking] = useState<{ email?: boolean; phone_number?: boolean }>({});
+  const debounceTimers = useRef<{ email?: NodeJS.Timeout; phone_number?: NodeJS.Timeout }>({});
+  const abortControllers = useRef<{ email?: AbortController; phone_number?: AbortController }>({});
+
+  const checkField = useCallback(
+    async (field: "email" | "phone_number", value: string) => {
+      // Clear previous timer
+      if (debounceTimers.current[field]) {
+        clearTimeout(debounceTimers.current[field]);
+      }
+
+      // Abort previous request
+      if (abortControllers.current[field]) {
+        abortControllers.current[field]?.abort();
+      }
+
+      // Clear error immediately if value is empty
+      if (!value.trim()) {
+        setErrors((prev) => ({ ...prev, [field]: undefined }));
+        setIsChecking((prev) => ({ ...prev, [field]: false }));
+        return;
+      }
+
+      // For email, validate format first
+      if (field === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        setErrors((prev) => ({ ...prev, email: undefined }));
+        setIsChecking((prev) => ({ ...prev, email: false }));
+        return;
+      }
+
+      setIsChecking((prev) => ({ ...prev, [field]: true }));
+
+      debounceTimers.current[field] = setTimeout(async () => {
+        const controller = new AbortController();
+        abortControllers.current[field] = controller;
+
+        try {
+          const token = await getAccessToken();
+          if (!token) {
+            setIsChecking((prev) => ({ ...prev, [field]: false }));
+            return;
+          }
+
+          const res = await fetch("/api/admin/participants/check", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ [field]: value }),
+            signal: controller.signal,
+          });
+
+          if (!res.ok) {
+            setIsChecking((prev) => ({ ...prev, [field]: false }));
+            return;
+          }
+
+          const data = await res.json();
+          setErrors((prev) => ({
+            ...prev,
+            [field]: data.errors?.[field] || undefined,
+          }));
+        } catch (err) {
+          if (err instanceof Error && err.name === "AbortError") {
+            return; // Request was aborted, ignore
+          }
+          console.error("Uniqueness check failed:", err);
+        } finally {
+          setIsChecking((prev) => ({ ...prev, [field]: false }));
+        }
+      }, 400); // 400ms debounce
+    },
+    [getAccessToken]
+  );
+
+  const clearError = useCallback((field: "email" | "phone_number") => {
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
+    setIsChecking((prev) => ({ ...prev, [field]: false }));
+    // Clear pending timer for this field
+    if (debounceTimers.current[field]) {
+      clearTimeout(debounceTimers.current[field]);
+    }
+    // Abort pending request for this field
+    if (abortControllers.current[field]) {
+      abortControllers.current[field]?.abort();
+    }
+  }, []);
+
+  const clearAllErrors = useCallback(() => {
+    setErrors({});
+    setIsChecking({});
+    // Clear any pending timers
+    if (debounceTimers.current.email) clearTimeout(debounceTimers.current.email);
+    if (debounceTimers.current.phone_number) clearTimeout(debounceTimers.current.phone_number);
+  }, []);
+
+  return { errors, isChecking, checkField, clearError, clearAllErrors };
+}
 
 type StatusFilter = "all" | "active" | "removed";
 
@@ -513,6 +621,7 @@ export function ParticipantManagement() {
           onSubmit={handleInviteParticipant}
           isSaving={isSaving}
           error={formError}
+          getAccessToken={getAccessToken}
         />
       )}
 
@@ -525,6 +634,7 @@ export function ParticipantManagement() {
           onSubmit={handleCreateParticipant}
           isSaving={isSaving}
           error={formError}
+          getAccessToken={getAccessToken}
         />
       )}
 
@@ -559,16 +669,49 @@ function InviteParticipantModal({
   onSubmit,
   isSaving,
   error,
+  getAccessToken,
 }: {
   onClose: () => void;
   onSubmit: (payload: CreateParticipantPayload) => Promise<void>;
   isSaving: boolean;
   error: string | null;
+  getAccessToken: () => Promise<string | null>;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [phoneFormatError, setPhoneFormatError] = useState<string | null>(null);
+
+  const { errors: fieldErrors, isChecking, checkField, clearError } = useUniquenessCheck(getAccessToken);
+
+  // Handle email change with validation
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    checkField("email", value);
+  };
+
+  // Handle phone change with validation
+  const handlePhoneChange = (value: string) => {
+    setPhone(value);
+    setPhoneFormatError(null);
+    
+    // Only check uniqueness if format is valid
+    const e164 = toE164(value);
+    if (e164) {
+      checkField("phone_number", e164);
+    } else if (value.trim()) {
+      // Clear phone uniqueness error when format is invalid (but keep email error)
+      clearError("phone_number");
+    }
+  };
+
+  // Validate phone format on blur
+  const handlePhoneBlur = () => {
+    if (phone.trim() && !toE164(phone)) {
+      setPhoneFormatError("Invalid phone number. Enter 10+ digits (e.g., 555-123-4567 or +15551234567).");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -586,7 +729,7 @@ function InviteParticipantModal({
 
     const e164Phone = toE164(phone);
     if (!e164Phone) {
-      setLocalError("Invalid phone number. Enter 10+ digits (e.g., 555-123-4567 or +15551234567).");
+      setPhoneFormatError("Invalid phone number. Enter 10+ digits (e.g., 555-123-4567 or +15551234567).");
       return;
     }
 
@@ -597,6 +740,9 @@ function InviteParticipantModal({
       sendInvite: true,
     });
   };
+
+  const hasFieldErrors = !!fieldErrors.email || !!fieldErrors.phone_number || !!phoneFormatError;
+  const isCheckingAny = isChecking.email || isChecking.phone_number;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -633,26 +779,66 @@ function InviteParticipantModal({
 
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="participant@example.com"
-              required
-            />
+            <div className="relative">
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                placeholder="participant@example.com"
+                required
+                className={fieldErrors.email ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
+              />
+              {isChecking.email && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+            {fieldErrors.email && (
+              <p className="text-xs text-red-600 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                {fieldErrors.email}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="phone">Phone</Label>
-            <Input 
-              id="phone" 
-              value={phone} 
-              onChange={(e) => setPhone(e.target.value)} 
-              placeholder="+15551234567" 
-              required 
-            />
-            <p className="text-xs text-slate-500">Use E.164 format for SMS features.</p>
+            <div className="relative">
+              <Input 
+                id="phone" 
+                value={phone} 
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                onBlur={handlePhoneBlur}
+                placeholder="+15551234567" 
+                required
+                className={(fieldErrors.phone_number || phoneFormatError) ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
+              />
+              {isChecking.phone_number && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+            {(fieldErrors.phone_number || phoneFormatError) ? (
+              <p className="text-xs text-red-600 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                {phoneFormatError || fieldErrors.phone_number}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">Use E.164 format for SMS features.</p>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -661,8 +847,8 @@ function InviteParticipantModal({
             </Button>
             <Button 
               type="submit" 
-              disabled={isSaving || !email || !name || !phone} 
-              className="flex-1 bg-teal-500 hover:bg-teal-600 text-white"
+              disabled={isSaving || !email || !name || !phone || hasFieldErrors || isCheckingAny} 
+              className="flex-1 bg-teal-500 hover:bg-teal-600 text-white disabled:opacity-50"
             >
               {isSaving ? "Sending..." : "Send Invite"}
             </Button>
@@ -678,16 +864,49 @@ function AddParticipantModal({
   onSubmit,
   isSaving,
   error,
+  getAccessToken,
 }: {
   onClose: () => void;
   onSubmit: (payload: CreateParticipantPayload) => Promise<void>;
   isSaving: boolean;
   error: string | null;
+  getAccessToken: () => Promise<string | null>;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [phoneFormatError, setPhoneFormatError] = useState<string | null>(null);
+
+  const { errors: fieldErrors, isChecking, checkField, clearError } = useUniquenessCheck(getAccessToken);
+
+  // Handle email change with validation
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    checkField("email", value);
+  };
+
+  // Handle phone change with validation
+  const handlePhoneChange = (value: string) => {
+    setPhone(value);
+    setPhoneFormatError(null);
+    
+    // Only check uniqueness if format is valid
+    const e164 = toE164(value);
+    if (e164) {
+      checkField("phone_number", e164);
+    } else if (value.trim()) {
+      // Clear phone uniqueness error when format is invalid (but keep email error)
+      clearError("phone_number");
+    }
+  };
+
+  // Validate phone format on blur
+  const handlePhoneBlur = () => {
+    if (phone.trim() && !toE164(phone)) {
+      setPhoneFormatError("Invalid phone number. Enter 10+ digits (e.g., 555-123-4567 or +15551234567).");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -705,7 +924,7 @@ function AddParticipantModal({
 
     const e164Phone = toE164(phone);
     if (!e164Phone) {
-      setLocalError("Invalid phone number. Enter 10+ digits (e.g., 555-123-4567 or +15551234567).");
+      setPhoneFormatError("Invalid phone number. Enter 10+ digits (e.g., 555-123-4567 or +15551234567).");
       return;
     }
 
@@ -716,6 +935,9 @@ function AddParticipantModal({
       sendInvite: false,
     });
   };
+
+  const hasFieldErrors = !!fieldErrors.email || !!fieldErrors.phone_number || !!phoneFormatError;
+  const isCheckingAny = isChecking.email || isChecking.phone_number;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -752,26 +974,66 @@ function AddParticipantModal({
 
           <div className="space-y-2">
             <Label htmlFor="add-email">Email</Label>
-            <Input
-              id="add-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="participant@example.com"
-              required
-            />
+            <div className="relative">
+              <Input
+                id="add-email"
+                type="email"
+                value={email}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                placeholder="participant@example.com"
+                required
+                className={fieldErrors.email ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
+              />
+              {isChecking.email && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+            {fieldErrors.email && (
+              <p className="text-xs text-red-600 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                {fieldErrors.email}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="add-phone">Phone</Label>
-            <Input 
-              id="add-phone" 
-              value={phone} 
-              onChange={(e) => setPhone(e.target.value)} 
-              placeholder="+15551234567" 
-              required 
-            />
-            <p className="text-xs text-slate-500">Use E.164 format for SMS features.</p>
+            <div className="relative">
+              <Input 
+                id="add-phone" 
+                value={phone} 
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                onBlur={handlePhoneBlur}
+                placeholder="+15551234567" 
+                required
+                className={(fieldErrors.phone_number || phoneFormatError) ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
+              />
+              {isChecking.phone_number && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+            {(fieldErrors.phone_number || phoneFormatError) ? (
+              <p className="text-xs text-red-600 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                {phoneFormatError || fieldErrors.phone_number}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">Use E.164 format for SMS features.</p>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -780,8 +1042,8 @@ function AddParticipantModal({
             </Button>
             <Button 
               type="submit" 
-              disabled={isSaving || !email || !name || !phone} 
-              className="flex-1 bg-teal-500 hover:bg-teal-600 text-white"
+              disabled={isSaving || !email || !name || !phone || hasFieldErrors || isCheckingAny} 
+              className="flex-1 bg-teal-500 hover:bg-teal-600 text-white disabled:opacity-50"
             >
               {isSaving ? "Adding..." : "Add Participant"}
             </Button>
