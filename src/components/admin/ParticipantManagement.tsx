@@ -202,31 +202,49 @@ export function ParticipantManagement() {
     });
   }, [participants, searchQuery, statusFilter, mentorFilter]);
 
+  // Handler for "Add Participant" - creates participant directly without invite
   const handleCreateParticipant = async (payload: CreateParticipantPayload) => {
     setIsSaving(true);
     setFormError(null);
     try {
-      const json = await adminFetch("/api/admin/participants", {
+      await adminFetch("/api/admin/participants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, sendInvite: false }),
       });
 
-      setIsInviteModalOpen(false);
       setIsAddModalOpen(false);
-      const inviteSent = Boolean(json.inviteSent);
-      const inviteError = json.inviteError as string | undefined;
-      setSuccessMessage(
-        inviteSent
-          ? `Invite sent to ${payload.email}`
-          : inviteError
-            ? `Participant created, invite not sent: ${inviteError}`
-            : "Participant added successfully"
-      );
+      setSuccessMessage("Participant added successfully");
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
       console.error("Error creating participant:", err);
       setFormError(err instanceof Error ? err.message : "Failed to create participant");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handler for "Invite Participant" - sends invite email only, participant created on consent
+  const handleInviteParticipant = async (payload: CreateParticipantPayload) => {
+    setIsSaving(true);
+    setFormError(null);
+    try {
+      await adminFetch("/api/admin/participants/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: payload.email,
+          name: payload.name,
+          phone_number: payload.phone_number,
+        }),
+      });
+
+      setIsInviteModalOpen(false);
+      setSuccessMessage(`Invite sent to ${payload.email}`);
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (err) {
+      console.error("Error sending invite:", err);
+      setFormError(err instanceof Error ? err.message : "Failed to send invite");
     } finally {
       setIsSaving(false);
     }
@@ -492,7 +510,7 @@ export function ParticipantManagement() {
             setIsInviteModalOpen(false);
             setFormError(null);
           }}
-          onSubmit={handleCreateParticipant}
+          onSubmit={handleInviteParticipant}
           isSaving={isSaving}
           error={formError}
         />
@@ -504,7 +522,7 @@ export function ParticipantManagement() {
             setIsAddModalOpen(false);
             setFormError(null);
           }}
-          onSubmit={(payload) => handleCreateParticipant({ ...payload, sendInvite: false })}
+          onSubmit={handleCreateParticipant}
           isSaving={isSaving}
           error={formError}
         />

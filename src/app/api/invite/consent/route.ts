@@ -5,7 +5,10 @@ import { createSupabaseClientWithAuth, getSupabaseAdmin } from "@/lib/supabase";
 /**
  * POST /api/invite/consent
  * Called when a participant accepts the consent terms after clicking the invite link.
- * Updates the participant record with consent_given = true.
+ * 
+ * This route creates the participant record AND records consent at the same time.
+ * Participant data (name, phone_number) is retrieved from the auth user's user_metadata,
+ * which was set when the admin sent the invite via /api/admin/participants/invite.
  */
 export async function POST(request: Request) {
   // Get auth token from request
@@ -32,7 +35,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const userEmail = userData.user.email;
+  const user = userData.user;
+  const userEmail = user.email;
+  
+  // Extract participant data from user_metadata (set during invite)
+  const userMetadata = user.user_metadata || {};
+  const participantName = userMetadata.name || null;
+  const participantPhone = userMetadata.phone_number || "";
 
   // Use admin client to update participant record (bypasses RLS)
   const admin = getSupabaseAdmin();
@@ -52,16 +61,16 @@ export async function POST(request: Request) {
     );
   }
 
-  // If the participant row doesn't exist yet, create it now (acceptance-based creation).
-  // This also supports the case where the admin only invited via Supabase Auth,
-  // without pre-creating a participants row.
+  // If the participant row doesn't exist yet, create it now.
+  // This is the expected flow: admin sends invite → user accepts consent → participant created.
   if (!participant) {
     const { data: created, error: createError } = await admin
       .from("participants")
       .insert({
+        id: user.id, // Link to auth user for consistency
         email: userEmail,
-        name: null,
-        phone_number: "",
+        name: participantName,
+        phone_number: participantPhone,
         is_active: true,
         consent_given: true,
         consent_timestamp: new Date().toISOString(),
@@ -77,6 +86,13 @@ export async function POST(request: Request) {
       );
     }
 
+    console.info("[CONSENT] Created participant on consent acceptance", {
+      participantId: created.id,
+      email: userEmail,
+      name: participantName,
+      phone: participantPhone,
+    });
+
     return NextResponse.json({ ok: true, createdParticipant: true });
   }
 
@@ -85,7 +101,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, alreadyConsented: true });
   }
 
-  // Update consent
+  // Update consent for existing participant (legacy flow or direct-add case)
   const { error: updateError } = await admin
     .from("participants")
     .update({
