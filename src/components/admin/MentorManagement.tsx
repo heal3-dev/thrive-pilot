@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
+import { AddMentorModal } from "./modals/AddMentorModal";
 import type { Mentor } from "@/types";
 
 type StatusFilter = "all" | "active" | "inactive";
@@ -105,33 +106,7 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
     return matchesSearch && matchesStatus;
   });
 
-  // Add mentor (direct creation with password)
-  const handleAddMentor = async (formData: MentorFormData) => {
-    setIsSaving(true);
-    setFormError(null);
-
-    try {
-      await adminFetch("/api/admin/mentors", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          role: formData.role || "mentor",
-        }),
-      });
-
-      setIsAddModalOpen(false);
-      setSuccessMessage("Mentor added successfully");
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
-      console.error("Error adding mentor:", err);
-      setFormError(err instanceof Error ? err.message : "Failed to add mentor");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+// handleAddMentor removed (using AddMentorModal)
 
   // Edit mentor
   const handleEditMentor = async (formData: MentorFormData) => {
@@ -323,13 +298,14 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
 
       {/* Add Mentor Modal (direct creation with password) */}
       {isAddModalOpen && (
-        <MentorModal
-          title="Add New Mentor"
-          mode="create"
-          onClose={() => { setIsAddModalOpen(false); setFormError(null); }}
-          onSubmit={handleAddMentor}
-          isSaving={isSaving}
-          error={formError}
+        <AddMentorModal
+          isOpen={true}
+          onClose={() => setIsAddModalOpen(false)}
+          onSuccess={() => {
+            fetchMentors();
+            setSuccessMessage("Mentor added successfully");
+            setTimeout(() => setSuccessMessage(null), 3000);
+          }}
         />
       )}
 

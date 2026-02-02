@@ -9,6 +9,10 @@ import { MentorManagement } from "@/components/admin/MentorManagement";
 import { AssignmentManagement } from "@/components/admin/AssignmentManagement";
 import { ParticipantManagement } from "./admin/ParticipantManagement";
 import { MessageViewer } from "./admin/MessageViewer";
+import { AddMentorModal } from "./admin/modals/AddMentorModal";
+import { AddParticipantModal } from "./admin/modals/AddParticipantModal";
+import { InviteParticipantModal } from "./admin/modals/InviteParticipantModal";
+import { AssignMentorModal } from "./admin/modals/AssignMentorModal";
 
 type AdminTab = "dashboard" | "mentors" | "participants" | "assignments" | "messages";
 
@@ -44,6 +48,9 @@ export function AdminPanel() {
   
   // Track which modal to open when navigating to a tab
   const [pendingModal, setPendingModal] = useState<string | null>(null);
+  
+  // Dashboard quick action modals
+  const [activeModal, setActiveModal] = useState<"add-mentor" | "add-participant" | "invite-participant" | "create-assignment" | null>(null);
 
   // Sync tab state with URL hash for back button support
   useEffect(() => {
@@ -261,7 +268,13 @@ export function AdminPanel() {
             isLoading={isLoading} 
             error={error} 
             onNavigate={(tab) => navigateToTab(tab)}
-            onQuickAction={(tab, modal) => navigateToTab(tab, modal)}
+            onQuickAction={(action) => {
+              if (action === "view-messages") {
+                navigateToTab("messages");
+              } else {
+                setActiveModal(action);
+              }
+            }}
           />
         )}
         {activeTab === "mentors" && (
@@ -288,6 +301,40 @@ export function AdminPanel() {
         )}
         {activeTab === "messages" && <MessageViewer onBack={() => navigateToTab("dashboard")} />}
       </div>
+
+      {/* Quick Action Modals */}
+      {activeModal === "add-mentor" && (
+        <AddMentorModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          onSuccess={() => {
+            fetchStats();
+            // Optional: Show success toast globally or rely on modal's own feedback (which currently doesn't persist after close)
+            // But fetchStats will update the counters immediately.
+          }}
+        />
+      )}
+      {activeModal === "add-participant" && (
+        <AddParticipantModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          onSuccess={() => fetchStats()}
+        />
+      )}
+      {activeModal === "invite-participant" && (
+        <InviteParticipantModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          onSuccess={() => fetchStats()}
+        />
+      )}
+      {activeModal === "create-assignment" && (
+        <AssignMentorModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          onSuccess={() => fetchStats()}
+        />
+      )}
     </div>
   );
 }
@@ -306,7 +353,7 @@ function DashboardTab({
   isLoading: boolean;
   error: string | null;
   onNavigate: (tab: AdminTab) => void;
-  onQuickAction: (tab: AdminTab, modal: string) => void;
+  onQuickAction: (action: "add-mentor" | "add-participant" | "invite-participant" | "create-assignment" | "view-messages") => void;
 }) {
   if (error) {
     return (
@@ -416,7 +463,7 @@ function DashboardTab({
               </svg>
             }
             color="teal"
-            onClick={() => onQuickAction("mentors", "add-mentor")}
+            onClick={() => onQuickAction("add-mentor")}
           />
           <QuickAction
             title="Add Participant"
@@ -427,7 +474,7 @@ function DashboardTab({
               </svg>
             }
             color="blue"
-            onClick={() => onQuickAction("participants", "add-participant")}
+            onClick={() => onQuickAction("add-participant")}
           />
           <QuickAction
             title="Invite Participant"
@@ -438,7 +485,7 @@ function DashboardTab({
               </svg>
             }
             color="teal"
-            onClick={() => onQuickAction("participants", "invite-participant")}
+            onClick={() => onQuickAction("invite-participant")}
           />
           <QuickAction
             title="Create Assignment"
@@ -449,7 +496,7 @@ function DashboardTab({
               </svg>
             }
             color="amber"
-            onClick={() => onQuickAction("assignments", "create-assignment")}
+            onClick={() => onQuickAction("create-assignment")}
           />
           <QuickAction
             title="View Messages"
@@ -460,7 +507,7 @@ function DashboardTab({
               </svg>
             }
             color="purple"
-            onClick={() => onNavigate("messages")}
+            onClick={() => onQuickAction("view-messages")}
           />
         </div>
       </div>
