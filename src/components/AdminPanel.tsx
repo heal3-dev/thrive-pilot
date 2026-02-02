@@ -19,6 +19,14 @@ type Stats = {
   activeAssignments: number;
 };
 
+// Parse tab from URL hash
+function getTabFromHash(): AdminTab {
+  if (typeof window === "undefined") return "dashboard";
+  const hash = window.location.hash.slice(1); // Remove #
+  const validTabs: AdminTab[] = ["dashboard", "mentors", "participants", "assignments", "messages"];
+  return validTabs.includes(hash as AdminTab) ? (hash as AdminTab) : "dashboard";
+}
+
 /**
  * AdminPanel - Admin dashboard with stats and navigation
  * Implements TICKET #15A: Admin Dashboard - Stats & Navigation
@@ -28,10 +36,44 @@ export function AdminPanel() {
   const { mentor } = useDashboard();
   const isAdmin = mentor.role === "admin";
 
+  // Initialize from URL hash for back button support
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Track which modal to open when navigating to a tab
+  const [pendingModal, setPendingModal] = useState<string | null>(null);
+
+  // Sync tab state with URL hash for back button support
+  useEffect(() => {
+    // Set initial tab from hash
+    setActiveTab(getTabFromHash());
+    
+    // Listen for back/forward navigation
+    const handlePopState = () => {
+      setActiveTab(getTabFromHash());
+      setPendingModal(null); // Clear any pending modal on navigation
+    };
+    
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  // Update URL hash when tab changes (for back button support)
+  const navigateToTab = useCallback((tab: AdminTab, modal?: string) => {
+    const currentHash = window.location.hash.slice(1);
+    // Use empty hash for dashboard to keep URL clean
+    const newHash = tab === "dashboard" ? "" : `#${tab}`;
+    const currentPath = window.location.pathname;
+    
+    if (currentHash !== (tab === "dashboard" ? "" : tab)) {
+      // Push to history so back button works
+      window.history.pushState(null, "", tab === "dashboard" ? currentPath : `${currentPath}${newHash}`);
+    }
+    setActiveTab(tab);
+    setPendingModal(modal ?? null);
+  }, []);
 
   // Admin-only access guard (defense-in-depth; dashboard routing should already enforce this)
   useEffect(() => {
@@ -193,7 +235,7 @@ export function AdminPanel() {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => navigateToTab(tab.id)}
             className={`inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-sm font-semibold transition-colors flex-1 cursor-pointer ${
               activeTab === tab.id
                 ? "bg-teal-500 text-white shadow-md shadow-teal-500/25"
@@ -214,12 +256,37 @@ export function AdminPanel() {
         }`}
       >
         {activeTab === "dashboard" && (
-          <DashboardTab stats={stats} isLoading={isLoading} error={error} onNavigate={setActiveTab} />
+          <DashboardTab 
+            stats={stats} 
+            isLoading={isLoading} 
+            error={error} 
+            onNavigate={(tab) => navigateToTab(tab)}
+            onQuickAction={(tab, modal) => navigateToTab(tab, modal)}
+          />
         )}
-        {activeTab === "mentors" && <MentorManagement />}
-        {activeTab === "participants" && <ParticipantManagement />}
-        {activeTab === "assignments" && <AssignmentManagement />}
-        {activeTab === "messages" && <MessageViewer onBack={() => setActiveTab("dashboard")} />}
+        {activeTab === "mentors" && (
+          <MentorManagement 
+            initialModal={pendingModal === "add-mentor" ? "add" : undefined}
+            key={pendingModal}
+          />
+        )}
+        {activeTab === "participants" && (
+          <ParticipantManagement 
+            initialModal={
+              pendingModal === "add-participant" ? "add" : 
+              pendingModal === "invite-participant" ? "invite" : 
+              undefined
+            }
+            key={pendingModal}
+          />
+        )}
+        {activeTab === "assignments" && (
+          <AssignmentManagement 
+            initialModal={pendingModal === "create-assignment" ? "assign" : undefined}
+            key={pendingModal}
+          />
+        )}
+        {activeTab === "messages" && <MessageViewer onBack={() => navigateToTab("dashboard")} />}
       </div>
     </div>
   );
@@ -233,11 +300,13 @@ function DashboardTab({
   isLoading,
   error,
   onNavigate,
+  onQuickAction,
 }: {
   stats: Stats | null;
   isLoading: boolean;
   error: string | null;
   onNavigate: (tab: AdminTab) => void;
+  onQuickAction: (tab: AdminTab, modal: string) => void;
 }) {
   if (error) {
     return (
@@ -255,55 +324,7 @@ function DashboardTab({
 
   return (
     <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Mentors"
-          value={stats?.totalMentors}
-          isLoading={isLoading}
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          }
-          color="teal"
-        />
-        <StatCard
-          title="Total Participants"
-          value={stats?.totalParticipants}
-          isLoading={isLoading}
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          }
-          color="blue"
-        />
-        <StatCard
-          title="Active Assignments"
-          value={stats?.activeAssignments}
-          isLoading={isLoading}
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
-          }
-          color="amber"
-        />
-        <StatCard
-          title="Messages Today"
-          value={stats?.messagesToday}
-          isLoading={isLoading}
-          icon={
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          }
-          color="purple"
-        />
-      </div>
-
-      {/* Dashboard Content */}
+      {/* System Overview */}
       <div className="bg-white rounded-2xl border-2 border-slate-100 p-8">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center">
@@ -317,8 +338,75 @@ function DashboardTab({
           </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Total Mentors"
+            value={stats?.totalMentors}
+            isLoading={isLoading}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            }
+            color="teal"
+            onClick={() => onNavigate("mentors")}
+          />
+          <StatCard
+            title="Total Participants"
+            value={stats?.totalParticipants}
+            isLoading={isLoading}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            }
+            color="blue"
+            onClick={() => onNavigate("participants")}
+          />
+          <StatCard
+            title="Active Assignments"
+            value={stats?.activeAssignments}
+            isLoading={isLoading}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+            }
+            color="amber"
+            onClick={() => onNavigate("assignments")}
+          />
+          <StatCard
+            title="Messages Today"
+            value={stats?.messagesToday}
+            isLoading={isLoading}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            }
+            color="purple"
+            onClick={() => onNavigate("messages")}
+          />
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white rounded-2xl border-2 border-slate-100 p-8">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+            <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Quick Actions</h2>
+            <p className="text-sm text-slate-500">Common tasks and shortcuts</p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <QuickAction
             title="Add Mentor"
             description="Create a new mentor account"
@@ -328,7 +416,7 @@ function DashboardTab({
               </svg>
             }
             color="teal"
-            onClick={() => onNavigate("mentors")}
+            onClick={() => onQuickAction("mentors", "add-mentor")}
           />
           <QuickAction
             title="Add Participant"
@@ -339,7 +427,18 @@ function DashboardTab({
               </svg>
             }
             color="blue"
-            onClick={() => onNavigate("participants")}
+            onClick={() => onQuickAction("participants", "add-participant")}
+          />
+          <QuickAction
+            title="Invite Participant"
+            description="Send email invitation"
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            }
+            color="teal"
+            onClick={() => onQuickAction("participants", "invite-participant")}
           />
           <QuickAction
             title="Create Assignment"
@@ -350,7 +449,7 @@ function DashboardTab({
               </svg>
             }
             color="amber"
-            onClick={() => onNavigate("assignments")}
+            onClick={() => onQuickAction("assignments", "create-assignment")}
           />
           <QuickAction
             title="View Messages"
@@ -378,12 +477,14 @@ function StatCard({
   icon,
   color,
   isLoading,
+  onClick,
 }: {
   title: string;
   value: number | undefined;
   icon: React.ReactNode;
   color: "teal" | "blue" | "purple" | "amber";
   isLoading: boolean;
+  onClick?: () => void;
 }) {
   const colorClasses = {
     teal: "bg-teal-50 text-teal-600",
@@ -393,7 +494,10 @@ function StatCard({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-5">
+    <div
+      className={`bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-5 ${onClick ? "cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all" : ""}`}
+      onClick={onClick}
+    >
       <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorClasses[color]}`}>
           {icon}

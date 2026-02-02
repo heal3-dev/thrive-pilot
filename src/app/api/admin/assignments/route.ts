@@ -42,6 +42,7 @@ export async function GET(request: Request) {
     unassigned_at: a.unassigned_at,
     participant: a.participants ?? null,
     mentor: a.mentors ?? null,
+    status: a.unassigned_at ? "ended" : "active" as "active" | "ended" | "never_assigned",
   }));
 
   // Active assignment participant ids (unassigned_at is NULL)
@@ -75,7 +76,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch mentors" }, { status: 500 });
   }
 
+  // Create unified rows for never-assigned participants
+  const neverAssignedRows = (unassignedParticipants ?? []).map((p) => ({
+    id: `unassigned-${p.id}`,
+    mentor_id: null,
+    participant_id: p.id,
+    assigned_at: null,
+    unassigned_at: null,
+    participant: p,
+    mentor: null,
+    status: "never_assigned" as const,
+  }));
+
+  // Unified display rows: never-assigned first (for visibility), then assignments
+  const displayRows = [...neverAssignedRows, ...assignments];
+
   return NextResponse.json({
+    displayRows,
+    // Keep these for backward compatibility and for the Assign Modal dropdown
     assignments,
     unassignedParticipants: unassignedParticipants ?? [],
     activeMentors: activeMentors ?? [],

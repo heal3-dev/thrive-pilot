@@ -4,26 +4,30 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Modal } from "@/components/ui/modal";
 import type { Mentor, Participant } from "@/types";
 
 type AssignmentFilter = "all" | "active" | "unassigned";
 
-type AssignmentWithDetails = {
+type AssignmentStatus = "active" | "ended" | "never_assigned";
+
+type AssignmentRow = {
   id: string;
-  mentor_id: string;
+  mentor_id: string | null;
   participant_id: string;
   assigned_at: string | null;
   unassigned_at: string | null;
   participant: Participant | null;
   mentor: Mentor | null;
+  status: AssignmentStatus;
 };
 
 /**
  * AssignmentManagement - Admin component for managing mentor-participant assignments
  * Implements TICKET #15B: Assignment Management Tab
  */
-export function AssignmentManagement() {
-  const [assignments, setAssignments] = useState<AssignmentWithDetails[]>([]);
+export function AssignmentManagement({ initialModal }: { initialModal?: "assign" }) {
+  const [allRows, setAllRows] = useState<AssignmentRow[]>([]);
   const [unassignedParticipants, setUnassignedParticipants] = useState<Participant[]>([]);
   const [activeMentors, setActiveMentors] = useState<Mentor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,9 +35,9 @@ export function AssignmentManagement() {
   const [filter, setFilter] = useState<AssignmentFilter>("all");
 
   // Modal states
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [reassigningAssignment, setReassigningAssignment] = useState<AssignmentWithDetails | null>(null);
-  const [unassigningAssignment, setUnassigningAssignment] = useState<AssignmentWithDetails | null>(null);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(initialModal === "assign");
+  const [reassigningAssignment, setReassigningAssignment] = useState<AssignmentRow | null>(null);
+  const [unassigningAssignment, setUnassigningAssignment] = useState<AssignmentRow | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -67,7 +71,7 @@ export function AssignmentManagement() {
   const fetchData = useCallback(async () => {
     try {
       const json = await adminFetch("/api/admin/assignments");
-      setAssignments((json.assignments as AssignmentWithDetails[]) ?? []);
+      setAllRows((json.displayRows as AssignmentRow[]) ?? []);
       setUnassignedParticipants((json.unassignedParticipants as Participant[]) ?? []);
       setActiveMentors((json.activeMentors as Mentor[]) ?? []);
 
@@ -98,11 +102,11 @@ export function AssignmentManagement() {
     };
   }, [fetchData]);
 
-  // Filter assignments
-  const filteredAssignments = assignments.filter((assignment) => {
-    if (filter === "active") return !assignment.unassigned_at;
-    if (filter === "unassigned") return !!assignment.unassigned_at; // Show ended/unassigned
-    return true;
+  // Filter rows based on status - API already puts never_assigned first
+  const displayRows = allRows.filter((row) => {
+    if (filter === "active") return row.status === "active";
+    if (filter === "unassigned") return row.status === "never_assigned" || row.status === "ended";
+    return true; // "all"
   });
 
   // Create new assignment
@@ -292,64 +296,91 @@ export function AssignmentManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredAssignments.length === 0 ? (
+                {displayRows.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                       No assignments found
                     </td>
                   </tr>
                 ) : (
-                  filteredAssignments.map((assignment) => (
-                    <tr key={assignment.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-900">
-                          {assignment.participant?.name || "—"}
-                        </p>
-                        <p className="text-sm text-slate-600">
-                          {assignment.participant ? formatPhone(assignment.participant.phone_number) : ""}
-                        </p>
-                        <p className="text-xs text-slate-500">{assignment.participant?.email || ""}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-900">{assignment.mentor?.name || "—"}</p>
-                        <p className="text-xs text-slate-500">{assignment.mentor?.email || ""}</p>
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">{formatDate(assignment.assigned_at)}</td>
-                      <td className="px-6 py-4">
-                        {!assignment.unassigned_at ? (
-                          <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-700">
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600">
-                            Ended {formatDate(assignment.unassigned_at)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setReassigningAssignment(assignment)}
-                            className="text-slate-600 hover:text-slate-900"
-                          >
-                            Reassign
-                          </Button>
-                          {!assignment.unassigned_at && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setUnassigningAssignment(assignment)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              Unassign
-                            </Button>
+                  displayRows.map((assignment) => {
+                    return (
+                      <tr key={assignment.id} className="hover:bg-slate-50">
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-slate-900">
+                            {assignment.participant?.name || "—"}
+                          </p>
+                          <p className="text-sm text-slate-600">
+                            {assignment.participant ? formatPhone(assignment.participant.phone_number) : ""}
+                          </p>
+                          <p className="text-xs text-slate-500">{assignment.participant?.email || ""}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          {assignment.status === "never_assigned" ? (
+                            <p className="text-sm text-slate-400 italic">Not yet assigned</p>
+                          ) : (
+                            <>
+                              <p className="font-semibold text-slate-900">{assignment.mentor?.name || "—"}</p>
+                              <p className="text-xs text-slate-500">{assignment.mentor?.email || ""}</p>
+                            </>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">
+                          {assignment.status === "never_assigned" ? "—" : formatDate(assignment.assigned_at)}
+                        </td>
+                        <td className="px-6 py-4">
+                          {assignment.status === "never_assigned" ? (
+                            <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
+                              Unassigned
+                            </span>
+                          ) : assignment.status === "active" ? (
+                            <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-700">
+                              Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600">
+                              Ended {formatDate(assignment.unassigned_at)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            {assignment.status === "never_assigned" ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsAssignModalOpen(true)}
+                                className="text-teal-600 hover:text-teal-700"
+                              >
+                                Assign
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setReassigningAssignment(assignment)}
+                                  className="text-slate-600 hover:text-slate-900"
+                                >
+                                  Reassign
+                                </Button>
+                                {assignment.status === "active" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setUnassigningAssignment(assignment)}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    Unassign
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -432,71 +463,65 @@ function AssignModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Assign Mentor to Participant</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Assign Mentor to Participant"
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="participant">Participant</Label>
+          <select
+            id="participant"
+            value={participantId}
+            onChange={(e) => setParticipantId(e.target.value)}
+            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm"
+            required
+          >
+            <option value="">Select participant...</option>
+            {participants.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name || "—"} • {formatPhone(p.phone_number)}{p.email ? ` • ${p.email}` : ""}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
+        <div className="space-y-2">
+          <Label htmlFor="mentor">Mentor</Label>
+          <select
+            id="mentor"
+            value={mentorId}
+            onChange={(e) => setMentorId(e.target.value)}
+            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm"
+            required
+          >
+            <option value="">Select mentor...</option>
+            {mentors.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name || m.email || "Unnamed Mentor"}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="participant">Participant</Label>
-            <select
-              id="participant"
-              value={participantId}
-              onChange={(e) => setParticipantId(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm"
-              required
-            >
-              <option value="">Select participant...</option>
-              {participants.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {formatPhone(p.phone_number)} {p.email ? `- ${p.email}` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="mentor">Mentor</Label>
-            <select
-              id="mentor"
-              value={mentorId}
-              onChange={(e) => setMentorId(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm"
-              required
-            >
-              <option value="">Select mentor...</option>
-              {mentors.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name || m.email || "Unnamed Mentor"}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSaving || !participantId || !mentorId} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white">
-              {isSaving ? "Assigning..." : "Assign"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSaving || !participantId || !mentorId} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white">
+            {isSaving ? "Assigning..." : "Assign"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -511,7 +536,7 @@ function ReassignModal({
   isSaving,
   error,
 }: {
-  assignment: AssignmentWithDetails;
+  assignment: AssignmentRow;
   mentors: Mentor[];
   onClose: () => void;
   onSubmit: (newMentorId: string) => Promise<void>;
@@ -533,68 +558,62 @@ function ReassignModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Reassign Mentor</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Reassign Mentor"
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        <div className="p-4 rounded-xl bg-slate-50">
+          <p className="text-sm text-slate-500 mb-1">
+            {assignment.unassigned_at ? "Previous Mentor" : "Current Mentor"}
+          </p>
+          <p className="font-semibold text-slate-900">{assignment.mentor?.name || assignment.mentor?.email || "Unknown"}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
+        <div className="space-y-2">
+          <Label htmlFor="newMentor">New Mentor</Label>
+          <select
+            id="newMentor"
+            value={newMentorId}
+            onChange={(e) => setNewMentorId(e.target.value)}
+            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm"
+            required
+          >
+            <option value="">Select new mentor...</option>
+            {availableMentors.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name || m.email || "Unnamed Mentor"}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div className="p-4 rounded-xl bg-slate-50">
-            <p className="text-sm text-slate-500 mb-1">
-              {assignment.unassigned_at ? "Previous Mentor" : "Current Mentor"}
-            </p>
-            <p className="font-semibold text-slate-900">{assignment.mentor?.name || assignment.mentor?.email || "Unknown"}</p>
-          </div>
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+          <p className="text-sm text-amber-700">
+            {assignment.unassigned_at
+              ? "This will create a new assignment with the selected mentor."
+              : "This will end the current assignment and create a new one with the selected mentor."}
+          </p>
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="newMentor">New Mentor</Label>
-            <select
-              id="newMentor"
-              value={newMentorId}
-              onChange={(e) => setNewMentorId(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm"
-              required
-            >
-              <option value="">Select new mentor...</option>
-              {availableMentors.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name || m.email || "Unnamed Mentor"}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-            <p className="text-sm text-amber-700">
-              {assignment.unassigned_at
-                ? "This will create a new assignment with the selected mentor."
-                : "This will end the current assignment and create a new one with the selected mentor."}
-            </p>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSaving || !newMentorId} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white">
-              {isSaving ? "Reassigning..." : "Confirm Reassign"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSaving || !newMentorId} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white">
+            {isSaving ? "Reassigning..." : "Confirm Reassign"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -608,7 +627,7 @@ function UnassignModal({
   isSaving,
   error,
 }: {
-  assignment: AssignmentWithDetails;
+  assignment: AssignmentRow;
   onClose: () => void;
   onConfirm: () => Promise<void>;
   isSaving: boolean;
@@ -623,63 +642,57 @@ function UnassignModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Unassign Mentor</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
-
-          <p className="text-slate-600">
-            Are you sure you want to unassign this mentor from the participant?
-          </p>
-
-          <div className="p-4 rounded-xl bg-slate-50 space-y-3">
-            <div>
-              <p className="text-xs text-slate-500 mb-0.5">Participant</p>
-              <p className="font-semibold text-slate-900">{assignment.participant?.name || "—"}</p>
-              <p className="text-sm text-slate-600">
-                {assignment.participant ? formatPhone(assignment.participant.phone_number) : ""}
-              </p>
-            </div>
-            <div className="border-t border-slate-200 pt-3">
-              <p className="text-xs text-slate-500 mb-0.5">Current Mentor</p>
-              <p className="font-semibold text-slate-900">{assignment.mentor?.name || assignment.mentor?.email || "Unknown"}</p>
-            </div>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Unassign Mentor"
+      size="md"
+    >
+      <div className="space-y-4">
+        {error && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm text-red-600">{error}</p>
           </div>
+        )}
 
-          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-            <p className="text-sm text-amber-700">
-              This will end the current assignment. The participant will no longer be assigned to any mentor.
+        <p className="text-slate-600">
+          Are you sure you want to unassign this mentor from the participant?
+        </p>
+
+        <div className="p-4 rounded-xl bg-slate-50 space-y-3">
+          <div>
+            <p className="text-xs text-slate-500 mb-0.5">Participant</p>
+            <p className="font-semibold text-slate-900">{assignment.participant?.name || "—"}</p>
+            <p className="text-sm text-slate-600">
+              {assignment.participant ? formatPhone(assignment.participant.phone_number) : ""}
             </p>
           </div>
-
-          <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-              Cancel
-            </Button>
-            <Button 
-              type="button" 
-              onClick={onConfirm} 
-              disabled={isSaving} 
-              className="flex-1 bg-red-500 hover:bg-red-600 text-white"
-            >
-              {isSaving ? "Unassigning..." : "Confirm Unassign"}
-            </Button>
+          <div className="border-t border-slate-200 pt-3">
+            <p className="text-xs text-slate-500 mb-0.5">Current Mentor</p>
+            <p className="font-semibold text-slate-900">{assignment.mentor?.name || assignment.mentor?.email || "Unknown"}</p>
           </div>
         </div>
+
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+          <p className="text-sm text-amber-700">
+            This will end the current assignment. The participant will no longer be assigned to any mentor.
+          </p>
+        </div>
+
+        <div className="flex gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button 
+            type="button" 
+            onClick={onConfirm} 
+            disabled={isSaving} 
+            className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+          >
+            {isSaving ? "Unassigning..." : "Confirm Unassign"}
+          </Button>
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

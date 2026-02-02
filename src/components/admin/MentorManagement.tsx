@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Modal } from "@/components/ui/modal";
 import type { Mentor } from "@/types";
 
 type StatusFilter = "all" | "active" | "inactive";
@@ -20,7 +21,7 @@ type MentorFormData = {
  * MentorManagement - Admin component for managing mentors
  * Implements TICKET #15B: Mentor Management Tab
  */
-export function MentorManagement() {
+export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export function MentorManagement() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   
   // Modal states
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(initialModal === "add");
   const [editingMentor, setEditingMentor] = useState<Mentor | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -391,89 +392,83 @@ function MentorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={title}
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input
+            id="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="John Doe"
+            required
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="john@example.com"
+            required
+            disabled={mode === "edit"}
+          />
+          {mode === "edit" && (
+            <p className="text-xs text-slate-400">Email cannot be changed</p>
           )}
+        </div>
 
+        {mode === "create" && (
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="password">Password</Label>
             <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="John Doe"
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Min 6 characters"
+              minLength={6}
               required
             />
+            <p className="text-xs text-slate-400">Mentor will use this password to log in</p>
           </div>
+        )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="john@example.com"
-              required
-              disabled={mode === "edit"}
-            />
-            {mode === "edit" && (
-              <p className="text-xs text-slate-400">Email cannot be changed</p>
-            )}
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="role">Role</Label>
+          <select
+            id="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm cursor-pointer"
+          >
+            <option value="mentor">Mentor</option>
+          </select>
+        </div>
 
-          {mode === "create" && (
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Min 6 characters"
-                minLength={6}
-                required
-              />
-              <p className="text-xs text-slate-400">Mentor will use this password to log in</p>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="role">Role</Label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm cursor-pointer"
-            >
-              <option value="mentor">Mentor</option>
-            </select>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1 cursor-pointer">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSaving} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white cursor-pointer">
-              {getButtonText()}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1 cursor-pointer">
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSaving} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white cursor-pointer">
+            {getButtonText()}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

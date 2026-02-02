@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Modal } from "@/components/ui/modal";
 import type { Mentor, Participant } from "@/types";
 
 // Debounced uniqueness check hook
@@ -207,7 +208,7 @@ function isValidPhone(phone: string): boolean {
   return toE164(phone) !== null;
 }
 
-export function ParticipantManagement() {
+export function ParticipantManagement({ initialModal }: { initialModal?: "add" | "invite" }) {
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -217,8 +218,8 @@ export function ParticipantManagement() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [mentorFilter, setMentorFilter] = useState<string>("all"); // mentor id | "all" | "unassigned"
 
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(initialModal === "invite");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(initialModal === "add");
   const [editingParticipant, setEditingParticipant] = useState<ParticipantRow | null>(null);
   const [historyParticipant, setHistoryParticipant] = useState<ParticipantRow | null>(null);
 
@@ -745,117 +746,109 @@ function InviteParticipantModal({
   const isCheckingAny = isChecking.email || isChecking.phone_number;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Invite Participant</h2>
-            <p className="text-sm text-slate-500">Sends an email invite to join the pilot</p>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Invite Participant"
+      subtitle="Sends an email invite to join the pilot"
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {(error || localError) && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm text-red-600">{localError ?? error}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input 
+            id="name" 
+            value={name} 
+            onChange={(e) => setName(e.target.value)} 
+            placeholder="Jane Doe" 
+            required 
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {(error || localError) && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-600">{localError ?? error}</p>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input 
-              id="name" 
-              value={name} 
-              onChange={(e) => setName(e.target.value)} 
-              placeholder="Jane Doe" 
-              required 
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <div className="relative">
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => handleEmailChange(e.target.value)}
+              placeholder="participant@example.com"
+              required
+              className={fieldErrors.email ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <div className="relative">
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => handleEmailChange(e.target.value)}
-                placeholder="participant@example.com"
-                required
-                className={fieldErrors.email ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
-              />
-              {isChecking.email && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                </div>
-              )}
-            </div>
-            {fieldErrors.email && (
-              <p className="text-xs text-red-600 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            {isChecking.email && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                {fieldErrors.email}
-              </p>
+              </div>
             )}
           </div>
+          {fieldErrors.email && (
+            <p className="text-xs text-red-600 flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              {fieldErrors.email}
+            </p>
+          )}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phone">Phone</Label>
-            <div className="relative">
-              <Input 
-                id="phone" 
-                value={phone} 
-                onChange={(e) => handlePhoneChange(e.target.value)}
-                onBlur={handlePhoneBlur}
-                placeholder="+15551234567" 
-                required
-                className={(fieldErrors.phone_number || phoneFormatError) ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
-              />
-              {isChecking.phone_number && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                </div>
-              )}
-            </div>
-            {(fieldErrors.phone_number || phoneFormatError) ? (
-              <p className="text-xs text-red-600 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        <div className="space-y-2">
+          <Label htmlFor="phone">Phone</Label>
+          <div className="relative">
+            <Input 
+              id="phone" 
+              value={phone} 
+              onChange={(e) => handlePhoneChange(e.target.value)}
+              onBlur={handlePhoneBlur}
+              placeholder="+15551234567" 
+              required
+              className={(fieldErrors.phone_number || phoneFormatError) ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
+            />
+            {isChecking.phone_number && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                {phoneFormatError || fieldErrors.phone_number}
-              </p>
-            ) : (
-              <p className="text-xs text-slate-500">Use E.164 format for SMS features.</p>
+              </div>
             )}
           </div>
+          {(fieldErrors.phone_number || phoneFormatError) ? (
+            <p className="text-xs text-red-600 flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              {phoneFormatError || fieldErrors.phone_number}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500">Use E.164 format for SMS features.</p>
+          )}
+        </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={isSaving || !email || !name || !phone || hasFieldErrors || isCheckingAny} 
-              className="flex-1 bg-teal-500 hover:bg-teal-600 text-white disabled:opacity-50"
-            >
-              {isSaving ? "Sending..." : "Send Invite"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={isSaving || !email || !name || !phone || hasFieldErrors || isCheckingAny} 
+            className="flex-1 bg-teal-500 hover:bg-teal-600 text-white disabled:opacity-50"
+          >
+            {isSaving ? "Sending..." : "Send Invite"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -940,117 +933,109 @@ function AddParticipantModal({
   const isCheckingAny = isChecking.email || isChecking.phone_number;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Add Participant</h2>
-            <p className="text-sm text-slate-500">Create participant directly (no email invite)</p>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Add Participant"
+      subtitle="Create participant directly (no email invite)"
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {(error || localError) && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm text-red-600">{localError ?? error}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="add-name">Name</Label>
+          <Input 
+            id="add-name" 
+            value={name} 
+            onChange={(e) => setName(e.target.value)} 
+            placeholder="Jane Doe" 
+            required 
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {(error || localError) && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-600">{localError ?? error}</p>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="add-name">Name</Label>
-            <Input 
-              id="add-name" 
-              value={name} 
-              onChange={(e) => setName(e.target.value)} 
-              placeholder="Jane Doe" 
-              required 
+        <div className="space-y-2">
+          <Label htmlFor="add-email">Email</Label>
+          <div className="relative">
+            <Input
+              id="add-email"
+              type="email"
+              value={email}
+              onChange={(e) => handleEmailChange(e.target.value)}
+              placeholder="participant@example.com"
+              required
+              className={fieldErrors.email ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="add-email">Email</Label>
-            <div className="relative">
-              <Input
-                id="add-email"
-                type="email"
-                value={email}
-                onChange={(e) => handleEmailChange(e.target.value)}
-                placeholder="participant@example.com"
-                required
-                className={fieldErrors.email ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
-              />
-              {isChecking.email && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                </div>
-              )}
-            </div>
-            {fieldErrors.email && (
-              <p className="text-xs text-red-600 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            {isChecking.email && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                {fieldErrors.email}
-              </p>
+              </div>
             )}
           </div>
+          {fieldErrors.email && (
+            <p className="text-xs text-red-600 flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              {fieldErrors.email}
+            </p>
+          )}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="add-phone">Phone</Label>
-            <div className="relative">
-              <Input 
-                id="add-phone" 
-                value={phone} 
-                onChange={(e) => handlePhoneChange(e.target.value)}
-                onBlur={handlePhoneBlur}
-                placeholder="+15551234567" 
-                required
-                className={(fieldErrors.phone_number || phoneFormatError) ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
-              />
-              {isChecking.phone_number && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                </div>
-              )}
-            </div>
-            {(fieldErrors.phone_number || phoneFormatError) ? (
-              <p className="text-xs text-red-600 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        <div className="space-y-2">
+          <Label htmlFor="add-phone">Phone</Label>
+          <div className="relative">
+            <Input 
+              id="add-phone" 
+              value={phone} 
+              onChange={(e) => handlePhoneChange(e.target.value)}
+              onBlur={handlePhoneBlur}
+              placeholder="+15551234567" 
+              required
+              className={(fieldErrors.phone_number || phoneFormatError) ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""}
+            />
+            {isChecking.phone_number && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                {phoneFormatError || fieldErrors.phone_number}
-              </p>
-            ) : (
-              <p className="text-xs text-slate-500">Use E.164 format for SMS features.</p>
+              </div>
             )}
           </div>
+          {(fieldErrors.phone_number || phoneFormatError) ? (
+            <p className="text-xs text-red-600 flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              {phoneFormatError || fieldErrors.phone_number}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500">Use E.164 format for SMS features.</p>
+          )}
+        </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={isSaving || !email || !name || !phone || hasFieldErrors || isCheckingAny} 
-              className="flex-1 bg-teal-500 hover:bg-teal-600 text-white disabled:opacity-50"
-            >
-              {isSaving ? "Adding..." : "Add Participant"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex gap-3 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={isSaving || !email || !name || !phone || hasFieldErrors || isCheckingAny} 
+            className="flex-1 bg-teal-500 hover:bg-teal-600 text-white disabled:opacity-50"
+          >
+            {isSaving ? "Adding..." : "Add Participant"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -1091,80 +1076,72 @@ function EditParticipantModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Edit Participant</h2>
-            <p className="text-xs text-slate-500">ID: {participant.id}</p>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Edit Participant"
+      subtitle={`ID: ${participant.id}`}
+      size="lg"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {(error || localError) && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm text-red-600">{localError ?? error}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        )}
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {(error || localError) && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-600">{localError ?? error}</p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">Name</Label>
-              <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="—" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-phone">Phone</Label>
-              <Input id="edit-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+15551234567" />
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-name">Name</Label>
+            <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="—" />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="edit-email">Email</Label>
-            <Input
-              id="edit-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="participant@example.com"
-            />
+            <Label htmlFor="edit-phone">Phone</Label>
+            <Input id="edit-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+15551234567" />
           </div>
+        </div>
 
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-            <p className="text-sm text-slate-500 mb-1">Current assignment</p>
-            {participant.assigned_mentor ? (
-              <p className="font-semibold text-slate-900">
-                {participant.assigned_mentor.mentor_name || "—"}{" "}
-                <span className="font-normal text-slate-500">
-                  {participant.assigned_mentor.mentor_email ? `(${participant.assigned_mentor.mentor_email})` : ""}
-                </span>
-              </p>
-            ) : (
-              <p className="font-semibold text-slate-900">Unassigned</p>
-            )}
-            <div className="mt-3">
-              <Button type="button" variant="outline" size="sm" onClick={onViewHistory}>
-                View assignment history
-              </Button>
-            </div>
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-email">Email</Label>
+          <Input
+            id="edit-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="participant@example.com"
+          />
+        </div>
 
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSaving} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white">
-              {isSaving ? "Saving..." : "Save Changes"}
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+          <p className="text-sm text-slate-500 mb-1">Current assignment</p>
+          {participant.assigned_mentor ? (
+            <p className="font-semibold text-slate-900">
+              {participant.assigned_mentor.mentor_name || "—"}{" "}
+              <span className="font-normal text-slate-500">
+                {participant.assigned_mentor.mentor_email ? `(${participant.assigned_mentor.mentor_email})` : ""}
+              </span>
+            </p>
+          ) : (
+            <p className="font-semibold text-slate-900">Unassigned</p>
+          )}
+          <div className="mt-3">
+            <Button type="button" variant="outline" size="sm" onClick={onViewHistory}>
+              View assignment history
             </Button>
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSaving} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white">
+            {isSaving ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -1180,8 +1157,8 @@ function AssignmentHistoryModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Participant Details</h2>
