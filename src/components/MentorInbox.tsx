@@ -36,29 +36,9 @@ export function MentorInbox() {
   // Message templates
   const messageTemplates = [
     {
-      id: "checkin",
-      label: "Weekly Check-in",
-      message: "Hi! Just checking in to see how you're doing this week. How are things going?"
-    },
-    {
-      id: "followup",
-      label: "Follow-up",
-      message: "Following up on our last conversation. Do you have any updates or questions I can help with?"
-    },
-    {
-      id: "encouragement",
-      label: "Encouragement",
-      message: "You're doing great! Keep up the good work. I'm here if you need any support."
-    },
-    {
-      id: "reminder",
-      label: "Appointment Reminder",
-      message: "Just a friendly reminder about our upcoming session. Looking forward to connecting with you!"
-    },
-    {
-      id: "resources",
-      label: "Share Resources",
-      message: "I wanted to share some helpful resources with you. Let me know if you'd like to discuss any of them."
+      id: "away",
+      label: "Away",
+      message: "Thanks for reaching out. I'm not here right now, but I'll be back soon."
     }
   ];
 
