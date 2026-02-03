@@ -224,6 +224,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
   };
 
   const openHistory = async (p: ParticipantRow) => {
+    setEditingParticipant(null); // Close edit modal
     setHistoryParticipant(p);
     setIsLoadingHistory(true);
     setHistory([]);
@@ -374,11 +375,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                 filteredParticipants.map((p) => (
                   <tr
                     key={p.id}
-                    className="hover:bg-slate-50 transition-colors cursor-pointer"
-                    onClick={() => {
-                      setFormError(null);
-                      setEditingParticipant(p);
-                    }}
+                    className="hover:bg-slate-50 transition-colors"
                   >
                     <td className="px-6 py-4">
                       <p className="font-semibold text-slate-900">{p.name || "—"}</p>
@@ -412,7 +409,10 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => openHistory(p)}
+                          onClick={() => {
+                            setFormError(null);
+                            setEditingParticipant(p);
+                          }}
                           className="text-slate-600 hover:text-slate-900"
                         >
                           Details
