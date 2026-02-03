@@ -66,7 +66,12 @@ function formatPhone(phone: string | null | undefined) {
 
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return "—";
-  const d = new Date(dateStr);
+  // Ensure UTC interpretation if timezone is missing
+  let s = dateStr;
+  if (s.includes("T") && !s.endsWith("Z") && !s.includes("+")) {
+    s += "Z";
+  }
+  const d = new Date(s);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
