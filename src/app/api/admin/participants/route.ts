@@ -35,26 +35,32 @@ export async function GET(request: Request) {
       participant_id,
       mentor_id,
       assigned_at,
+      unassigned_at,
       mentors ( id, name, email )
     `)
-    .is("unassigned_at", null);
+    .order("assigned_at", { ascending: false });
 
   if (assignmentsError) {
     return NextResponse.json({ error: "Failed to fetch assignments" }, { status: 500 });
   }
 
-  // Create a map of participant_id -> mentor
-  const assignmentMap = new Map<string, { mentor_id: string; mentor_name: string | null; mentor_email: string | null; assigned_at: string | null }>();
+  // Create a map of participant_id -> latest assignment
+  const assignmentMap = new Map<string, { mentor_id: string; mentor_name: string | null; mentor_email: string | null; assigned_at: string | null; unassigned_at: string | null }>();
   for (const a of assignmentsData ?? []) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mentor = a.mentors as any;
-    assignmentMap.set(a.participant_id, {
-      mentor_id: a.mentor_id,
-      mentor_name: mentor?.name ?? null,
-      mentor_email: mentor?.email ?? null,
+    // Since we ordered by assigned_at desc, we only care about the first one we see for each participant
+    if (!assignmentMap.has(a.participant_id)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      assigned_at: (a as any).assigned_at,
-    });
+      const mentor = a.mentors as any;
+      assignmentMap.set(a.participant_id, {
+        mentor_id: a.mentor_id,
+        mentor_name: mentor?.name ?? null,
+        mentor_email: mentor?.email ?? null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        assigned_at: (a as any).assigned_at,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        unassigned_at: (a as any).unassigned_at,
+      });
+    }
   }
 
   // Enrich participants with mentor info

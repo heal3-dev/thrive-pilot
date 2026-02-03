@@ -22,6 +22,7 @@ type AssignedMentor = {
   mentor_name: string | null;
   mentor_email: string | null;
   assigned_at: string | null;
+  unassigned_at: string | null;
 };
 
 type ParticipantRow = Participant & {
@@ -163,17 +164,20 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
         (p.email ?? "").toLowerCase().includes(q) ||
         (p.phone_number ?? "").toLowerCase().includes(q);
 
-      const isRemoved = p.is_active === false;
+  const isRemoved = p.is_active === false;
       const matchesStatus =
         statusFilter === "all" ||
         (statusFilter === "active" && !isRemoved) ||
         (statusFilter === "removed" && isRemoved);
 
-      const assignedMentorId = p.assigned_mentor?.mentor_id ?? null;
+      const assignedMentor = p.assigned_mentor;
+      // Consider "assigned" only if it's an active assignment (unassigned_at is null)
+      const isActiveAssignment = assignedMentor && !assignedMentor.unassigned_at;
+      
       const matchesMentor =
         mentorFilter === "all" ||
-        (mentorFilter === "unassigned" && !assignedMentorId) ||
-        (mentorFilter !== "unassigned" && mentorFilter !== "all" && assignedMentorId === mentorFilter);
+        (mentorFilter === "unassigned" && !isActiveAssignment) ||
+        (mentorFilter !== "unassigned" && mentorFilter !== "all" && isActiveAssignment && assignedMentor?.mentor_id === mentorFilter);
 
       return matchesSearch && matchesStatus && matchesMentor;
     });
@@ -370,7 +374,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                     <td className="px-6 py-4 text-slate-700 text-sm">{formatPhone(p.phone_number)}</td>
                     <td className="px-6 py-4 text-slate-700 break-words">{p.email || "—"}</td>
                     <td className="px-6 py-4">
-                      {p.assigned_mentor ? (
+                      {p.assigned_mentor && !p.assigned_mentor.unassigned_at ? (
                         <div>
                           <p className="font-semibold text-slate-900">{p.assigned_mentor.mentor_name || "—"}</p>
                           <p className="text-xs text-slate-500">{p.assigned_mentor.mentor_email || ""}</p>
@@ -545,16 +549,27 @@ function EditParticipantModal({
           <p className="text-sm text-slate-500 mb-1">Current assignment</p>
           {participant.assigned_mentor ? (
             <div>
-              <p className="font-semibold text-slate-900">
-                {participant.assigned_mentor.mentor_name || "—"}{" "}
-                <span className="font-normal text-slate-500">
-                  {participant.assigned_mentor.mentor_email ? `(${participant.assigned_mentor.mentor_email})` : ""}
-                </span>
-              </p>
-              {participant.assigned_mentor.assigned_at && (
-                <p className="text-xs text-slate-500 mt-1">
-                  Assigned on {formatDate(participant.assigned_mentor.assigned_at)}
-                </p>
+              {participant.assigned_mentor.unassigned_at ? (
+                <>
+                  <p className="font-semibold text-slate-900">Unassigned</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Last assigned to <strong>{participant.assigned_mentor.mentor_name}</strong> {participant.assigned_mentor.mentor_email ? `(${participant.assigned_mentor.mentor_email})` : ""} on {formatDate(participant.assigned_mentor.assigned_at)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-slate-900">
+                    {participant.assigned_mentor.mentor_name || "—"}{" "}
+                    <span className="font-normal text-slate-500">
+                      {participant.assigned_mentor.mentor_email ? `(${participant.assigned_mentor.mentor_email})` : ""}
+                    </span>
+                  </p>
+                  {participant.assigned_mentor.assigned_at && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      Assigned on {formatDate(participant.assigned_mentor.assigned_at)}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           ) : (

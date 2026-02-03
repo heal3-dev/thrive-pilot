@@ -483,7 +483,7 @@ function ReassignModal({
         <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
           <p className="text-sm text-amber-700">
             {assignment.unassigned_at
-              ? "This will create a new assignment with the selected mentor."
+              ? "This will create a new assignment with the selected mentor and activate the participant."
               : "This will end the current assignment and create a new one with the selected mentor."}
           </p>
         </div>
