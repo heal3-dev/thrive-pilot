@@ -205,8 +205,8 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
   const handleToggleActive = async (p: ParticipantRow) => {
     const nextIsActive = p.is_active === false;
     const confirmText = nextIsActive
-      ? "Restore this participant?"
-      : "Remove this participant? This is a soft delete (SMS history is preserved).";
+      ? "Activate this participant?"
+      : "Deactivate this participant? This will also end their current mentor assignment.";
     if (!confirm(confirmText)) return;
 
     try {
@@ -215,7 +215,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_active: nextIsActive }),
       });
-      setSuccessMessage(nextIsActive ? "Participant restored" : "Participant removed");
+      setSuccessMessage(nextIsActive ? "Participant activated" : "Participant deactivated");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error("Error toggling participant:", err);
@@ -294,7 +294,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
-              <option value="removed">Removed</option>
+              <option value="removed">Inactive</option>
             </select>
 
             <select
@@ -399,7 +399,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                     <td className="px-6 py-4">
                       {p.is_active === false ? (
                         <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
-                          Removed
+                          Inactive
                         </span>
                       ) : (
                         <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-700">
@@ -423,7 +423,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                           onClick={() => handleToggleActive(p)}
                           className={p.is_active === false ? "text-green-600 hover:text-green-700" : "text-red-600 hover:text-red-700"}
                         >
-                          {p.is_active === false ? "Restore" : "Remove"}
+                          {p.is_active === false ? "Activate" : "Deactivate"}
                         </Button>
                       </div>
                     </td>

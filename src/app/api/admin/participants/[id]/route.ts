@@ -150,6 +150,20 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Failed to update participant" }, { status: 500 });
   }
 
+  // If deactivating, also end any active assignments
+  if (payload.is_active === false) {
+    const { error: unassignError } = await admin
+      .from("mentor_assignments")
+      .update({ unassigned_at: new Date().toISOString() })
+      .eq("participant_id", id)
+      .is("unassigned_at", null);
+
+    if (unassignError) {
+      console.error("Failed to unassign mentor during deactivation", unassignError);
+      // We don't fail the request, just log it, as the participant is already inactive
+    }
+  }
+
   return NextResponse.json({ participant: data });
 }
 
@@ -165,6 +179,17 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     .from("participants")
     .update({ is_active: false })
     .eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: "Failed to remove participant" }, { status: 500 });
+  }
+
+  // Also end any active assignments
+  await admin
+    .from("mentor_assignments")
+    .update({ unassigned_at: new Date().toISOString() })
+    .eq("participant_id", id)
+    .is("unassigned_at", null);
 
   if (error) {
     return NextResponse.json({ error: "Failed to remove participant" }, { status: 500 });
