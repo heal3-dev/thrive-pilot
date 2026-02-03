@@ -51,6 +51,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Failed to reassign: ${updateError.message}` }, { status: 500 });
   }
 
+  // Implicitly activate the participant
+  await admin
+    .from("participants")
+    .update({ is_active: true })
+    .eq("id", payload.participantId);
+
   return NextResponse.json({ ok: true }, { status: 201 });
 }
 
