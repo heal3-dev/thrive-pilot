@@ -34,6 +34,7 @@ export async function GET(request: Request) {
     .select(`
       participant_id,
       mentor_id,
+      assigned_at,
       mentors ( id, name, email )
     `)
     .is("unassigned_at", null);
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
   }
 
   // Create a map of participant_id -> mentor
-  const assignmentMap = new Map<string, { mentor_id: string; mentor_name: string | null; mentor_email: string | null }>();
+  const assignmentMap = new Map<string, { mentor_id: string; mentor_name: string | null; mentor_email: string | null; assigned_at: string | null }>();
   for (const a of assignmentsData ?? []) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mentor = a.mentors as any;
@@ -51,6 +52,8 @@ export async function GET(request: Request) {
       mentor_id: a.mentor_id,
       mentor_name: mentor?.name ?? null,
       mentor_email: mentor?.email ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      assigned_at: (a as any).assigned_at,
     });
   }
 

@@ -21,6 +21,7 @@ type AssignedMentor = {
   mentor_id: string;
   mentor_name: string | null;
   mentor_email: string | null;
+  assigned_at: string | null;
 };
 
 type ParticipantRow = Participant & {
@@ -89,9 +90,8 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(initialModal === "invite");
   const [isAddModalOpen, setIsAddModalOpen] = useState(initialModal === "add");
   const [editingParticipant, setEditingParticipant] = useState<ParticipantRow | null>(null);
-  const [historyParticipant, setHistoryParticipant] = useState<ParticipantRow | null>(null);
-
   const [history, setHistory] = useState<AssignmentHistoryRow[]>([]);
+  const [historyParticipant, setHistoryParticipant] = useState<ParticipantRow | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -223,21 +223,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
     }
   };
 
-  const openHistory = async (p: ParticipantRow) => {
-    setEditingParticipant(null); // Close edit modal
-    setHistoryParticipant(p);
-    setIsLoadingHistory(true);
-    setHistory([]);
-    try {
-      const json = await adminFetch(`/api/admin/participants/${p.id}/assignments`);
-      setHistory((json.history as AssignmentHistoryRow[]) ?? []);
-    } catch (err) {
-      console.error("Error fetching assignment history:", err);
-      setError(err instanceof Error ? err.message : "Failed to load assignment history");
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
+
 
   if (isLoading) {
     return (
@@ -415,7 +401,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                           }}
                           className="text-slate-600 hover:text-slate-900"
                         >
-                          Details
+                          Edit
                         </Button>
                         <Button
                           variant="ghost"
@@ -467,20 +453,13 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
             setFormError(null);
           }}
           onSubmit={(payload) => handleUpdateParticipant(editingParticipant.id, payload)}
-          onViewHistory={() => openHistory(editingParticipant)}
           isSaving={isSaving}
           error={formError}
         />
       )}
 
-      {historyParticipant && (
-        <AssignmentHistoryModal
-          participant={historyParticipant}
-          history={history}
-          isLoading={isLoadingHistory}
-          onClose={() => setHistoryParticipant(null)}
-        />
-      )}
+
+
     </div>
   );
 }
@@ -494,14 +473,12 @@ function EditParticipantModal({
   participant,
   onClose,
   onSubmit,
-  onViewHistory,
   isSaving,
   error,
 }: {
   participant: ParticipantRow;
   onClose: () => void;
   onSubmit: (payload: UpdateParticipantPayload) => Promise<void>;
-  onViewHistory: () => void;
   isSaving: boolean;
   error: string | null;
 }) {
@@ -567,20 +544,22 @@ function EditParticipantModal({
         <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
           <p className="text-sm text-slate-500 mb-1">Current assignment</p>
           {participant.assigned_mentor ? (
-            <p className="font-semibold text-slate-900">
-              {participant.assigned_mentor.mentor_name || "—"}{" "}
-              <span className="font-normal text-slate-500">
-                {participant.assigned_mentor.mentor_email ? `(${participant.assigned_mentor.mentor_email})` : ""}
-              </span>
-            </p>
+            <div>
+              <p className="font-semibold text-slate-900">
+                {participant.assigned_mentor.mentor_name || "—"}{" "}
+                <span className="font-normal text-slate-500">
+                  {participant.assigned_mentor.mentor_email ? `(${participant.assigned_mentor.mentor_email})` : ""}
+                </span>
+              </p>
+              {participant.assigned_mentor.assigned_at && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Assigned on {formatDate(participant.assigned_mentor.assigned_at)}
+                </p>
+              )}
+            </div>
           ) : (
             <p className="font-semibold text-slate-900">Unassigned</p>
           )}
-          <div className="mt-3">
-            <Button type="button" variant="outline" size="sm" onClick={onViewHistory}>
-              View assignment history
-            </Button>
-          </div>
         </div>
 
         <div className="flex gap-3 pt-2">
@@ -596,93 +575,5 @@ function EditParticipantModal({
   );
 }
 
-function AssignmentHistoryModal({
-  participant,
-  history,
-  isLoading,
-  onClose,
-}: {
-  participant: ParticipantRow;
-  history: AssignmentHistoryRow[];
-  isLoading: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Participant Details</h2>
-            <p className="text-sm text-slate-600">
-              {participant.name || "—"} · {formatPhone(participant.phone_number)} · {participant.email || "—"}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
 
-        <div className="p-6 space-y-4">
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-            <p className="text-sm text-slate-500 mb-1">Current assigned mentor</p>
-            {participant.assigned_mentor ? (
-              <p className="font-semibold text-slate-900">
-                {participant.assigned_mentor.mentor_name || "—"}{" "}
-                <span className="font-normal text-slate-500">
-                  {participant.assigned_mentor.mentor_email ? `(${participant.assigned_mentor.mentor_email})` : ""}
-                </span>
-              </p>
-            ) : (
-              <p className="font-semibold text-slate-900">Unassigned</p>
-            )}
-          </div>
-
-          <div className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-slate-100">
-              <h3 className="font-bold text-slate-900">Assignment History</h3>
-            </div>
-
-            {isLoading ? (
-              <div className="p-8 text-center text-slate-500">Loading history...</div>
-            ) : history.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">No assignment history</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-100">
-                    <tr>
-                      <th className="text-left px-6 py-3 text-xs font-bold text-slate-600 uppercase">Mentor</th>
-                      <th className="text-left px-6 py-3 text-xs font-bold text-slate-600 uppercase">Assigned</th>
-                      <th className="text-left px-6 py-3 text-xs font-bold text-slate-600 uppercase">Ended</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {history.map((h) => (
-                      <tr key={h.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-4">
-                          <p className="font-semibold text-slate-900">{h.mentor?.name || h.mentor?.email || "—"}</p>
-                          <p className="text-xs text-slate-500">{h.mentor?.email || ""}</p>
-                        </td>
-                        <td className="px-6 py-4 text-slate-700">{formatDate(h.assigned_at)}</td>
-                        <td className="px-6 py-4 text-slate-700">{formatDate(h.unassigned_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-end">
-            <Button variant="outline" onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
