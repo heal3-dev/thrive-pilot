@@ -332,8 +332,8 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
           <table className="w-full table-fixed">
             <colgroup>
               <col className="w-[15%]" />
-              <col className="w-[15%]" />
-              <col className="w-[20%]" />
+              <col className="w-[18%]" />
+              <col className="w-[17%]" />
               <col className="w-[20%]" />
               <col className="w-[12%]" />
               <col className="w-[18%]" />
@@ -367,7 +367,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                       <p className="font-semibold text-slate-900">{p.name || "—"}</p>
                       <p className="text-xs text-slate-500">Created {formatDate(p.created_at ?? null)}</p>
                     </td>
-                    <td className="px-6 py-4 text-slate-700">{formatPhone(p.phone_number)}</td>
+                    <td className="px-6 py-4 text-slate-700 text-xs whitespace-nowrap">{formatPhone(p.phone_number)}</td>
                     <td className="px-6 py-4 text-slate-700">{p.email || "—"}</td>
                     <td className="px-6 py-4">
                       {p.assigned_mentor ? (
