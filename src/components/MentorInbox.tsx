@@ -8,6 +8,7 @@ import type { Participant, SMSMessage } from "@/types";
 
 type ParticipantWithAssignment = Participant & {
   assignment_id: string;
+  unassigned_at: string | null;
 };
 
 type OptimisticSMSMessage = SMSMessage & {
@@ -60,6 +61,7 @@ export function MentorInbox() {
           .select(`
             id,
             participant_id,
+            unassigned_at,
             participants (
               id,
               name,
@@ -82,7 +84,9 @@ export function MentorInbox() {
           .map((assignment) => {
             if (!assignment.participants || typeof assignment.participants !== "object") return null;
             const participant = assignment.participants as Participant;
-            return { ...participant, assignment_id: assignment.id };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const unassignedAt = (assignment as any).unassigned_at;
+            return { ...participant, assignment_id: assignment.id, unassigned_at: unassignedAt };
           })
           .filter((p): p is ParticipantWithAssignment => Boolean(p));
 
@@ -513,6 +517,11 @@ export function MentorInbox() {
                     <p className="text-xs text-slate-500 truncate">
                       {formatPhone(participant.phone_number)}
                     </p>
+                    {(participant.unassigned_at || participant.is_active === false) && (
+                      <span className="inline-flex mt-1 items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                        Unassigned
+                      </span>
+                    )}
                   </div>
                 </div>
               </button>
@@ -533,7 +542,14 @@ export function MentorInbox() {
                     {getInitials(selectedParticipant.name, selectedParticipant.email, selectedParticipant.phone_number)}
                   </div>
                   <div>
-                    <p className="font-bold text-slate-900">{selectedParticipant.name || "Unnamed"}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-slate-900">{selectedParticipant.name || "Unnamed"}</p>
+                      {(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-200 text-slate-600">
+                          Unassigned
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500">{formatPhone(selectedParticipant.phone_number)}</p>
                   </div>
                 </div>
@@ -670,13 +686,14 @@ export function MentorInbox() {
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Type a message..."
+                    placeholder={(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? "Conversation is read-only" : "Type a message..."}
+                    disabled={!!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
                     className="flex-1"
                   />
                   <Button
                     onClick={handleSendMessage}
-                    disabled={!messageInput.trim()}
-                    className="bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer"
+                    disabled={!messageInput.trim() || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
+                    className="bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -684,6 +701,11 @@ export function MentorInbox() {
                     Send
                   </Button>
                 </div>
+                {(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) && (
+                   <p className="text-xs text-center text-slate-400 mt-2">
+                     This conversation is read-only because the participant is unassigned.
+                   </p>
+                )}
               </div>
             </div>
           </>
