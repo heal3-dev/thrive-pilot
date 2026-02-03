@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getInviteRedirect, requireAdmin } from "../_utils";
+import { twilioClient, TWILIO_PHONE_NUMBER } from "@/lib/twilio";
 
 const createParticipantSchema = z.object({
   email: z.string().email(),
@@ -190,6 +191,22 @@ export async function POST(request: Request) {
           redirectSource: source,
           userId: inviteData?.user?.id ?? null,
         });
+
+        // Send Welcome SMS
+        if (payload.phone_number && TWILIO_PHONE_NUMBER) {
+          try {
+            const messageBody = `Hi ${payload.name || "there"}, you've been invited to Thrive Pilot. Please check your email ${payload.email} to accept the invitation.`;
+            await twilioClient.messages.create({
+              to: payload.phone_number,
+              from: TWILIO_PHONE_NUMBER,
+              body: messageBody,
+            });
+            console.info("[INVITE] Welcome SMS sent", { phone: payload.phone_number });
+          } catch (smsError) {
+            console.error("[INVITE] Failed to send Welcome SMS", smsError);
+            // Don't fail the request, just log it
+          }
+        }
       }
     } catch (e) {
       console.error("[INVITE] Supabase invite threw", {
