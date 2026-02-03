@@ -167,7 +167,14 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
   // Format date
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "—";
-    return new Date(dateStr).toLocaleDateString(undefined, {
+    // Ensure UTC interpretation if timezone is missing
+    let s = dateStr;
+    if (s.includes("T") && !s.endsWith("Z") && !s.includes("+")) {
+      s += "Z";
+    }
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString(undefined, {
       month: "short",
       day: "numeric",
       year: "numeric",
