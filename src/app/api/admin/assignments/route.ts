@@ -45,19 +45,16 @@ export async function GET(request: Request) {
     status: a.unassigned_at ? "ended" : "active" as "active" | "ended" | "never_assigned",
   }));
 
-  // Active assignment participant ids (unassigned_at is NULL)
-  const activeAssignmentParticipantIds = assignments
-    .filter((a) => !a.unassigned_at)
-    .map((a) => a.participant_id);
+  // Unassigned participants = active participants who have NEVER been assigned (not in ANY assignment)
+  // We need to filter out anyone who appears in the assignments list, regardless of status.
+  const allAssignedParticipantIds = Array.from(new Set(assignments.map(a => a.participant_id)));
 
-  // Unassigned participants = active participants NOT in active assignments
   let unassignedQuery = admin.from("participants").select("*").eq("is_active", true);
-  if (activeAssignmentParticipantIds.length > 0) {
-    // PostgREST "in" expects a comma-separated list without quotes when values are UUIDs.
+  if (allAssignedParticipantIds.length > 0) {
     unassignedQuery = unassignedQuery.not(
       "id",
       "in",
-      `(${activeAssignmentParticipantIds.join(",")})`
+      `(${allAssignedParticipantIds.join(",")})`
     );
   }
   const { data: unassignedParticipants, error: unassignedError } = await unassignedQuery;
