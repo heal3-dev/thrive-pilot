@@ -1,76 +1,85 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { generateStateToken } from '@/lib/garmin/oauth-state';
+import { 
+  getAuthorizationUrl, 
+  generateCodeVerifier, 
+  generateCodeChallenge 
+} from '@/lib/garmin/oauth-client';
 
-import { useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-
-function GarminConnectContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+export default async function GarminConnectPage() {
+  // Step 1: Verify Supabase session (magic link creates it automatically)
+  const supabase = await createClient();
+  const { data, error: sessionError } = await supabase.auth.getSession();
+  const session = data?.session;
+  const user = session?.user;
   
-  useEffect(() => {
-    const participantId = searchParams.get('participant_id');
-    const action = searchParams.get('action');
-    
-    // Validate that this came from a Garmin OAuth invite
-    if (!participantId || action !== 'garmin_connect') {
-      console.error('[GARMIN_CONNECT] Invalid parameters');
-      router.push('/dashboard');
-      return;
-    }
-    
-    // TODO: Redirect to Garmin OAuth flow
-    // For now, just show message
-    console.log('[GARMIN_CONNECT] Ready to initiate OAuth for participant:', participantId);
-    
-    // const garminAuthUrl = new URL('https://connect.garmin.com/oauthConfirm');
-    // garminAuthUrl.searchParams.set('oauth_token', 'REQUEST_TOKEN');
-    // window.location.href = garminAuthUrl.toString();
-  }, [router, searchParams]);
+  if (sessionError || !session || !user) {
+    console.error('[GARMIN_CONNECT] No valid session:', sessionError);
+    redirect('/garmin/error?reason=invalid_link');
+  }
   
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50">
-      <div className="text-center max-w-md px-6">
-        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-teal-100 flex items-center justify-center">
-          <svg 
-            className="w-8 h-8 text-teal-600" 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            stroke="currentColor" 
-            strokeWidth={2}
-          >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              d="M13 10V3L4 14h7v7l9-11h-7z" 
-            />
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-3">
-          Connecting to Garmin
-        </h1>
-        <p className="text-slate-600 mb-6">
-          Preparing to redirect you to Garmin Connect...
-        </p>
-        <div className="flex items-center justify-center gap-2 text-sm text-slate-400">
-          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path 
-              className="opacity-75" 
-              fill="currentColor" 
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" 
-            />
-          </svg>
-          <span>Please wait...</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function GarminConnectPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <GarminConnectContent />
-    </Suspense>
-  );
+  // Step 2: Get participant context from magic link metadata
+  const participantId = user.user_metadata?.participant_id;
+  const action = user.user_metadata?.action;
+  
+  if (!participantId || action !== 'garmin_connect') {
+    console.error('[GARMIN_CONNECT] Missing or invalid participant context:', {
+      participantId,
+      action,
+    });
+    redirect('/garmin/error?reason=missing_context');
+  }
+  
+  // Step 3: Check if already connected
+  const { data: existingToken } = await supabase
+    .from('garmin_tokens')
+    .select('id')
+    .eq('participant_id', participantId)
+    .is('revoked_at', null)
+    .maybeSingle();
+    
+  if (existingToken) {
+    console.log('[GARMIN_CONNECT] Already connected:', participantId);
+    redirect('/garmin/error?reason=already_connected');
+  }
+  
+  try {
+    // Step 4: Generate CSRF state token
+    const state = await generateStateToken({
+      user_id: user.id,
+      participant_id: participantId,
+    });
+    
+    // Step 5: Generate PKCE code verifier and challenge (OAuth 2.0 PKCE)
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = generateCodeChallenge(codeVerifier);
+    
+    // Store code verifier temporarily for callback verification
+    await supabase
+      .from('garmin_oauth_temp')
+      .insert({
+        state_token: state,
+        code_verifier: codeVerifier,
+        participant_id: participantId,
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min
+      });
+    
+    // Step 6: Build Garmin OAuth 2.0 authorization URL
+    const authUrl = getAuthorizationUrl({
+      state,
+      codeChallenge,
+    });
+    
+    console.log('[GARMIN_CONNECT] Redirecting to Garmin:', {
+      participant_id: participantId,
+      state,
+    });
+    
+    // Step 7: Redirect to Garmin for user authorization
+    redirect(authUrl);
+  } catch (error) {
+    console.error('[GARMIN_CONNECT] OAuth initialization failed:', error);
+    redirect('/garmin/error?reason=garmin_unavailable');
+  }
 }
