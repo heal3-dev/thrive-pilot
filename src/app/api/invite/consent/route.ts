@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     const { data: created, error: createError } = await admin
       .from("participants")
       .insert({
-        id: user.id, // Link to auth user for consistency
+        user_id: user.id, // Link to auth user
         email: userEmail,
         name: participantName,
         phone_number: participantPhone,
@@ -79,15 +79,27 @@ export async function POST(request: Request) {
       .single();
 
     if (createError || !created?.id) {
-      console.error("Error creating participant on consent:", createError);
+      console.error("[CONSENT] Error creating participant on consent:", {
+        error: createError,
+        code: createError?.code,
+        message: createError?.message,
+        details: createError?.details,
+        hint: createError?.hint,
+        userId: user.id,
+        email: userEmail,
+      });
       return NextResponse.json(
-        { error: "Failed to create participant record" },
+        { 
+          error: "Failed to create participant record",
+          details: createError?.message || "Unknown error"
+        },
         { status: 500 }
       );
     }
 
     console.info("[CONSENT] Created participant on consent acceptance", {
       participantId: created.id,
+      userId: user.id,
       email: userEmail,
       name: participantName,
       phone: participantPhone,
