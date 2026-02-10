@@ -174,26 +174,69 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   const admin = guard.admin;
   const { id } = await params;
 
-  // Soft delete: set is_active = false
-  const { error } = await admin
+  // Check if participant record exists in the participants table
+  const { data: existing } = await admin
     .from("participants")
-    .update({ is_active: false })
-    .eq("id", id);
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: "Failed to remove participant" }, { status: 500 });
+  if (existing?.id) {
+    // ── Existing participant: soft delete ──
+    const { error } = await admin
+      .from("participants")
+      .update({ is_active: false })
+      .eq("id", id);
+
+    if (error) {
+      return NextResponse.json({ error: "Failed to remove participant" }, { status: 500 });
+    }
+
+    // Also end any active assignments
+    const { error: assignError } = await admin
+      .from("mentor_assignments")
+      .update({ unassigned_at: new Date().toISOString() })
+      .eq("participant_id", id)
+      .is("unassigned_at", null);
+
+    if (assignError) {
+      console.error("Failed to unassign mentor during deletion", assignError);
+    }
+
+    return NextResponse.json({ ok: true });
   }
 
-  // Also end any active assignments
-  await admin
-    .from("mentor_assignments")
-    .update({ unassigned_at: new Date().toISOString() })
-    .eq("participant_id", id)
-    .is("unassigned_at", null);
+  // ── No participant record: this is an unverified auth-only user ──
+  // Verify the auth user exists and is a participant invite
+  const { data: authData, error: getUserError } =
+    await admin.auth.admin.getUserById(id);
 
-  if (error) {
-    return NextResponse.json({ error: "Failed to remove participant" }, { status: 500 });
+  if (getUserError || !authData?.user) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
+
+  const meta = authData.user.user_metadata as Record<string, unknown> | undefined;
+  if (meta?.role !== "participant") {
+    return NextResponse.json(
+      { error: "This auth user is not a participant invite" },
+      { status: 400 }
+    );
+  }
+
+  // Hard delete the auth user
+  const { error: deleteAuthError } = await admin.auth.admin.deleteUser(id);
+  if (deleteAuthError) {
+    console.error("[DELETE] Failed to delete auth user", deleteAuthError);
+    return NextResponse.json(
+      { error: "Failed to delete invited user" },
+      { status: 500 }
+    );
+  }
+
+  console.info("[DELETE] Unverified auth user deleted", {
+    id,
+    email: authData.user.email,
+  });
 
   return NextResponse.json({ ok: true });
 }

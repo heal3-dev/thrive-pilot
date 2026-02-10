@@ -236,6 +236,38 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
     }
   };
 
+  const handleResendInvite = async (p: ParticipantRow) => {
+    if (!confirm(`Resend invite email to ${p.email}?`)) return;
+
+    try {
+      await adminFetch(`/api/admin/participants/${p.id}/resend-invite`, {
+        method: "POST",
+      });
+      setSuccessMessage(`Invite resent to ${p.email}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+      fetchParticipants();
+    } catch (err) {
+      console.error("Error resending invite:", err);
+      setError(err instanceof Error ? err.message : "Failed to resend invite");
+    }
+  };
+
+  const handleDeleteUnverified = async (p: ParticipantRow) => {
+    if (!confirm(`Delete invited user ${p.email}? This cannot be undone.`)) return;
+
+    try {
+      await adminFetch(`/api/admin/participants/${p.id}`, {
+        method: "DELETE",
+      });
+      setSuccessMessage(`Invited user ${p.email} deleted`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+      fetchParticipants();
+    } catch (err) {
+      console.error("Error deleting unverified user:", err);
+      setError(err instanceof Error ? err.message : "Failed to delete user");
+    }
+  };
+
 
 
   if (isLoading) {
@@ -412,7 +444,26 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                        {!p.is_unverified && (
+                        {p.is_unverified ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResendInvite(p)}
+                              className="text-teal-600 hover:text-teal-700"
+                            >
+                              Resend Invite
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteUnverified(p)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        ) : (
                           <>
                             <Button
                               variant="ghost"
