@@ -15,7 +15,7 @@ import type { Mentor, Participant } from "@/types";
 // Debounced uniqueness check hook removed (using import from hooks)
 // toE164 removed (using import from utils)
 
-type StatusFilter = "all" | "active" | "removed";
+type StatusFilter = "all" | "active" | "removed" | "unverified";
 
 type AssignedMentor = {
   mentor_id: string;
@@ -27,6 +27,7 @@ type AssignedMentor = {
 
 type ParticipantRow = Participant & {
   assigned_mentor: AssignedMentor | null;
+  is_unverified?: boolean;
 };
 
 type AssignmentHistoryRow = {
@@ -169,11 +170,14 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
         (p.email ?? "").toLowerCase().includes(q) ||
         (p.phone_number ?? "").toLowerCase().includes(q);
 
-  const isRemoved = p.is_active === false;
+  const isUnverified = !!(p as ParticipantRow).is_unverified;
+      const isRemoved = !isUnverified && p.is_active === false;
+      const isActive = !isUnverified && p.is_active !== false;
       const matchesStatus =
         statusFilter === "all" ||
-        (statusFilter === "active" && !isRemoved) ||
-        (statusFilter === "removed" && isRemoved);
+        (statusFilter === "active" && isActive) ||
+        (statusFilter === "removed" && isRemoved) ||
+        (statusFilter === "unverified" && isUnverified);
 
       const assignedMentor = p.assigned_mentor;
       // Consider "assigned" only if it's an active assignment (unassigned_at is null)
@@ -291,6 +295,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="removed">Inactive</option>
+              <option value="unverified">Unverified</option>
             </select>
 
             <select
@@ -374,7 +379,9 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                   >
                     <td className="px-6 py-4">
                       <p className="font-semibold text-slate-900">{p.name || "—"}</p>
-                      <p className="text-xs text-slate-500">Created {formatDate(p.created_at ?? null)}</p>
+                      <p className="text-xs text-slate-500">
+                        {p.is_unverified ? "Invited" : "Created"} {formatDate(p.created_at ?? null)}
+                      </p>
                     </td>
                     <td className="px-6 py-4 text-slate-700 text-sm">{formatPhone(p.phone_number)}</td>
                     <td className="px-6 py-4 text-slate-700 break-words">{p.email || "—"}</td>
@@ -389,7 +396,11 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      {p.is_active === false ? (
+                      {p.is_unverified ? (
+                        <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
+                          Unverified
+                        </span>
+                      ) : p.is_active === false ? (
                         <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
                           Inactive
                         </span>
@@ -401,25 +412,29 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setFormError(null);
-                            setEditingParticipant(p);
-                          }}
-                          className="text-slate-600 hover:text-slate-900"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleActive(p)}
-                          className={p.is_active === false ? "text-green-600 hover:text-green-700" : "text-red-600 hover:text-red-700"}
-                        >
-                          {p.is_active === false ? "Activate" : "Deactivate"}
-                        </Button>
+                        {!p.is_unverified && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setFormError(null);
+                                setEditingParticipant(p);
+                              }}
+                              className="text-slate-600 hover:text-slate-900"
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleActive(p)}
+                              className={p.is_active === false ? "text-green-600 hover:text-green-700" : "text-red-600 hover:text-red-700"}
+                            >
+                              {p.is_active === false ? "Activate" : "Deactivate"}
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

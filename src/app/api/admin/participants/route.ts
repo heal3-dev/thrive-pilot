@@ -70,6 +70,48 @@ export async function GET(request: Request) {
     assigned_mentor: assignmentMap.get(p.id) ?? null,
   }));
 
+  // ── Fetch Supabase Auth users invited as participants but not yet in the participants table ──
+  const participantIds = new Set((participantsData ?? []).map((p) => p.id));
+
+  let unverifiedParticipants: typeof participants = [];
+  try {
+    // listUsers paginates; fetch up to a reasonable page size
+    const { data: authList, error: authListError } = await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+
+    if (!authListError && authList?.users) {
+      unverifiedParticipants = authList.users
+        .filter((u) => {
+          const meta = u.user_metadata as Record<string, unknown> | undefined;
+          return meta?.role === "participant" && !participantIds.has(u.id);
+        })
+        .map((u) => {
+          const meta = u.user_metadata as Record<string, unknown> | undefined;
+          return {
+            id: u.id,
+            name: (meta?.name as string) ?? null,
+            phone_number: (meta?.phone_number as string) ?? "",
+            email: u.email ?? null,
+            is_active: false,
+            garmin_user_id: null,
+            consent_given: false,
+            consent_timestamp: null,
+            created_at: u.created_at,
+            updated_at: u.updated_at,
+            is_unverified: true,
+            assigned_mentor: null,
+          };
+        });
+    }
+  } catch (e) {
+    // Non-fatal: log and continue without unverified users
+    console.error("[PARTICIPANTS] Failed to fetch auth users for unverified list", e);
+  }
+
+  const allParticipants = [...participants, ...unverifiedParticipants];
+
   // Provide mentor list for filtering / display
   const { data: mentors, error: mentorsError } = await admin
     .from("mentors")
@@ -81,7 +123,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch mentors" }, { status: 500 });
   }
 
-  return NextResponse.json({ participants, mentors: mentors ?? [] });
+  return NextResponse.json({ participants: allParticipants, mentors: mentors ?? [] });
 }
 
 export async function POST(request: Request) {
