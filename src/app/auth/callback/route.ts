@@ -3,28 +3,36 @@ import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
-  const token = requestUrl.searchParams.get('token')
+  const code = requestUrl.searchParams.get('code')
+  const token_hash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
-  const redirectTo = requestUrl.searchParams.get('redirect_to') || '/invite/consent'
+  const next = requestUrl.searchParams.get('next') || '/invite/consent'
 
-  if (token && type) {
-    const supabase = await createClient()
+  const supabase = await createClient()
 
-    // Exchange the token for a session
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash: token,
-      type: type as any,
-    })
-
+  // PKCE flow: exchange authorization code for session
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (error) {
-      console.error('[AUTH_CALLBACK] Error verifying token:', error)
-      return NextResponse.redirect(new URL('/?error=invalid_token', requestUrl.origin))
+      console.error('[AUTH_CALLBACK] Code exchange error:', error)
+      return NextResponse.redirect(new URL('/?error=auth_code_error', requestUrl.origin))
     }
-
-    // Successful verification - redirect to the intended page
-    return NextResponse.redirect(new URL(redirectTo, requestUrl.origin))
+    return NextResponse.redirect(new URL(next, requestUrl.origin))
   }
 
-  // No token provided - redirect to home
+  // OTP/token hash flow (magic links, invites with token_hash)
+  if (token_hash && type) {
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash,
+      type: type as any,
+    })
+    if (error) {
+      console.error('[AUTH_CALLBACK] OTP verification error:', error)
+      return NextResponse.redirect(new URL('/?error=invalid_token', requestUrl.origin))
+    }
+    return NextResponse.redirect(new URL(next, requestUrl.origin))
+  }
+
+  console.error('[AUTH_CALLBACK] No code or token_hash provided')
   return NextResponse.redirect(new URL('/', requestUrl.origin))
 }
