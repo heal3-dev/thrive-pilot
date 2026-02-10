@@ -44,6 +44,7 @@ export default function ConsentPage() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => null);
+        console.error("[CONSENT] Full error response:", data);
         throw new Error(data?.error || "Failed to record consent");
       }
 
