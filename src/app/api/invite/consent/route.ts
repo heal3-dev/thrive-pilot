@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   // Extract participant data from user_metadata (set during invite)
   const userMetadata = user.user_metadata || {};
   const participantName = userMetadata.name || null;
-  const participantPhone = userMetadata.phone_number || "";
+  const participantPhone = userMetadata.phone_number || null; // null instead of "" for E.164 constraint
 
   // Use admin client to update participant record (bypasses RLS)
   const admin = getSupabaseAdmin();
