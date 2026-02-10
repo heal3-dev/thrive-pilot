@@ -39,9 +39,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // Optional: Redirect to dashboard if already logged in
+  // Redirect authenticated users from login page based on role
   if (request.nextUrl.pathname === '/' && user) {
-     return NextResponse.redirect(new URL('/dashboard', request.url))
+    const userRole = user.user_metadata?.role || user.app_metadata?.role;
+    
+    // Participants should go to consent page (if invited) or stay on login
+    if (userRole === 'participant') {
+      return NextResponse.redirect(new URL('/invite/consent', request.url))
+    }
+    
+    // Mentors/admins go to dashboard
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return response
