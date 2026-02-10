@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     const { data: created, error: createError } = await admin
       .from("participants")
       .insert({
-        user_id: user.id, // Link to auth user
+        // id is auto-generated - don't set it
         email: userEmail,
         name: participantName,
         phone_number: participantPhone,
@@ -85,7 +85,6 @@ export async function POST(request: Request) {
         message: createError?.message,
         details: createError?.details,
         hint: createError?.hint,
-        userId: user.id,
         email: userEmail,
       });
       return NextResponse.json(
@@ -99,7 +98,6 @@ export async function POST(request: Request) {
 
     console.info("[CONSENT] Created participant on consent acceptance", {
       participantId: created.id,
-      userId: user.id,
       email: userEmail,
       name: participantName,
       phone: participantPhone,
