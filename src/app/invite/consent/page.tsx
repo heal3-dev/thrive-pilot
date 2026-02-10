@@ -15,9 +15,6 @@ export default function ConsentPage() {
   // Check if user is authenticated (came from magic link)
   useEffect(() => {
     const checkAuth = async () => {
-      // Wait a bit for Supabase to process auth callback
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         // User not authenticated, redirect to login
