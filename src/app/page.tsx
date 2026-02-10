@@ -28,6 +28,26 @@ export default function LoginPage() {
     };
   }, [router]);
 
+  // Check for auth errors in URL hash (from Supabase redirects)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash) return;
+
+    const params = new URLSearchParams(hash.substring(1));
+    const error = params.get('error');
+    const errorCode = params.get('error_code');
+    const errorDescription = params.get('error_description');
+
+    if (error === 'access_denied' && errorCode === 'otp_expired') {
+      setError('Your invite link has expired. Please contact your administrator for a new invitation.');
+      // Clear the hash from URL
+      window.history.replaceState(null, '', window.location.pathname);
+    } else if (error) {
+      setError(errorDescription || 'Authentication failed. Please try again or contact support.');
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
+
   // Simple email validation
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
