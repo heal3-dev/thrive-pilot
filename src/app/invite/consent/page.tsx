@@ -10,14 +10,20 @@ export default function ConsentPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Check if user is authenticated (came from magic link)
   useEffect(() => {
     const checkAuth = async () => {
+      // Wait a bit for Supabase to process auth callback
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         // User not authenticated, redirect to login
         router.replace("/");
+      } else {
+        setIsLoading(false);
       }
     };
     checkAuth();
@@ -57,6 +63,19 @@ export default function ConsentPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-slate-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-3xl shadow-xl border-2 border-slate-100 max-w-2xl w-full p-8">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mb-4"></div>
+            <p className="text-slate-600">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-slate-50 flex items-center justify-center p-6">
