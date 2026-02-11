@@ -1,0 +1,19 @@
+export function garminInviteTemplate(params: {
+  name: string;
+  link: string;
+  expiresIn: string;
+}): string {
+  return `
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+      <h1>Connect Your Garmin</h1>
+      <p>Hi ${params.name},</p>
+      <p>Click the button below to securely connect your Garmin device to Thrive Pilot.</p>
+      <a href="${params.link}" style="display: inline-block; padding: 12px 24px; background: #0d9488; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">
+        Connect Garmin
+      </a>
+      <p style="color: #64748b; font-size: 14px; margin-top: 24px;">
+        This link expires in ${params.expiresIn}. Only trend-level wellness data is collected.
+      </p>
+    </div>
+  `;
+}

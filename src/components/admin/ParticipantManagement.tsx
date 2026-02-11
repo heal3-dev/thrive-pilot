@@ -28,6 +28,7 @@ type AssignedMentor = {
 type ParticipantRow = Participant & {
   assigned_mentor: AssignedMentor | null;
   is_unverified?: boolean;
+  garmin_connected?: boolean;
 };
 
 type AssignmentHistoryRow = {
@@ -252,6 +253,30 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
     }
   };
 
+  const handleConnectGarmin = async (p: ParticipantRow) => {
+    if (!p.email) {
+      setError("Participant is missing an email address");
+      return;
+    }
+
+    try {
+      setError(null);
+      const result = await adminFetch("/api/garmin/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participant_id: p.id,
+          email: p.email,
+        }),
+      });
+      setSuccessMessage(result?.message ?? `Garmin invite sent to ${p.email}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error("Error sending Garmin invite:", err);
+      setError(err instanceof Error ? err.message : "Failed to send Garmin invite");
+    }
+  };
+
   const handleDeleteUnverified = async (p: ParticipantRow) => {
     if (!confirm(`Delete invited user ${p.email}? This cannot be undone.`)) return;
 
@@ -465,6 +490,15 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                           </>
                         ) : (
                           <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleConnectGarmin(p)}
+                              disabled={p.garmin_connected === true || Boolean(p.garmin_user_id)}
+                              className="text-teal-600 hover:text-teal-700 disabled:text-slate-300"
+                            >
+                              {p.garmin_connected === true || Boolean(p.garmin_user_id) ? "Garmin Connected" : "Connect Garmin"}
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"

@@ -45,6 +45,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch assignments" }, { status: 500 });
   }
 
+  // Fetch active Garmin connections to expose connected state in admin UI.
+  const { data: garminTokensData, error: garminTokensError } = await admin
+    .from("garmin_tokens")
+    .select("participant_id")
+    .is("revoked_at", null);
+
+  if (garminTokensError) {
+    return NextResponse.json({ error: "Failed to fetch Garmin connections" }, { status: 500 });
+  }
+
+  const connectedParticipantIds = new Set(
+    (garminTokensData ?? []).map((token) => token.participant_id)
+  );
+
   // Create a map of participant_id -> latest assignment
   const assignmentMap = new Map<string, { mentor_id: string; mentor_name: string | null; mentor_email: string | null; assigned_at: string | null; unassigned_at: string | null }>();
   for (const a of assignmentsData ?? []) {
@@ -67,6 +81,8 @@ export async function GET(request: Request) {
   // Enrich participants with mentor info
   const participants = (participantsData ?? []).map((p) => ({
     ...p,
+    garmin_connected:
+      connectedParticipantIds.has(p.id) || Boolean(p.garmin_user_id),
     assigned_mentor: assignmentMap.get(p.id) ?? null,
   }));
 
@@ -100,6 +116,7 @@ export async function GET(request: Request) {
             consent_timestamp: null,
             created_at: u.created_at,
             updated_at: u.updated_at,
+            garmin_connected: false,
             is_unverified: true,
             assigned_mentor: null,
           };

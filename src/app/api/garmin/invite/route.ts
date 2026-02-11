@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAdmin } from '@/app/api/admin/_utils';
+import { sendEmail } from '@/lib/email/send';
+import { garminInviteTemplate } from '@/lib/email/templates/garmin-invite';
 
 const inviteSchema = z.object({
   participant_id: z.string().uuid(),
@@ -30,6 +32,10 @@ export async function POST(request: Request) {
     
   if (participantError || !participant) {
     return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
+  }
+
+  if (!participant.email || participant.email.toLowerCase() !== payload.email.toLowerCase()) {
+    return NextResponse.json({ error: 'Participant email does not match request' }, { status: 400 });
   }
   
   // 2. Check if already connected
@@ -83,27 +89,34 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+
+  const actionLink = linkData.properties.action_link;
+  if (!actionLink) {
+    return NextResponse.json(
+      { error: 'Invite link was not generated' },
+      { status: 500 }
+    );
+  }
   
-  // 5. Send email (placeholder - will implement template next)
+  // 5. Send email
   const expiresAt = new Date(Date.now() + 86400000); // 24 hours
-  console.log('[GARMIN_INVITE] Magic link generated:', {
-    participant_id: payload.participant_id,
-    email: participant.email,
-    link: linkData.properties.action_link,
-    expires_at: expiresAt.toISOString(),
-  });
-  
-  // TODO: Implement email sending with template
-  // await sendEmail({
-  //   to: participant.email,
-  //   subject: '🔗 Connect Your Garmin to Thrive Pilot',
-  //   template: 'garmin-invite',
-  //   data: {
-  //     name: participant.name || 'there',
-  //     link: linkData.properties.action_link,
-  //     expiresIn: '24 hours',
-  //   },
-  // });
+  try {
+    await sendEmail({
+      to: participant.email,
+      subject: 'Connect Your Garmin to Thrive Pilot',
+      html: garminInviteTemplate({
+        name: participant.name || 'there',
+        link: actionLink,
+        expiresIn: '24 hours',
+      }),
+    });
+  } catch (emailError) {
+    console.error('[GARMIN_INVITE] Failed to send Garmin invite email:', emailError);
+    return NextResponse.json(
+      { error: 'Failed to send Garmin invite email' },
+      { status: 500 }
+    );
+  }
   
   // 6. Get authenticated user for audit log
   const { data: sessionData } = await admin.auth.getSession();
