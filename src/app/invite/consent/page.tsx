@@ -15,21 +15,35 @@ export default function ConsentPage() {
   // Handle auth from invite link hash fragments (#access_token=...)
   // Supabase client auto-detects hash fragments and fires onAuthStateChange
   useEffect(() => {
+    let redirectTimer: NodeJS.Timeout;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (session) {
+          // Session established (from hash fragment or existing cookies)
+          clearTimeout(redirectTimer);
           setIsReady(true);
-        } else {
-          // No session after Supabase checked - redirect to login
+        } else if (event === 'SIGNED_OUT') {
+          // Explicitly signed out
           router.replace("/");
         }
+        // For INITIAL_SESSION with null: do NOT redirect yet.
+        // The hash fragment might still be processing.
       }
     );
 
+    // Fallback: if no session after 3 seconds, redirect to login
+    redirectTimer = setTimeout(() => {
+      if (!isReady) {
+        router.replace("/");
+      }
+    }, 3000);
+
     return () => {
+      clearTimeout(redirectTimer);
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, isReady]);
 
   const handleConsent = async () => {
     setIsSubmitting(true);
