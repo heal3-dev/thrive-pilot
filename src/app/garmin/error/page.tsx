@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import Link from 'next/link';
 
 interface ErrorPageProps {
   searchParams: Promise<{ reason?: string }>;
@@ -28,6 +28,31 @@ export default async function GarminErrorPage({ searchParams }: ErrorPageProps) 
       title: 'Garmin Service Unavailable',
       message: 'We\'re having trouble connecting to Garmin right now. This might be temporary.',
       action: 'Please try again in a few minutes. If the problem persists, contact support.',
+    },
+    invalid_callback: {
+      title: 'Invalid Callback',
+      message: 'The Garmin authorization response was missing required information.',
+      action: 'Please restart the connection flow from your original invite link.',
+    },
+    csrf_failure: {
+      title: 'Security Check Failed',
+      message: 'We could not verify your OAuth state token for this request.',
+      action: 'Please restart the connection flow and try again.',
+    },
+    session_expired: {
+      title: 'Session Expired',
+      message: 'Your Garmin authorization session expired before completion.',
+      action: 'Please restart the connection flow. Authorization sessions expire after 30 minutes.',
+    },
+    token_exchange_failed: {
+      title: 'Token Exchange Failed',
+      message: 'Garmin returned an error while exchanging your authorization code.',
+      action: 'Please try again in a few minutes. If this keeps happening, contact support.',
+    },
+    db_error: {
+      title: 'Storage Error',
+      message: 'We were unable to save your Garmin connection details.',
+      action: 'Please try again. If the problem persists, contact support.',
     },
     unknown: {
       title: 'Something Went Wrong',
@@ -70,12 +95,12 @@ export default async function GarminErrorPage({ searchParams }: ErrorPageProps) 
         </p>
         
         {reason === 'already_connected' && (
-          <button
-            onClick={() => redirect('/dashboard')}
+          <Link
+            href="/dashboard"
             className="inline-flex items-center justify-center px-6 py-3 bg-teal-600 text-white font-medium rounded-lg hover:bg-teal-700 transition-colors"
           >
             Go to Dashboard
-          </button>
+          </Link>
         )}
       </div>
     </div>

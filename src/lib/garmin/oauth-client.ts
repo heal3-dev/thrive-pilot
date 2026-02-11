@@ -75,6 +75,7 @@ export async function exchangeCodeForToken(params: {
   token_type: string;
   expires_in: number;
   refresh_token?: string;
+  scope?: string | string[];
 }> {
   const { clientId, clientSecret, callbackUrl } = getGarminCredentials();
   

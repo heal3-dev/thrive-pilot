@@ -56,7 +56,7 @@ export default async function GarminConnectPage() {
     const codeChallenge = generateCodeChallenge(codeVerifier);
     
     // Store code verifier temporarily for callback verification
-    await supabase
+    const { error: tempInsertError } = await supabase
       .from('garmin_oauth_temp')
       .insert({
         state_token: state,
@@ -64,6 +64,11 @@ export default async function GarminConnectPage() {
         participant_id: participantId,
         expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min
       });
+
+    if (tempInsertError) {
+      console.error('[GARMIN_CONNECT] Failed to persist OAuth temp state:', tempInsertError);
+      redirect('/garmin/error?reason=db_error');
+    }
     
     // Step 6: Build Garmin OAuth 2.0 authorization URL
     const authUrl = getAuthorizationUrl({
