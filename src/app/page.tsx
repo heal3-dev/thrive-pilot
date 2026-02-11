@@ -2,7 +2,8 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { getSession, signIn } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
+import { signIn } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,39 +15,46 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // If already signed in, go straight to dashboard.
+  // Handle auth state: existing sessions, invite hash fragments, and errors
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { session } = await getSession();
-      if (!cancelled && session) {
-        router.replace("/dashboard");
+    // First check for auth errors in URL hash (expired links, etc.)
+    const hash = window.location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1));
+      const hashError = params.get('error');
+      const errorCode = params.get('error_code');
+      const errorDescription = params.get('error_description');
+
+      if (hashError === 'access_denied' && errorCode === 'otp_expired') {
+        setError('Your invite link has expired. Please contact your administrator for a new invitation.');
+        window.history.replaceState(null, '', window.location.pathname);
+        return;
+      } else if (hashError) {
+        setError(errorDescription || 'Authentication failed. Please try again or contact support.');
+        window.history.replaceState(null, '', window.location.pathname);
+        return;
       }
-    })();
+    }
+
+    // Listen for auth state changes (handles both existing sessions and
+    // new sessions from invite hash fragments like #access_token=...)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session?.user) {
+          const role = session.user.user_metadata?.role;
+          if (role === 'participant') {
+            router.replace('/invite/consent');
+          } else {
+            router.replace('/dashboard');
+          }
+        }
+      }
+    );
+
     return () => {
-      cancelled = true;
+      subscription.unsubscribe();
     };
   }, [router]);
-
-  // Check for auth errors in URL hash (from Supabase redirects)
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (!hash) return;
-
-    const params = new URLSearchParams(hash.substring(1));
-    const error = params.get('error');
-    const errorCode = params.get('error_code');
-    const errorDescription = params.get('error_description');
-
-    if (error === 'access_denied' && errorCode === 'otp_expired') {
-      setError('Your invite link has expired. Please contact your administrator for a new invitation.');
-      // Clear the hash from URL
-      window.history.replaceState(null, '', window.location.pathname);
-    } else if (error) {
-      setError(errorDescription || 'Authentication failed. Please try again or contact support.');
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-  }, []);
 
   // Simple email validation
   const isValidEmail = (email: string) => {
