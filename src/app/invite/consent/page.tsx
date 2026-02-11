@@ -10,18 +10,26 @@ export default function ConsentPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
-  // Check if user is authenticated (came from magic link via /auth/callback)
+  // Handle auth from invite link hash fragments (#access_token=...)
+  // Supabase client auto-detects hash fragments and fires onAuthStateChange
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // User not authenticated, redirect to login
-        router.replace("/");
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session) {
+          setIsReady(true);
+        } else {
+          // No session after Supabase checked - redirect to login
+          router.replace("/");
+        }
       }
+    );
+
+    return () => {
+      subscription.unsubscribe();
     };
-    checkAuth();
-   }, [router]);
+  }, [router]);
 
   const handleConsent = async () => {
     setIsSubmitting(true);
@@ -57,6 +65,19 @@ export default function ConsentPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-slate-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-3xl shadow-xl border-2 border-slate-100 max-w-2xl w-full p-8">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mb-4"></div>
+            <p className="text-slate-600">Verifying your invitation...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-slate-50 flex items-center justify-center p-6">

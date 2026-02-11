@@ -27,12 +27,12 @@ export function getInviteRedirect(request: Request): {
 } {
   const siteUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL);
   if (siteUrl) {
-    return { redirectTo: `${siteUrl}/auth/callback?next=/invite/consent`, source: "env" };
+    return { redirectTo: `${siteUrl}/invite/consent`, source: "env" };
   }
 
   const origin = normalizeBaseUrl(request.headers.get("origin"));
   if (origin) {
-    return { redirectTo: `${origin}/auth/callback?next=/invite/consent`, source: "origin" };
+    return { redirectTo: `${origin}/invite/consent`, source: "origin" };
   }
 
   const forwardedHost = request.headers
@@ -46,7 +46,7 @@ export function getInviteRedirect(request: Request): {
       ?.trim() || "https";
     const forwardedBase = normalizeBaseUrl(`${forwardedProto}://${forwardedHost}`);
     if (forwardedBase) {
-      return { redirectTo: `${forwardedBase}/auth/callback?next=/invite/consent`, source: "forwarded" };
+      return { redirectTo: `${forwardedBase}/invite/consent`, source: "forwarded" };
     }
   }
 
