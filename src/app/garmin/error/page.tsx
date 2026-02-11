@@ -64,9 +64,12 @@ export default async function GarminErrorPage({ searchParams }: ErrorPageProps) 
   const error = errorMessages[reason] || errorMessages.unknown;
   
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50">
-      <div className="text-center max-w-md px-6">
-        <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-red-100 flex items-center justify-center">
+    <main className="flex items-center justify-center min-h-screen bg-gradient-to-br from-teal-50 to-slate-50 p-4 sm:p-6">
+      <article className="bg-white rounded-3xl shadow-xl border-2 border-slate-100 max-w-md w-full p-6 sm:p-8 text-center">
+        <div
+          className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-red-100 flex items-center justify-center"
+          aria-hidden="true"
+        >
           <svg 
             className="w-8 h-8 text-red-600" 
             fill="none" 
@@ -90,19 +93,29 @@ export default async function GarminErrorPage({ searchParams }: ErrorPageProps) 
           {error.message}
         </p>
         
-        <p className="text-sm text-slate-500 mb-8">
+        <p className="text-sm text-slate-500 mb-6">
           {error.action}
         </p>
         
         {reason === 'already_connected' && (
           <Link
             href="/dashboard"
-            className="inline-flex items-center justify-center px-6 py-3 bg-teal-600 text-white font-medium rounded-lg hover:bg-teal-700 transition-colors"
+            className="inline-flex items-center justify-center px-6 py-3 bg-teal-600 text-white font-medium rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors"
           >
             Go to Dashboard
           </Link>
         )}
-      </div>
-    </div>
+
+        <p className="text-xs text-slate-400 mt-6">
+          Need help? Contact{' '}
+          <a
+            href="mailto:dev@heal-3.com"
+            className="text-teal-600 hover:underline focus:underline focus:outline-none"
+          >
+            dev@heal-3.com
+          </a>
+        </p>
+      </article>
+    </main>
   );
 }
