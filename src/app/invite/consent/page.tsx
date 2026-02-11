@@ -13,37 +13,59 @@ export default function ConsentPage() {
   const [isReady, setIsReady] = useState(false);
 
   // Handle auth from invite link hash fragments (#access_token=...)
-  // Supabase client auto-detects hash fragments and fires onAuthStateChange
+  // The @supabase/ssr browser client does NOT auto-detect hash fragments,
+  // so we must manually extract tokens and call setSession.
   useEffect(() => {
-    let redirectTimer: NodeJS.Timeout;
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (session) {
-          // Session established (from hash fragment or existing cookies)
-          clearTimeout(redirectTimer);
-          setIsReady(true);
-        } else if (event === 'SIGNED_OUT') {
-          // Explicitly signed out
-          router.replace("/");
+    const handleAuth = async () => {
+      const hash = window.location.hash;
+      
+      if (hash) {
+        const params = new URLSearchParams(hash.substring(1));
+        
+        // Check for errors in hash (expired/used tokens)
+        const hashError = params.get('error');
+        if (hashError) {
+          const errorDesc = params.get('error_description')?.replace(/\+/g, ' ');
+          setError(errorDesc || 'Your invite link is invalid or has expired. Please request a new invitation.');
+          window.history.replaceState(null, '', window.location.pathname);
+          return;
         }
-        // For INITIAL_SESSION with null: do NOT redirect yet.
-        // The hash fragment might still be processing.
+        
+        // Extract tokens from hash
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        
+        if (accessToken && refreshToken) {
+          // Set the session manually
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          
+          if (sessionError) {
+            console.error('[CONSENT] Error setting session:', sessionError);
+            setError('Failed to verify your invitation. Please try again.');
+            return;
+          }
+          
+          // Clear hash from URL
+          window.history.replaceState(null, '', window.location.pathname);
+          setIsReady(true);
+          return;
+        }
       }
-    );
-
-    // Fallback: if no session after 3 seconds, redirect to login
-    redirectTimer = setTimeout(() => {
-      if (!isReady) {
+      
+      // No hash fragment - check for existing session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsReady(true);
+      } else {
         router.replace("/");
       }
-    }, 3000);
-
-    return () => {
-      clearTimeout(redirectTimer);
-      subscription.unsubscribe();
     };
-  }, [router, isReady]);
+
+    handleAuth();
+  }, [router]);
 
   const handleConsent = async () => {
     setIsSubmitting(true);
@@ -85,8 +107,17 @@ export default function ConsentPage() {
       <div className="min-h-screen bg-gradient-to-br from-teal-50 to-slate-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-3xl shadow-xl border-2 border-slate-100 max-w-2xl w-full p-8">
           <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mb-4"></div>
-            <p className="text-slate-600">Verifying your invitation...</p>
+            {error ? (
+              <>
+                <p className="text-red-600 font-semibold mb-4">{error}</p>
+                <p className="text-slate-500 text-sm">Please contact your administrator for a new invitation.</p>
+              </>
+            ) : (
+              <>
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mb-4"></div>
+                <p className="text-slate-600">Verifying your invitation...</p>
+              </>
+            )}
           </div>
         </div>
       </div>
