@@ -138,8 +138,10 @@ export function verifyGarminSignature(
 
 /**
  * Map a Garmin daily summary to our `garmin_metrics` column format.
+ *
+ * Exported so the backfill/pull logic can reuse the same mapping.
  */
-function mapSummaryToMetrics(
+export function mapSummaryToMetrics(
   summary: GarminDailySummary,
   participantId: string
 ) {
