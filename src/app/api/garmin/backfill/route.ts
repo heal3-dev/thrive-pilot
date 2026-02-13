@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/app/api/admin/_utils';
 import { runBackfill } from '@/lib/garmin/pull-client';
+import { GarminTokenRevokedError } from '@/lib/garmin/token-manager';
 
 // ---------------------------------------------------------------------------
 // Validation helpers
@@ -138,6 +139,17 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[GARMIN_BACKFILL] Error:', { participant_id, error: message });
+
+    // Return 409 for revoked tokens (participant needs to reconnect)
+    if (err instanceof GarminTokenRevokedError) {
+      return NextResponse.json(
+        {
+          error: 'Garmin connection has been revoked. The participant needs to reconnect.',
+          details: message,
+        },
+        { status: 409 },
+      );
+    }
 
     return NextResponse.json(
       { error: message },

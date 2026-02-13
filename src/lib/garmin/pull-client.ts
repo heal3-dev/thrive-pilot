@@ -5,12 +5,14 @@
  * summaries for a given participant.  The participant must already have
  * a valid access token stored in `garmin_tokens`.
  *
+ * Now uses GarminClient for all API calls, which provides:
+ *   - Automatic token refresh on expiry
+ *   - 401 auto-retry with single refresh attempt
+ *   - Revocation handling when tokens are permanently invalid
+ *
  * Garmin Backfill API:
  *   GET /wellness-api/rest/backfill/dailies
  *     ?summaryStartTimeInSeconds=<epoch>&summaryEndTimeInSeconds=<epoch>
- *
- * The response is an array of daily-summary objects whose shape matches
- * the webhook payload (`GarminDailySummary`).
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -18,13 +20,13 @@ import {
   type GarminDailySummary,
   mapSummaryToMetrics,
 } from '@/lib/garmin/webhook';
-import { refreshAccessToken } from '@/lib/garmin/oauth-client';
+import { GarminClient } from '@/lib/garmin/garmin-client';
+import { GarminTokenRevokedError } from '@/lib/garmin/token-manager';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const GARMIN_API_BASE = 'https://apis.garmin.com';
 const BACKFILL_DAILIES_PATH = '/wellness-api/rest/backfill/dailies';
 
 /** Max date range Garmin allows per backfill request (roughly 90 days). */
@@ -79,130 +81,36 @@ function sleep(ms: number): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Token retrieval
-// ---------------------------------------------------------------------------
-
-/**
- * Fetch the stored Garmin OAuth access token for a participant.
- *
- * If the token is expired and a refresh token is available, it will
- * automatically refresh the token and persist the new credentials.
- *
- * Returns `null` if no token exists, has been revoked, or refresh fails.
- */
-async function getAccessToken(
-  participantId: string,
-): Promise<string | null> {
-  const supabase = getSupabaseAdmin();
-
-  const { data, error } = await supabase
-    .from('garmin_tokens')
-    .select('id, access_token, refresh_token, expires_at, revoked_at')
-    .eq('participant_id', participantId)
-    .is('revoked_at', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    console.error('[GARMIN_PULL] Token lookup error:', error.message);
-    return null;
-  }
-
-  if (!data) {
-    return null;
-  }
-
-  // If the token hasn't expired yet, return it directly
-  const isExpired = data.expires_at && new Date(data.expires_at).getTime() < Date.now();
-  if (!isExpired) {
-    return data.access_token as string;
-  }
-
-  // --- Token is expired – attempt refresh ---
-  console.warn('[GARMIN_PULL] Access token expired for participant', participantId, '– attempting refresh');
-
-  if (!data.refresh_token) {
-    console.error('[GARMIN_PULL] No refresh token available for participant', participantId);
-    return null;
-  }
-
-  try {
-    const newTokens = await refreshAccessToken(data.refresh_token as string);
-
-    const newExpiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
-
-    // Persist refreshed tokens
-    const { error: updateError } = await supabase
-      .from('garmin_tokens')
-      .update({
-        access_token: newTokens.access_token,
-        refresh_token: newTokens.refresh_token ?? data.refresh_token,
-        expires_at: newExpiresAt,
-      })
-      .eq('id', data.id);
-
-    if (updateError) {
-      console.error('[GARMIN_PULL] Failed to persist refreshed token:', updateError.message);
-      // Still return the new access token even if DB update fails –
-      // it's valid for this request at least.
-    }
-
-    console.log('[GARMIN_PULL] Token refreshed successfully for participant', participantId);
-    return newTokens.access_token;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[GARMIN_PULL] Token refresh failed for participant', participantId, ':', message);
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Garmin API call
+// Garmin API call (via GarminClient)
 // ---------------------------------------------------------------------------
 
 /**
  * Call the Garmin Backfill Dailies endpoint and return the array of daily
- * summaries.
+ * summaries.  Uses GarminClient which handles 401 auto-retry.
  */
 async function fetchDailiesFromGarmin(
-  accessToken: string,
+  client: GarminClient,
   startEpoch: number,
   endEpoch: number,
 ): Promise<GarminDailySummary[]> {
-  const url = new URL(`${GARMIN_API_BASE}${BACKFILL_DAILIES_PATH}`);
-  url.searchParams.set('summaryStartTimeInSeconds', String(startEpoch));
-  url.searchParams.set('summaryEndTimeInSeconds', String(endEpoch));
-
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
+  const data = await client.get<GarminDailySummary[] | { dailies: GarminDailySummary[] }>(
+    BACKFILL_DAILIES_PATH,
+    {
+      params: {
+        summaryStartTimeInSeconds: String(startEpoch),
+        summaryEndTimeInSeconds: String(endEpoch),
+      },
     },
-  });
-
-  if (response.status === 429) {
-    throw new Error('Garmin API rate limit exceeded (HTTP 429)');
-  }
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(
-      `Garmin API error: ${response.status} ${response.statusText} – ${body}`,
-    );
-  }
-
-  const data = await response.json();
+  );
 
   // The backfill endpoint returns an array directly (or wrapped in an object
   // depending on API version).  Handle both shapes.
   if (Array.isArray(data)) {
-    return data as GarminDailySummary[];
+    return data;
   }
 
   if (data && Array.isArray(data.dailies)) {
-    return data.dailies as GarminDailySummary[];
+    return data.dailies;
   }
 
   console.warn('[GARMIN_PULL] Unexpected response shape:', JSON.stringify(data).slice(0, 200));
@@ -295,12 +203,13 @@ async function upsertDailies(
  *
  * The function:
  *   1. Validates the date range (max 90 days)
- *   2. Retrieves the participant's stored access token
+ *   2. Creates a GarminClient (handles token lifecycle automatically)
  *   3. Calls the Garmin Backfill Dailies endpoint
  *   4. Upserts each returned summary into `garmin_metrics`
  *   5. Logs every result to `ingestion_logs` (source = 'backfill')
  *
  * @throws if the participant has no valid token or the date range is invalid.
+ * @throws {GarminTokenRevokedError} if the token is permanently revoked.
  */
 export async function runBackfill(req: BackfillRequest): Promise<BackfillResult> {
   const startMs = Date.now();
@@ -315,14 +224,8 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
     throw new Error(`Date range exceeds maximum of ${MAX_RANGE_DAYS} days`);
   }
 
-  // --- Get access token ---
-  const accessToken = await getAccessToken(participantId);
-  if (!accessToken) {
-    throw new Error(
-      'No valid Garmin access token found for this participant. ' +
-      'Ensure they have connected their Garmin account.',
-    );
-  }
+  // --- Create GarminClient (handles token refresh + 401 retry) ---
+  const client = new GarminClient(participantId);
 
   // --- Fetch from Garmin ---
   const startEpoch = dateToEpoch(startDate);
@@ -334,8 +237,12 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
 
   let summaries: GarminDailySummary[];
   try {
-    summaries = await fetchDailiesFromGarmin(accessToken, startEpoch, endEpoch);
+    summaries = await fetchDailiesFromGarmin(client, startEpoch, endEpoch);
   } catch (err) {
+    // Re-throw revocation errors directly so the caller can handle them
+    if (err instanceof GarminTokenRevokedError) {
+      throw err;
+    }
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(`Failed to fetch data from Garmin: ${message}`);
   }

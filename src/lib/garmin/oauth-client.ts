@@ -142,7 +142,11 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
       status: response.status,
       body: errorText,
     });
-    throw new Error(`Failed to refresh token: ${response.status}`);
+    // Include status code in message so callers can distinguish
+    // 401 (permanent — refresh token revoked) from transient errors
+    throw new Error(
+      `Failed to refresh token: ${response.status} – ${errorText}`,
+    );
   }
 
   const tokenData = await response.json();
