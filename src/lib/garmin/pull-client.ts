@@ -18,6 +18,7 @@ import {
   type GarminDailySummary,
   mapSummaryToMetrics,
 } from '@/lib/garmin/webhook';
+import { refreshAccessToken } from '@/lib/garmin/oauth-client';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -84,7 +85,10 @@ function sleep(ms: number): Promise<void> {
 /**
  * Fetch the stored Garmin OAuth access token for a participant.
  *
- * Returns `null` if no token exists or the token has been revoked.
+ * If the token is expired and a refresh token is available, it will
+ * automatically refresh the token and persist the new credentials.
+ *
+ * Returns `null` if no token exists, has been revoked, or refresh fails.
  */
 async function getAccessToken(
   participantId: string,
@@ -93,7 +97,7 @@ async function getAccessToken(
 
   const { data, error } = await supabase
     .from('garmin_tokens')
-    .select('access_token, expires_at, revoked_at')
+    .select('id, access_token, refresh_token, expires_at, revoked_at')
     .eq('participant_id', participantId)
     .is('revoked_at', null)
     .order('created_at', { ascending: false })
@@ -109,15 +113,48 @@ async function getAccessToken(
     return null;
   }
 
-  // Check for obvious expiry (Garmin long-lived tokens rarely expire,
-  // but we still guard against it).
-  if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
-    console.warn('[GARMIN_PULL] Access token expired for participant', participantId);
-    // Future: implement token refresh here
+  // If the token hasn't expired yet, return it directly
+  const isExpired = data.expires_at && new Date(data.expires_at).getTime() < Date.now();
+  if (!isExpired) {
+    return data.access_token as string;
+  }
+
+  // --- Token is expired – attempt refresh ---
+  console.warn('[GARMIN_PULL] Access token expired for participant', participantId, '– attempting refresh');
+
+  if (!data.refresh_token) {
+    console.error('[GARMIN_PULL] No refresh token available for participant', participantId);
     return null;
   }
 
-  return data.access_token as string;
+  try {
+    const newTokens = await refreshAccessToken(data.refresh_token as string);
+
+    const newExpiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
+
+    // Persist refreshed tokens
+    const { error: updateError } = await supabase
+      .from('garmin_tokens')
+      .update({
+        access_token: newTokens.access_token,
+        refresh_token: newTokens.refresh_token ?? data.refresh_token,
+        expires_at: newExpiresAt,
+      })
+      .eq('id', data.id);
+
+    if (updateError) {
+      console.error('[GARMIN_PULL] Failed to persist refreshed token:', updateError.message);
+      // Still return the new access token even if DB update fails –
+      // it's valid for this request at least.
+    }
+
+    console.log('[GARMIN_PULL] Token refreshed successfully for participant', participantId);
+    return newTokens.access_token;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[GARMIN_PULL] Token refresh failed for participant', participantId, ':', message);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

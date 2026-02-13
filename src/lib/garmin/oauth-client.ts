@@ -108,3 +108,43 @@ export async function exchangeCodeForToken(params: {
   const tokenData = await response.json();
   return tokenData;
 }
+
+/**
+ * Refresh an expired Garmin access token.
+ */
+export async function refreshAccessToken(refreshToken: string): Promise<{
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token?: string;
+  scope?: string | string[];
+}> {
+  const { clientId, clientSecret } = getGarminCredentials();
+
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+
+  const response = await fetch(GARMIN_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: body.toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[GARMIN_OAUTH] Token refresh error:', {
+      status: response.status,
+      body: errorText,
+    });
+    throw new Error(`Failed to refresh token: ${response.status}`);
+  }
+
+  const tokenData = await response.json();
+  return tokenData;
+}
