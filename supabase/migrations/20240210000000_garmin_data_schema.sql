@@ -50,24 +50,42 @@ EXCEPTION
     WHEN others THEN NULL; -- might fail if duplicates exist
 END $$;
 
--- 3. RLS Policies (if not already present or needs update)
+-- 3. RLS Policies (idempotent)
 ALTER TABLE ingestion_logs ENABLE ROW LEVEL SECURITY;
 
 -- Service role full access
-CREATE POLICY "Service role can manage ingestion logs" ON ingestion_logs
-    FOR ALL
-    USING (auth.role() = 'service_role');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'ingestion_logs'
+          AND policyname = 'Service role can manage ingestion logs'
+    ) THEN
+        CREATE POLICY "Service role can manage ingestion logs" ON ingestion_logs
+            FOR ALL
+            USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 -- Admins read-only
-CREATE POLICY "Admins can view ingestion logs" ON ingestion_logs
-    FOR SELECT
-    USING (
-        EXISTS (
-            SELECT 1 FROM mentors 
-            WHERE mentors.user_id = auth.uid() 
-            AND mentors.role = 'admin'
-        )
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'ingestion_logs'
+          AND policyname = 'Admins can view ingestion logs'
+    ) THEN
+        CREATE POLICY "Admins can view ingestion logs" ON ingestion_logs
+            FOR SELECT
+            USING (
+                EXISTS (
+                    SELECT 1 FROM mentors 
+                    WHERE mentors.user_id = auth.uid() 
+                    AND mentors.role = 'admin'
+                )
+            );
+    END IF;
+END $$;
 
 -- Down Migration (for reference)
 -- DROP TABLE ingestion_logs;
