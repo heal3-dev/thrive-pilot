@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
 const GARMIN_AUTHORIZE_URL = 'https://connect.garmin.com/oauthConfirm';
-const GARMIN_TOKEN_URL = 'https://connectapi.garmin.com/oauth-service/oauth/access_token';
+const GARMIN_TOKEN_URL = 'https://diauth.garmin.com/di-oauth2-service/oauth/token';
 
 /**
  * Get Garmin OAuth 2.0 credentials from environment
