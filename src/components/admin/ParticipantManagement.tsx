@@ -437,21 +437,21 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
         <div className="overflow-x-auto">
           <table className="w-full table-fixed">
             <colgroup>
-              <col className="w-[14%]" />
-              <col className="w-[16%]" />
-              <col className="w-[24%]" />
-              <col className="w-[18%]" />
               <col className="w-[10%]" />
+              <col className="w-[12%]" />
+              <col className="w-[22%]" />
               <col className="w-[18%]" />
+              <col className="w-[8%]" />
+              <col className="w-[30%]" />
             </colgroup>
             <thead className="bg-slate-100 border-b border-slate-100">
               <tr>
-                <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Name</th>
-                <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Phone</th>
-                <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Email</th>
-                <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Assigned Mentor</th>
-                <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Status</th>
-                <th className="text-right px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Actions</th>
+                <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Name</th>
+                <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Phone</th>
+                <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Email</th>
+                <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Mentor</th>
+                <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Status</th>
+                <th className="text-right px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -469,41 +469,41 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                     key={p.id}
                     className="hover:bg-slate-50 transition-colors"
                   >
-                    <td className="px-6 py-4">
-                      <p className="font-semibold text-slate-900">{p.name || "—"}</p>
+                    <td className="px-3 py-4">
+                      <p className="font-semibold text-slate-900 truncate">{p.name || "—"}</p>
                       <p className="text-xs text-slate-500">
                         {p.is_unverified ? "Invited" : "Created"} {formatDate(p.created_at ?? null)}
                       </p>
                     </td>
-                    <td className="px-6 py-4 text-slate-700 text-sm">{formatPhone(p.phone_number)}</td>
-                    <td className="px-6 py-4 text-slate-700 break-words">{p.email || "—"}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4 text-slate-700 text-sm truncate">{formatPhone(p.phone_number)}</td>
+                    <td className="px-3 py-4 text-slate-700 text-sm truncate">{p.email || "—"}</td>
+                    <td className="px-3 py-4">
                       {p.assigned_mentor && !p.assigned_mentor.unassigned_at ? (
                         <div>
-                          <p className="font-semibold text-slate-900">{p.assigned_mentor.mentor_name || "—"}</p>
-                          <p className="text-xs text-slate-500">{p.assigned_mentor.mentor_email || ""}</p>
+                          <p className="font-semibold text-slate-900 truncate">{p.assigned_mentor.mentor_name || "—"}</p>
+                          <p className="text-xs text-slate-500 truncate">{p.assigned_mentor.mentor_email || ""}</p>
                         </div>
                       ) : (
                         <span className="text-slate-500">Unassigned</span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       {p.is_unverified ? (
-                        <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
+                        <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
                           Unverified
                         </span>
                       ) : p.is_active === false ? (
-                        <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
+                        <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
                           Inactive
                         </span>
                       ) : (
-                        <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-700">
+                        <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700">
                           Active
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-4">
+                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                         {p.is_unverified ? (
                           <>
                             <Button
