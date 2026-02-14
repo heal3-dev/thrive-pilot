@@ -26,11 +26,12 @@ export async function POST(request: Request) {
   // 1. Verify participant exists
   const { data: participant, error: participantError } = await admin
     .from('participants')
-    .select('id, name, email, user_id')
+    .select('id, name, email')
     .eq('id', payload.participant_id)
     .single();
     
   if (participantError || !participant) {
+    console.error('[GARMIN_INVITE] Participant lookup error:', participantError?.message);
     return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
   }
 
