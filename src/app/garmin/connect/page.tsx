@@ -46,6 +46,7 @@ export default async function GarminConnectPage({
     redirect('/garmin/error?reason=already_connected');
   }
   
+  let authUrl: string;
   try {
     // Step 4: Generate CSRF state token
     const state = await generateStateToken({
@@ -73,7 +74,7 @@ export default async function GarminConnectPage({
     }
     
     // Step 6: Build Garmin OAuth 2.0 authorization URL
-    const authUrl = getAuthorizationUrl({
+    authUrl = getAuthorizationUrl({
       state,
       codeChallenge,
     });
@@ -82,11 +83,13 @@ export default async function GarminConnectPage({
       participant_id: participantId,
       state,
     });
-    
-    // Step 7: Redirect to Garmin for user authorization
-    redirect(authUrl);
   } catch (error) {
+    // Re-throw Next.js redirect errors (redirect() works by throwing)
+    if (error instanceof Error && error.message === 'NEXT_REDIRECT') throw error;
     console.error('[GARMIN_CONNECT] OAuth initialization failed:', error);
     redirect('/garmin/error?reason=garmin_unavailable');
   }
+
+  // Step 7: Redirect to Garmin — MUST be outside try-catch
+  redirect(authUrl);
 }
