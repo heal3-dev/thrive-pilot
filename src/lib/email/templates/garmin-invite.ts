@@ -12,7 +12,7 @@ export function garminInviteTemplate(params: {
         <span style="color: #ffffff !important;">Connect Garmin</span>
       </a>
       <p style="color: #64748b; font-size: 14px; margin-top: 24px;">
-        This link expires in ${params.expiresIn}. Only trend-level wellness data is collected.
+        This link expires in ${params.expiresIn}.
       </p>
     </div>
   `;

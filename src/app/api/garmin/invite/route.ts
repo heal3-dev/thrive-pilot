@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     type: 'magiclink',
     email: participant.email,
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/garmin/connect`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/garmin/connect`,
       data: {
         participant_id: payload.participant_id,
         action: 'garmin_connect',
@@ -91,13 +91,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const actionLink = linkData.properties.action_link;
-  if (!actionLink) {
+  const hashedToken = linkData.properties.hashed_token;
+  if (!hashedToken) {
     return NextResponse.json(
       { error: 'Invite link was not generated' },
-      { status: 500 }
+      { status: 500 },
     );
   }
+
+  // Build link through our own /auth/callback which calls verifyOtp() server-side
+  // and creates a cookie-based session before redirecting to /garmin/connect.
+  // We do NOT use Supabase's action_link because it uses the implicit flow
+  // (tokens in URL hash fragment), which server components cannot read.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const actionLink = `${siteUrl}/auth/callback?token_hash=${hashedToken}&type=magiclink&next=/garmin/connect`;
   
   // 5. Send email
   const expiresAt = new Date(Date.now() + 86400000); // 24 hours
