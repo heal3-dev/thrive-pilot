@@ -46,50 +46,42 @@ export default async function GarminConnectPage({
     redirect('/garmin/error?reason=already_connected');
   }
   
-  let authUrl: string;
-  try {
-    // Step 4: Generate CSRF state token
-    const state = await generateStateToken({
-      user_id: user.id,
+  // Step 4: Generate CSRF state token
+  const state = await generateStateToken({
+    user_id: user.id,
+    participant_id: participantId,
+  });
+  
+  // Step 5: Generate PKCE code verifier and challenge (OAuth 2.0 PKCE)
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  
+  // Store code verifier temporarily for callback verification
+  const { error: tempInsertError } = await supabase
+    .from('garmin_oauth_temp')
+    .insert({
+      state_token: state,
+      code_verifier: codeVerifier,
       participant_id: participantId,
+      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min
     });
-    
-    // Step 5: Generate PKCE code verifier and challenge (OAuth 2.0 PKCE)
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = generateCodeChallenge(codeVerifier);
-    
-    // Store code verifier temporarily for callback verification
-    const { error: tempInsertError } = await supabase
-      .from('garmin_oauth_temp')
-      .insert({
-        state_token: state,
-        code_verifier: codeVerifier,
-        participant_id: participantId,
-        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min
-      });
 
-    if (tempInsertError) {
-      console.error('[GARMIN_CONNECT] Failed to persist OAuth temp state:', tempInsertError);
-      redirect('/garmin/error?reason=db_error');
-    }
-    
-    // Step 6: Build Garmin OAuth 2.0 authorization URL
-    authUrl = getAuthorizationUrl({
-      state,
-      codeChallenge,
-    });
-    
-    console.log('[GARMIN_CONNECT] Redirecting to Garmin:', {
-      participant_id: participantId,
-      state,
-    });
-  } catch (error) {
-    // Re-throw Next.js redirect errors (redirect() works by throwing)
-    if (error instanceof Error && error.message === 'NEXT_REDIRECT') throw error;
-    console.error('[GARMIN_CONNECT] OAuth initialization failed:', error);
-    redirect('/garmin/error?reason=garmin_unavailable');
+  if (tempInsertError) {
+    console.error('[GARMIN_CONNECT] Failed to persist OAuth temp state:', tempInsertError);
+    redirect('/garmin/error?reason=db_error');
   }
+  
+  // Step 6: Build Garmin OAuth 2.0 authorization URL
+  const authUrl = getAuthorizationUrl({
+    state,
+    codeChallenge,
+  });
+  
+  console.log('[GARMIN_CONNECT] Redirecting to Garmin:', {
+    participant_id: participantId,
+    state,
+  });
 
-  // Step 7: Redirect to Garmin — MUST be outside try-catch
+  // Step 7: Redirect to Garmin for user authorization
   redirect(authUrl);
 }
