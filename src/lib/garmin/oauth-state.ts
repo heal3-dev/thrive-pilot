@@ -1,9 +1,7 @@
 import crypto from 'crypto';
-import { cookies } from 'next/headers';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
-const STATE_COOKIE_NAME = 'garmin_oauth_state';
 const STATE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 interface OAuthState {
@@ -15,7 +13,7 @@ interface OAuthState {
 
 /**
  * Get encryption key from environment
- * Uses a simple key derivation from session secret for OAuth state
+ * Uses a simple key derivation from service role key for OAuth state
  */
 function getStateEncryptionKey(): Buffer {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -72,7 +70,7 @@ function decryptState(encrypted: string): OAuthState {
 
 /**
  * Generate CSRF state token for OAuth flow
- * Encrypts state and stores in HttpOnly cookie
+ * Returns encrypted state string (stored in garmin_oauth_temp DB table)
  */
 export async function generateStateToken(params: {
   user_id: string;
@@ -85,35 +83,15 @@ export async function generateStateToken(params: {
     expires_at: Date.now() + STATE_TTL_MS,
   };
   
-  const encryptedState = encryptState(state);
-  
-  // Store in HttpOnly cookie
-  const cookieStore = await cookies();
-  cookieStore.set(STATE_COOKIE_NAME, encryptedState, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: STATE_TTL_MS / 1000, // Convert to seconds
-    path: '/',
-  });
-  
-  return encryptedState;
+  return encryptState(state);
 }
 
 /**
- * Verify and retrieve OAuth state from cookie
- * Validates expiration and removes cookie after use
+ * Verify OAuth state token by decrypting and checking expiration.
+ * State is verified against the garmin_oauth_temp DB record (looked up in callback).
  */
 export async function verifyStateToken(stateToken: string): Promise<OAuthState | null> {
   try {
-    const cookieStore = await cookies();
-    const storedState = cookieStore.get(STATE_COOKIE_NAME)?.value;
-    
-    // Verify state matches what's in cookie (CSRF protection)
-    if (!storedState || storedState !== stateToken) {
-      return null;
-    }
-    
     // Decrypt and validate
     const state = decryptState(stateToken);
     
@@ -122,12 +100,10 @@ export async function verifyStateToken(stateToken: string): Promise<OAuthState |
       return null;
     }
     
-    // Delete cookie after successful verification (one-time use)
-    cookieStore.delete(STATE_COOKIE_NAME);
-    
     return state;
   } catch (error) {
     console.error('[OAUTH_STATE] Verification failed:', error);
     return null;
   }
 }
+
