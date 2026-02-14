@@ -18,12 +18,12 @@ interface OAuthState {
  * Uses a simple key derivation from session secret for OAuth state
  */
 function getStateEncryptionKey(): Buffer {
-  const secret = process.env.SUPABASE_JWT_SECRET;
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!secret) {
-    throw new Error('SUPABASE_JWT_SECRET is required for OAuth state encryption');
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for OAuth state encryption');
   }
   
-  // Derive a 32-byte key from the JWT secret
+  // Derive a 32-byte key from the service role key
   return crypto.createHash('sha256').update(secret).digest();
 }
 
