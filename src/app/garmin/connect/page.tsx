@@ -7,7 +7,13 @@ import {
   generateCodeChallenge 
 } from '@/lib/garmin/oauth-client';
 
-export default async function GarminConnectPage() {
+export default async function GarminConnectPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ participant_id?: string }>;
+}) {
+  const params = await searchParams;
+
   // Step 1: Verify Supabase session (magic link creates it automatically)
   const supabase = await createClient();
   const { data, error: sessionError } = await supabase.auth.getSession();
@@ -19,15 +25,11 @@ export default async function GarminConnectPage() {
     redirect('/garmin/error?reason=invalid_link');
   }
   
-  // Step 2: Get participant context from magic link metadata
-  const participantId = user.user_metadata?.participant_id;
-  const action = user.user_metadata?.action;
+  // Step 2: Get participant_id from URL searchParams (passed through auth callback)
+  const participantId = params.participant_id;
   
-  if (!participantId || action !== 'garmin_connect') {
-    console.error('[GARMIN_CONNECT] Missing or invalid participant context:', {
-      participantId,
-      action,
-    });
+  if (!participantId) {
+    console.error('[GARMIN_CONNECT] Missing participant_id in searchParams');
     redirect('/garmin/error?reason=missing_context');
   }
   

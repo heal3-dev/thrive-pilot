@@ -104,7 +104,8 @@ export async function POST(request: Request) {
   // We do NOT use Supabase's action_link because it uses the implicit flow
   // (tokens in URL hash fragment), which server components cannot read.
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  const actionLink = `${siteUrl}/auth/callback?token_hash=${hashedToken}&type=magiclink&next=/garmin/connect`;
+  const nextPath = `/garmin/connect?participant_id=${payload.participant_id}`;
+  const actionLink = `${siteUrl}/auth/callback?token_hash=${hashedToken}&type=magiclink&next=${encodeURIComponent(nextPath)}`;
   
   // 5. Send email
   const expiresAt = new Date(Date.now() + 86400000); // 24 hours
