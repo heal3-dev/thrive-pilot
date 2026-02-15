@@ -26,10 +26,15 @@ type AssignedMentor = {
   unassigned_at: string | null;
 };
 
+import type { Flag } from "@/lib/flags/rules";
+
+// ... (imports)
+
 type ParticipantRow = Participant & {
   assigned_mentor: AssignedMentor | null;
   is_unverified?: boolean;
   garmin_connected?: boolean;
+  flags?: Flag[]; // Add flags array
 };
 
 type AssignmentHistoryRow = {
@@ -470,6 +475,7 @@ export function ParticipantManagement({
               <col className="w-[8%]" />
               <col className="w-[12%]" />
               <col className="w-[17%]" />
+              {/* No specific col width change needed if we fit it in or adjust status */}
             </colgroup>
             <thead className="bg-slate-100 border-b border-slate-100">
               <tr>
@@ -477,7 +483,7 @@ export function ParticipantManagement({
                 <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Phone</th>
                 <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Email</th>
                 <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Mentor</th>
-                <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Status</th>
+                <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Status & Flags</th>
                 <th className="text-center px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Garmin</th>
                 <th className="text-right px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Actions</th>
               </tr>
@@ -518,19 +524,38 @@ export function ParticipantManagement({
                       )}
                     </td>
                     <td className="px-3 py-4">
-                      {p.is_unverified ? (
-                        <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
-                          Unverified
-                        </span>
-                      ) : p.is_active === false ? (
-                        <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
-                          Inactive
-                        </span>
-                      ) : (
-                        <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700">
-                          Active
-                        </span>
-                      )}
+                      <div className="flex flex-col gap-1 items-start">
+                        {p.is_unverified ? (
+                          <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
+                            Unverified
+                          </span>
+                        ) : p.is_active === false ? (
+                          <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
+                            Inactive
+                          </span>
+                        ) : (
+                          <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700">
+                            Active
+                          </span>
+                        )}
+                        
+                        {/* Render Flags */}
+                        {p.flags?.map((flag, idx) => (
+                           <span 
+                             key={idx}
+                             className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold border ${
+                               flag.severity === 'alert' 
+                                 ? 'bg-red-50 text-red-700 border-red-200' 
+                                 : flag.severity === 'warning'
+                                 ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                 : 'bg-blue-50 text-blue-700 border-blue-200'
+                             }`}
+                             title={flag.message}
+                           >
+                             {flag.type.replace('_', ' ')}
+                           </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-3 py-4 text-center">
                       {!p.is_unverified && (

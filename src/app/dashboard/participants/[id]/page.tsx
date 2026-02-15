@@ -23,6 +23,12 @@ type Metric = {
   sleep_duration_seconds: number | null;
 };
 
+type Flag = {
+  type: 'LOW_SLEEP' | 'HIGH_STRESS' | 'NO_DATA';
+  message: string;
+  severity: 'warning' | 'alert' | 'info';
+};
+
 export default function ParticipantDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -30,6 +36,7 @@ export default function ParticipantDetailsPage() {
 
   const [participant, setParticipant] = useState<Participant | null>(null);
   const [metrics, setMetrics] = useState<Metric[]>([]);
+  const [flags, setFlags] = useState<Flag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +71,7 @@ export default function ParticipantDetailsPage() {
         const json = await res.json();
         setParticipant(json.participant);
         setMetrics(json.metrics);
+        setFlags(json.flags || []);
       } catch (err) {
         console.error("Error loading details:", err);
         setError("An error occurred");
@@ -113,8 +121,23 @@ export default function ParticipantDetailsPage() {
             ← Back
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">
+            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
               {participant.name || participant.email}
+              {flags.map((flag, idx) => (
+                <span 
+                  key={idx}
+                  className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-medium border ${
+                    flag.severity === 'alert' 
+                      ? 'bg-red-50 text-red-700 border-red-200' 
+                      : flag.severity === 'warning'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                  }`}
+                  title={flag.message}
+                >
+                  {flag.message}
+                </span>
+              ))}
             </h1>
             <p className="text-slate-500 text-sm">
               Garmin Status:{" "}

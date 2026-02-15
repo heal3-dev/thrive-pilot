@@ -11,6 +11,10 @@ const createParticipantSchema = z.object({
   sendInvite: z.boolean().optional(),
 });
 
+import { calculateFlags, Metric } from "@/lib/flags/rules";
+
+// ... (rest of imports)
+
 export async function GET(request: Request) {
   const guard = await requireAdmin(request);
   if (!guard.ok) return guard.response;
@@ -55,6 +59,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch Garmin connections" }, { status: 500 });
   }
 
+  // --- NEW: Fetch recent metrics for Flagging Logic ---
+  // Fetch last 4 days of metrics to be safe for "last 3 days" calculation
+  const fourDaysAgo = new Date();
+  fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+  const dateStr = fourDaysAgo.toISOString().split('T')[0];
+
+  const { data: metricsData } = await admin
+    .from("garmin_metrics")
+    .select("participant_id, metric_date, steps, resting_heart_rate, average_stress_level, sleep_duration_seconds")
+    .gte("metric_date", dateStr)
+    .order("metric_date", { ascending: false });
+
+  const metricsByParticipant = new Map<string, Metric[]>();
+  if (metricsData) {
+    for (const m of metricsData) {
+      if (!metricsByParticipant.has(m.participant_id)) {
+        metricsByParticipant.set(m.participant_id, []);
+      }
+      // Cast the row to Metric type (schema matches)
+      metricsByParticipant.get(m.participant_id)?.push({
+        id: "temp", // ID not needed for calculation
+        metric_date: m.metric_date,
+        steps: m.steps,
+        resting_heart_rate: m.resting_heart_rate,
+        average_stress_level: m.average_stress_level,
+        sleep_duration_seconds: m.sleep_duration_seconds,
+      });
+    }
+  }
+  // ----------------------------------------------------
+
   const connectedParticipantIds = new Set(
     (garminTokensData ?? []).map((token) => token.participant_id)
   );
@@ -78,13 +113,19 @@ export async function GET(request: Request) {
     }
   }
 
-  // Enrich participants with mentor info
-  const participants = (participantsData ?? []).map((p) => ({
-    ...p,
-    garmin_connected:
-      connectedParticipantIds.has(p.id) || Boolean(p.garmin_user_id),
-    assigned_mentor: assignmentMap.get(p.id) ?? null,
-  }));
+  // Enrich participants with mentor info AND flags
+  const participants = (participantsData ?? []).map((p) => {
+    const pMetrics = metricsByParticipant.get(p.id) || [];
+    const flags = calculateFlags(pMetrics);
+
+    return {
+      ...p,
+      garmin_connected:
+        connectedParticipantIds.has(p.id) || Boolean(p.garmin_user_id),
+      assigned_mentor: assignmentMap.get(p.id) ?? null,
+      flags, // Attach flags
+    };
+  });
 
   // ── Fetch Supabase Auth users invited as participants but not yet in the participants table ──
   const participantIds = new Set((participantsData ?? []).map((p) => p.id));
@@ -119,6 +160,7 @@ export async function GET(request: Request) {
             garmin_connected: false,
             is_unverified: true,
             assigned_mentor: null,
+            flags: [], // No flags for unverified
           };
         });
     }

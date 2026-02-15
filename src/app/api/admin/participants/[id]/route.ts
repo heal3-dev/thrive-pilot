@@ -1,6 +1,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/app/api/admin/_utils";
+import { calculateFlags, type Metric } from "@/lib/flags/rules";
 
 export async function GET(
   request: NextRequest,
@@ -37,12 +38,26 @@ export async function GET(
     .limit(30);
 
   if (mError) {
-    console.error("Error fetching metrics:", mError);
+    console.error(`[PARTICIPANT_DETAILS] Error fetching metrics for ${id}:`, mError);
     // Don't fail the whole request if metrics fail, just return empty array
   }
 
+  // Calculate flags
+  const metricsData = metrics || [];
+  const typedMetrics: Metric[] = metricsData.map(m => ({
+    id: m.id,
+    metric_date: m.metric_date,
+    steps: m.steps,
+    resting_heart_rate: m.resting_heart_rate,
+    average_stress_level: m.average_stress_level,
+    sleep_duration_seconds: m.sleep_duration_seconds,
+  }));
+  const flags = calculateFlags(typedMetrics);
+
   return NextResponse.json({
     participant,
-    metrics: metrics || [],
+    metrics: metricsData,
+    flags,
   });
 }
+
