@@ -198,6 +198,20 @@ export class GarminClient {
       );
     }
 
-    return response.json() as Promise<T>;
+    if (response.status === 204) {
+      return null as T;
+    }
+
+    const text = await response.text();
+    if (!text) {
+      // Empty body (e.g. 200 OK but empty)
+      return null as T;
+    }
+
+    try {
+      return JSON.parse(text) as T;
+    } catch (e) {
+      throw new Error(`Invalid JSON response: ${text.slice(0, 100)}...`);
+    }
   }
 }
