@@ -514,7 +514,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                                 size="sm"
                                 onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
                                 disabled={backfillLoadingId === p.id}
-                                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-medium w-full justify-center"
+                                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center"
                               >
                                 {backfillLoadingId === p.id ? (
                                   <span className="flex items-center gap-1">
@@ -533,7 +533,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                                 variant="ghost"
                                 size="sm"
                                 onClick={(e) => { e.stopPropagation(); handleConnectGarmin(p); }}
-                                className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 font-medium w-full justify-center"
+                                className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center"
                               >
                                 Connect Garmin
                               </Button>
