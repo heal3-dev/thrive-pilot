@@ -14,20 +14,21 @@ import { AddParticipantModal } from "./admin/modals/AddParticipantModal";
 import { InviteParticipantModal } from "./admin/modals/InviteParticipantModal";
 import { AssignMentorModal } from "./admin/modals/AssignMentorModal";
 
-type AdminTab = "dashboard" | "mentors" | "participants" | "assignments" | "messages";
+type AdminTab = "dashboard" | "mentors" | "participants" | "assignments" | "messages" | "garmin-trends";
 
 type Stats = {
   totalMentors: number;
   totalParticipants: number;
   messagesToday: number;
   activeAssignments: number;
+  connectedGarmin: number;
 };
 
 // Parse tab from URL hash
 function getTabFromHash(): AdminTab {
   if (typeof window === "undefined") return "dashboard";
   const hash = window.location.hash.slice(1); // Remove #
-  const validTabs: AdminTab[] = ["dashboard", "mentors", "participants", "assignments", "messages"];
+  const validTabs: AdminTab[] = ["dashboard", "mentors", "participants", "assignments", "messages", "garmin-trends"];
   return validTabs.includes(hash as AdminTab) ? (hash as AdminTab) : "dashboard";
 }
 
@@ -98,7 +99,7 @@ export function AdminPanel() {
       const todayISO = today.toISOString();
 
       // Parallel fetch all stats
-      const [mentorsRes, participantsRes, messagesRes, assignmentsRes] = await Promise.all([
+      const [mentorsRes, participantsRes, messagesRes, assignmentsRes, garminRes] = await Promise.all([
         supabase.from("mentors").select("id", { count: "exact", head: true }).neq("role", "admin"),
         supabase.from("participants").select("id", { count: "exact", head: true }),
         supabase
@@ -106,6 +107,7 @@ export function AdminPanel() {
           .select("id", { count: "exact", head: true })
           .gte("created_at", todayISO),
         supabase.from("mentor_assignments").select("id", { count: "exact", head: true }),
+        supabase.from("garmin_tokens").select("id", { count: "exact", head: true }),
       ]);
 
       // Check for errors
@@ -119,6 +121,7 @@ export function AdminPanel() {
         totalParticipants: participantsRes.count ?? 0,
         messagesToday: messagesRes.count ?? 0,
         activeAssignments: assignmentsRes.count ?? 0,
+        connectedGarmin: (garminRes?.count ?? 0),
       });
       setError(null);
     } catch (err) {
@@ -300,6 +303,20 @@ export function AdminPanel() {
           />
         )}
         {activeTab === "messages" && <MessageViewer onBack={() => navigateToTab("dashboard")} />}
+        {activeTab === "garmin-trends" && (
+          <div className="space-y-4">
+             <div className="flex items-center gap-2 mb-4">
+               <button onClick={() => navigateToTab("dashboard")} className="text-sm text-slate-500 hover:text-slate-900 flex items-center gap-1">
+                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                 </svg>
+                 Back to Dashboard
+               </button>
+               <h2 className="text-xl font-bold text-slate-900">Participant Trends</h2>
+             </div>
+             <ParticipantManagement mode="trends" initialGarminFilter="connected" />
+          </div>
+        )}
       </div>
 
       {/* Quick Action Modals */}
@@ -508,6 +525,37 @@ function DashboardTab({
             }
             color="purple"
             onClick={() => onQuickAction("view-messages")}
+          />
+        </div>
+      </div>
+
+
+      {/* Garmin Insights */}
+      <div className="bg-white rounded-2xl border-2 border-slate-100 p-8">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+            <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Garmin Insights</h2>
+            <p className="text-sm text-slate-500">Device connection and activity trends</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Participant Trends"
+            value={stats?.connectedGarmin}
+            isLoading={isLoading}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            }
+            color="purple"
+            onClick={() => onNavigate("garmin-trends")}
           />
         </div>
       </div>

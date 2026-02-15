@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -85,7 +86,16 @@ function isValidPhone(phone: string): boolean {
   return toE164(phone) !== null;
 }
 
-export function ParticipantManagement({ initialModal }: { initialModal?: "add" | "invite" }) {
+export function ParticipantManagement({ 
+  initialModal,
+  mode = "management",
+  initialGarminFilter = "all"
+}: { 
+  initialModal?: "add" | "invite";
+  mode?: "management" | "trends";
+  initialGarminFilter?: "all" | "connected" | "disconnected";
+}) {
+  const router = useRouter();
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -94,6 +104,7 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [mentorFilter, setMentorFilter] = useState<string>("all"); // mentor id | "all" | "unassigned"
+  const [garminFilter, setGarminFilter] = useState<"all" | "connected" | "disconnected">(initialGarminFilter);
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(initialModal === "invite");
   const [isAddModalOpen, setIsAddModalOpen] = useState(initialModal === "add");
@@ -190,9 +201,15 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
         (mentorFilter === "unassigned" && !isActiveAssignment) ||
         (mentorFilter !== "unassigned" && mentorFilter !== "all" && isActiveAssignment && assignedMentor?.mentor_id === mentorFilter);
 
-      return matchesSearch && matchesStatus && matchesMentor;
+      const isConnected = p.garmin_connected === true || Boolean(p.garmin_user_id);
+      const matchesGarmin =
+        garminFilter === "all" ||
+        (garminFilter === "connected" && isConnected) ||
+        (garminFilter === "disconnected" && !isConnected);
+
+      return matchesSearch && matchesStatus && matchesMentor && matchesGarmin;
     });
-  }, [participants, searchQuery, statusFilter, mentorFilter]);
+  }, [participants, searchQuery, statusFilter, mentorFilter, garminFilter]);
 
 
 
@@ -542,7 +559,16 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                     </td>
                     <td className="px-3 py-4">
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        {p.is_unverified ? (
+                        {mode === "trends" ? (
+                          <Button
+                             variant="outline"
+                             size="sm"
+                             onClick={() => router.push(`/admin/participants/${p.id}`)}
+                             className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
+                          >
+                            View Trend
+                          </Button>
+                        ) : p.is_unverified ? (
                           <>
                             <Button
                               variant="ghost"
