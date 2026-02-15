@@ -425,27 +425,31 @@ export function ParticipantManagement({
           </div>
 
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsAddModalOpen(true)}
-              className="border-slate-300 text-slate-700 hover:bg-slate-100"
-            >
-              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Add Participant
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setIsInviteModalOpen(true)}
-              className="bg-teal-500 hover:bg-teal-600 text-white"
-            >
-              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              Invite Participant
-            </Button>
+            {mode === "management" && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                >
+                  <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Participant
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setIsInviteModalOpen(true)}
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                >
+                  <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Invite Participant
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
