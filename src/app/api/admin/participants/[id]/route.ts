@@ -4,13 +4,13 @@ import { requireAdmin } from "@/app/api/admin/_utils";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const guard = await requireAdmin(request);
   if (!guard.ok) return guard.response;
 
   const supabase = guard.admin;
-  const { id } = params;
+  const { id } = await params;
 
   // 1. Fetch Participant
   const { data: participant, error: pError } = await supabase
