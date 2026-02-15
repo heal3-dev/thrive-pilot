@@ -62,7 +62,12 @@ export default function ParticipantDetailsPage() {
           if (res.status === 404) {
             setError("Participant not found");
           } else {
-            setError("Failed to load details");
+            try {
+              const errJson = await res.json();
+              setError(errJson.error || `Failed to load details (${res.status})`);
+            } catch (e) {
+              setError(`Failed to load details (${res.status})`);
+            }
           }
           setIsLoading(false);
           return;
