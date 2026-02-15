@@ -365,13 +365,7 @@ export function ParticipantManagement({
     );
   }
 
-  if (error) {
-    return (
-      <div className="bg-white rounded-2xl border-2 border-red-100 p-8 text-center">
-        <p className="text-red-600 font-semibold">{error}</p>
-      </div>
-    );
-  }
+  // Removed blocking error return. Error is displayed in the banner below.
 
   return (
     <div className="space-y-4">
@@ -382,6 +376,17 @@ export function ParticipantManagement({
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
             {successMessage}
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+          <p className="text-sm font-medium text-red-700 flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            {error}
           </p>
         </div>
       )}
@@ -533,7 +538,7 @@ export function ParticipantManagement({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
+                               onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
                                 disabled={backfillLoadingId === p.id}
                                 className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center"
                               >
@@ -567,7 +572,7 @@ export function ParticipantManagement({
                           <Button
                              variant="outline"
                              size="sm"
-                             onClick={() => router.push(`/admin/participants/${p.id}`)}
+                             onClick={() => router.push(`/dashboard/participants/${p.id}`)}
                              className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
                           >
                             View Trend
