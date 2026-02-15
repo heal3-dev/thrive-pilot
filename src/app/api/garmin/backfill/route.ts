@@ -107,12 +107,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!participant.garmin_user_id) {
-    return NextResponse.json(
-      { error: 'Participant has not connected their Garmin account' },
-      { status: 400 },
-    );
-  }
+  // Removed strict garmin_user_id check. runBackfill will fail if tokens are missing.
+  // if (!participant.garmin_user_id) {
+  //   return NextResponse.json(
+  //     { error: 'Participant has not connected their Garmin account' },
+  //     { status: 400 },
+  //   );
+  // }
 
   // 4. Run the backfill
   try {
