@@ -31,39 +31,45 @@ export default function ParticipantDetailsPage() {
   const [participant, setParticipant] = useState<Participant | null>(null);
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
-      // 1. Fetch Participant
-      const { data: pData, error: pError } = await supabase
-        .from("participants")
-        .select("id, name, email, garmin_user_id, garmin_connected_at")
-        .eq("id", id)
-        .single();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
 
-      if (pError) {
-        console.error("Error fetching participant:", pError);
+        if (!token) {
+          setError("Not authenticated");
+          setIsLoading(false);
+          return;
+        }
+
+        const res = await fetch(`/api/admin/participants/${id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          if (res.status === 404) {
+            setError("Participant not found");
+          } else {
+            setError("Failed to load details");
+          }
+          setIsLoading(false);
+          return;
+        }
+
+        const json = await res.json();
+        setParticipant(json.participant);
+        setMetrics(json.metrics);
+      } catch (err) {
+        console.error("Error loading details:", err);
+        setError("An error occurred");
+      } finally {
         setIsLoading(false);
-        return;
       }
-
-      setParticipant(pData);
-
-      // 2. Fetch Metrics (Last 30 days)
-      const { data: mData, error: mError } = await supabase
-        .from("garmin_metrics")
-        .select("id, metric_date, steps, resting_heart_rate, average_stress_level, sleep_duration_seconds")
-        .eq("participant_id", id)
-        .order("metric_date", { ascending: false })
-        .limit(30);
-
-      if (mError) {
-        console.error("Error fetching metrics:", mError);
-      } else {
-        setMetrics(mData || []);
-      }
-
-      setIsLoading(false);
     }
 
     if (id) {
@@ -72,11 +78,30 @@ export default function ParticipantDetailsPage() {
   }, [id]);
 
   if (isLoading) {
-    return <div className="p-8">Loading details...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center gap-3 text-slate-500">
+          <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span className="font-medium">Loading details...</span>
+        </div>
+      </div>
+    );
   }
 
-  if (!participant) {
-    return <div className="p-8">Participant not found.</div>;
+  if (error || !participant) {
+    return (
+      <div className="p-8 max-w-5xl mx-auto">
+        <Button variant="ghost" onClick={() => router.back()} className="mb-4">
+          ← Back
+        </Button>
+        <div className="bg-white rounded-xl border border-red-200 p-8 text-center">
+          <p className="text-red-600 font-medium">{error || "Participant not found"}</p>
+        </div>
+      </div>
+    );
   }
 
   return (
