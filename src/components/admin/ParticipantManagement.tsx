@@ -437,13 +437,13 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
         <div className="overflow-x-auto">
           <table className="w-full table-fixed">
             <colgroup>
-              <col className="w-[10%]" />
               <col className="w-[12%]" />
-              <col className="w-[20%]" />
               <col className="w-[15%]" />
+              <col className="w-[19%]" />
+              <col className="w-[17%]" />
               <col className="w-[8%]" />
-              <col className="w-[15%]" />
-              <col className="w-[20%]" />
+              <col className="w-[12%]" />
+              <col className="w-[17%]" />
             </colgroup>
             <thead className="bg-slate-100 border-b border-slate-100">
               <tr>
@@ -474,18 +474,18 @@ export function ParticipantManagement({ initialModal }: { initialModal?: "add" |
                     className="hover:bg-slate-50 transition-colors"
                   >
                     <td className="px-3 py-4">
-                      <p className="font-semibold text-slate-900 truncate">{p.name || "—"}</p>
+                      <p className="font-semibold text-slate-900 truncate" title={p.name ?? ""}>{p.name || "—"}</p>
                       <p className="text-xs text-slate-500">
                         {p.is_unverified ? "Invited" : "Created"} {formatDate(p.created_at ?? null)}
                       </p>
                     </td>
-                    <td className="px-3 py-4 text-slate-700 text-sm truncate">{formatPhone(p.phone_number)}</td>
-                    <td className="px-3 py-4 text-slate-700 text-sm truncate">{p.email || "—"}</td>
+                    <td className="px-3 py-4 text-slate-700 text-sm truncate" title={formatPhone(p.phone_number) ?? ""}>{formatPhone(p.phone_number)}</td>
+                    <td className="px-3 py-4 text-slate-700 text-sm truncate" title={p.email ?? ""}>{p.email || "—"}</td>
                     <td className="px-3 py-4">
                       {p.assigned_mentor && !p.assigned_mentor.unassigned_at ? (
                         <div>
-                          <p className="font-semibold text-slate-900 truncate">{p.assigned_mentor.mentor_name || "—"}</p>
-                          <p className="text-xs text-slate-500 truncate">{p.assigned_mentor.mentor_email || ""}</p>
+                          <p className="font-semibold text-slate-900 truncate" title={p.assigned_mentor.mentor_name ?? ""}>{p.assigned_mentor.mentor_name || "—"}</p>
+                          <p className="text-xs text-slate-500 truncate" title={p.assigned_mentor.mentor_email ?? ""}>{p.assigned_mentor.mentor_email || ""}</p>
                         </div>
                       ) : (
                         <span className="text-slate-500">Unassigned</span>
