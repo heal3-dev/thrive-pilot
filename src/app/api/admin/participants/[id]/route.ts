@@ -29,7 +29,16 @@ export async function GET(
     return NextResponse.json({ error: "Participant not found" }, { status: 404 });
   }
 
-  // 2. Fetch Metrics (Last 30 days)
+  // 2. Check Garmin Tokens
+  const { data: tokenData } = await supabase
+    .from("garmin_tokens")
+    .select("participant_id")
+    .eq("participant_id", id)
+    .maybeSingle();
+
+  const isConnected = Boolean(participant.garmin_user_id) || Boolean(tokenData);
+
+  // 3. Fetch Metrics (Last 30 days)
   const { data: metrics, error: mError } = await supabase
     .from("garmin_metrics")
     .select("id, metric_date, steps, resting_heart_rate, average_stress_level, sleep_duration_seconds")
@@ -56,6 +65,7 @@ export async function GET(
 
   return NextResponse.json({
     participant,
+    is_connected: isConnected,
     metrics: metricsData,
     flags,
   });

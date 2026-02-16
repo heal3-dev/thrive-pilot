@@ -12,6 +12,7 @@ type Participant = {
   email: string;
   garmin_user_id: string | null;
   garmin_connected_at: string | null;
+  is_connected?: boolean;
 };
 
 type Metric = {
@@ -74,7 +75,10 @@ export default function ParticipantDetailsPage() {
         }
 
         const json = await res.json();
-        setParticipant(json.participant);
+        setParticipant({
+          ...json.participant,
+          is_connected: json.is_connected
+        });
         setMetrics(json.metrics);
         setFlags(json.flags || []);
       } catch (err) {
@@ -146,7 +150,7 @@ export default function ParticipantDetailsPage() {
             </h1>
             <p className="text-slate-500 text-sm">
               Garmin Status:{" "}
-              {participant.garmin_user_id ? (
+              {participant.is_connected ? (
                 <span className="text-teal-600 font-medium">Connected</span>
               ) : (
                 <span className="text-slate-400">Not Connected</span>

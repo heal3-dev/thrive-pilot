@@ -475,7 +475,6 @@ export function ParticipantManagement({
               <col className="w-[8%]" />
               <col className="w-[12%]" />
               <col className="w-[17%]" />
-              {/* No specific col width change needed if we fit it in or adjust status */}
             </colgroup>
             <thead className="bg-slate-100 border-b border-slate-100">
               <tr>
