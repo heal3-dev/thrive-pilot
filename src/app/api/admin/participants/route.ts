@@ -67,7 +67,7 @@ export async function GET(request: Request) {
 
   const { data: metricsData } = await admin
     .from("garmin_metrics")
-    .select("participant_id, metric_date, steps, resting_heart_rate, average_stress_level, sleep_duration_seconds")
+    .select("participant_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, hrv_last_night_average, hrv_last_night_5_min_high")
     .gte("metric_date", dateStr)
     .order("metric_date", { ascending: false });
 
@@ -77,14 +77,17 @@ export async function GET(request: Request) {
       if (!metricsByParticipant.has(m.participant_id)) {
         metricsByParticipant.set(m.participant_id, []);
       }
-      // Cast the row to Metric type (schema matches)
       metricsByParticipant.get(m.participant_id)?.push({
-        id: "temp", // ID not needed for calculation
+        id: "temp",
         metric_date: m.metric_date,
-        steps: m.steps,
         resting_heart_rate: m.resting_heart_rate,
         average_stress_level: m.average_stress_level,
         sleep_duration_seconds: m.sleep_duration_seconds,
+        sleep_score: m.sleep_score,
+        body_battery_charged: m.body_battery_charged,
+        body_battery_drained: m.body_battery_drained,
+        hrv_last_night_average: m.hrv_last_night_average,
+        hrv_last_night_5_min_high: m.hrv_last_night_5_min_high,
       });
     }
   }
