@@ -16,20 +16,39 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 // Types
 // ---------------------------------------------------------------------------
 
-/** A single daily summary object sent by Garmin in the webhook payload. */
+/**
+ * A single daily summary object sent by Garmin in the webhook payload.
+ *
+ * Field names match the official Garmin Health API "ClientDaily" schema.
+ * See: https://developer.garmin.com/gc-developer-program/health-api/
+ */
 export interface GarminDailySummary {
   userId: string;
-  userAccessToken: string;
+  userAccessToken?: string;
   summaryId: string;
   calendarDate: string; // "YYYY-MM-DD"
+  activityType?: string;
+
+  // Timing
+  startTimeInSeconds?: number;
+  startTimeOffsetInSeconds?: number;
+  durationInSeconds?: number;
 
   // Activity
   steps?: number;
+  stepsGoal?: number;
   distanceInMeters?: number;
   activeTimeInSeconds?: number;
   floorsClimbed?: number;
+  floorsClimbedGoal?: number;
   moderateIntensityDurationInSeconds?: number;
   vigorousIntensityDurationInSeconds?: number;
+  intensityDurationGoalInSeconds?: number;
+
+  // Wheelchair pushes
+  pushes?: number;
+  pushesGoal?: number;
+  pushDistanceInMeters?: number;
 
   // Calories
   activeKilocalories?: number;
@@ -47,28 +66,15 @@ export interface GarminDailySummary {
   maxStressLevel?: number;
   stressDurationInSeconds?: number;
   restStressDurationInSeconds?: number;
+  activityStressDurationInSeconds?: number;
   lowStressDurationInSeconds?: number;
   mediumStressDurationInSeconds?: number;
   highStressDurationInSeconds?: number;
+  stressQualifier?: string;
 
-  // Sleep
-  sleepDurationInSeconds?: number;
-  sleepScoreQualifier?: string;
-  overallSleepScore?: { value?: number };
-
-  // Body Battery
-  bodyBatteryHighestValue?: number;
-  bodyBatteryLowestValue?: number;
-  bodyBatteryMostRecentValue?: number;
-
-  // SpO2
-  averageSpo2Value?: number;
-  lowestSpo2Value?: number;
-
-  // Respiration
-  avgWakingRespirationValue?: number;
-  highestRespirationValue?: number;
-  lowestRespirationValue?: number;
+  // Body Battery (daily charged/drained values)
+  bodyBatteryChargedValue?: number;
+  bodyBatteryDrainedValue?: number;
 
   // Privacy
   privacyProtected?: boolean;
@@ -193,8 +199,10 @@ export function mapSummaryToMetrics(
 
     // Activity
     steps: summary.steps ?? null,
+    steps_goal: summary.stepsGoal ?? null,
     distance_meters: summary.distanceInMeters ?? null,
     active_time_seconds: summary.activeTimeInSeconds ?? null,
+    duration_seconds: summary.durationInSeconds ?? null,
     floors_climbed: summary.floorsClimbed ?? null,
     intensity_minutes_moderate: summary.moderateIntensityDurationInSeconds ?? null,
     intensity_minutes_vigorous: summary.vigorousIntensityDurationInSeconds ?? null,
@@ -202,7 +210,9 @@ export function mapSummaryToMetrics(
     // Calories
     active_calories: summary.activeKilocalories ?? null,
     bmr_calories: summary.bmrKilocalories ?? null,
-    total_calories: summary.totalKilocalories ?? null,
+    total_calories:
+      summary.totalKilocalories ??
+      ((summary.activeKilocalories ?? 0) + (summary.bmrKilocalories ?? 0)) || null,
 
     // Heart rate
     resting_heart_rate: summary.restingHeartRateInBeatsPerMinute ?? null,
@@ -213,29 +223,17 @@ export function mapSummaryToMetrics(
     // Stress
     average_stress_level: summary.averageStressLevel ?? null,
     max_stress_level: summary.maxStressLevel ?? null,
+    stress_qualifier: summary.stressQualifier ?? null,
     stress_duration_seconds: summary.stressDurationInSeconds ?? null,
     rest_stress_duration_seconds: summary.restStressDurationInSeconds ?? null,
+    activity_stress_duration_seconds: summary.activityStressDurationInSeconds ?? null,
     low_stress_duration_seconds: summary.lowStressDurationInSeconds ?? null,
     medium_stress_duration_seconds: summary.mediumStressDurationInSeconds ?? null,
     high_stress_duration_seconds: summary.highStressDurationInSeconds ?? null,
 
-    // Sleep
-    sleep_duration_seconds: summary.sleepDurationInSeconds ?? null,
-    sleep_score: summary.overallSleepScore?.value ?? null,
-
-    // Body Battery
-    body_battery_highest: summary.bodyBatteryHighestValue ?? null,
-    body_battery_lowest: summary.bodyBatteryLowestValue ?? null,
-    body_battery_most_recent: summary.bodyBatteryMostRecentValue ?? null,
-
-    // SpO2
-    spo2_average: summary.averageSpo2Value ?? null,
-    spo2_lowest: summary.lowestSpo2Value ?? null,
-
-    // Respiration
-    avg_waking_respiration: summary.avgWakingRespirationValue ?? null,
-    highest_respiration: summary.highestRespirationValue ?? null,
-    lowest_respiration: summary.lowestRespirationValue ?? null,
+    // Body Battery (charged/drained from dailies)
+    body_battery_charged: summary.bodyBatteryChargedValue ?? null,
+    body_battery_drained: summary.bodyBatteryDrainedValue ?? null,
 
     // Raw data for debugging
     raw_data: summary,
