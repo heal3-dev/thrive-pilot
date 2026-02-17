@@ -375,8 +375,8 @@ export function mapSleepToMetrics(
       ? new Date(summary.startTimeInSeconds * 1000).toISOString()
       : null,
 
-    // Raw data
-    raw_data: summary,
+    // NOTE: Do NOT set raw_data here — it would overwrite the dailies payload.
+    // raw_data is owned by the dailies endpoint only.
 
     updated_at: new Date().toISOString(),
   };
