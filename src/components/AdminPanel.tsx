@@ -108,7 +108,7 @@ export function AdminPanel() {
           .select("id", { count: "exact", head: true })
           .gte("created_at", todayISO),
         supabase.from("mentor_assignments").select("id", { count: "exact", head: true }),
-        supabase.from("garmin_tokens").select("id", { count: "exact", head: true }),
+        supabase.from("participants").select("id", { count: "exact", head: true }).not("garmin_user_id", "is", null),
       ]);
 
       // Check for errors
