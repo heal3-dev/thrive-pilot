@@ -126,7 +126,7 @@ export default function ParticipantDetailsPage() {
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-5xl mx-auto">
+    <div className="p-8 space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -176,9 +176,9 @@ export default function ParticipantDetailsPage() {
             No metrics found. {(participant.garmin_user_id) && "Wait for daily sync."}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-slate-500 bg-slate-50 border-b border-slate-100">
+          <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+            <table className="w-full text-sm text-left min-w-[700px]">
+              <thead className="text-slate-500 bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
                 <tr>
                   <th className="px-5 py-3 font-medium">Date</th>
                   <th className="px-5 py-3 font-medium">Sleep</th>
