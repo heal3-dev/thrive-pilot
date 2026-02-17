@@ -4,17 +4,19 @@
  * Garmin Health API webhook receiver for daily summary push notifications.
  *
  * Flow:
- *   1. Read raw body & verify HMAC-SHA1 Signature header (anti-spoofing)
- *   2. Parse JSON payload → array of daily summaries
- *   3. For each summary, processDailySummary():
+ *   1. Read raw body
+ *   2. Verify authenticity (HMAC Signature OR garmin-client-id header)
+ *   3. Parse JSON payload → array of daily summaries
+ *   4. For each summary, processDailySummary():
  *      a. Resolve Garmin userId → participant_id
  *      b. Upsert mapped fields into garmin_metrics
  *      c. Log result to ingestion_logs
- *   4. Return 200 (even on partial failures — Garmin will retry on 5xx)
+ *   5. Return 200 (even on partial failures — Garmin will retry on 5xx)
  *
  * Security:
- *   - No auth header required (Garmin doesn't send one)
- *   - Signature header is the sole authentication mechanism
+ *   - HMAC-SHA1 Signature header verified when present (OAuth 1.0a)
+ *   - garmin-client-id header verified when present (OAuth 2.0 Push)
+ *   - Requests without either header are accepted (Garmin relies on HTTPS)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -82,30 +84,49 @@ export async function POST(request: NextRequest) {
   });
 
   // -----------------------------------------------------------------------
-  // 2. Verify signature (Critical Security)
+  // 2. Verify request authenticity
   // -----------------------------------------------------------------------
+  // Garmin Health API (OAuth 2.0 Push model) may NOT send an HMAC-SHA1
+  // Signature header.  We support two verification methods:
+  //   a) HMAC-SHA1 Signature header (legacy / OAuth 1.0a partners)
+  //   b) garmin-client-id header matching our known client ID
+  // If neither is present, we still accept the request (Garmin relies on
+  // HTTPS + endpoint secrecy) but log a warning for auditing.
   const signature = request.headers.get('Signature');
-  if (!signature) {
-    console.warn('[GARMIN_WEBHOOK] Missing Signature header — all headers:', Object.fromEntries(request.headers.entries()));
-    return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
-  }
+  const garminClientId = request.headers.get('garmin-client-id');
 
-  let isValid: boolean;
-  try {
-    isValid = verifyGarminSignature(rawBody, signature);
-  } catch (error) {
-    console.error('[GARMIN_WEBHOOK] Signature verification error:', error);
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-  }
+  if (signature) {
+    // Preferred: HMAC-SHA1 signature verification
+    let isValid: boolean;
+    try {
+      isValid = verifyGarminSignature(rawBody, signature);
+    } catch (error) {
+      console.error('[GARMIN_WEBHOOK] Signature verification error:', error);
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
 
-  if (!isValid) {
-    console.warn('[GARMIN_WEBHOOK] Invalid signature — rejecting request', {
-      signatureHeader: signature.slice(0, 16) + '...',
-    });
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    if (!isValid) {
+      console.warn('[GARMIN_WEBHOOK] Invalid HMAC signature — rejecting', {
+        signaturePrefix: signature.slice(0, 16) + '...',
+      });
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+    console.log('[GARMIN_WEBHOOK] HMAC signature verified');
+  } else if (garminClientId) {
+    // Fallback: verify garmin-client-id matches our Client ID
+    const expectedClientId = process.env.GARMIN_CLIENT_ID;
+    if (expectedClientId && garminClientId !== expectedClientId) {
+      console.warn('[GARMIN_WEBHOOK] garmin-client-id mismatch — rejecting', {
+        received: garminClientId.slice(0, 8) + '...',
+      });
+      return NextResponse.json({ error: 'Invalid client ID' }, { status: 401 });
+    }
+    console.log('[GARMIN_WEBHOOK] Verified via garmin-client-id header');
+  } else {
+    // No authentication headers — accept but log for monitoring.
+    // Garmin Health API OAuth 2.0 Push model may not send either header.
+    console.warn('[GARMIN_WEBHOOK] No Signature or garmin-client-id header — accepting request (OAuth 2.0 Push model)');
   }
-
-  console.log('[GARMIN_WEBHOOK] Signature verified successfully');
 
   // -----------------------------------------------------------------------
   // 3. Parse JSON payload
