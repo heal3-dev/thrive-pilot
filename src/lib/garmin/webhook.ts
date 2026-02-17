@@ -181,6 +181,40 @@ export function verifyGarminSignature(
 }
 
 // ---------------------------------------------------------------------------
+// Raw record storage (append-only)
+// ---------------------------------------------------------------------------
+
+type RawTable = 'garmin_raw_dailies' | 'garmin_raw_sleeps' | 'garmin_raw_hrv';
+
+/**
+ * Insert a raw webhook payload into the appropriate append-only table.
+ * This preserves every payload for debugging and potential reprocessing.
+ * Failures are logged but never block the main processing flow.
+ */
+async function insertRawRecord(
+  table: RawTable,
+  participantId: string | null,
+  garminUserId: string,
+  summary: { summaryId?: string; calendarDate?: string; [key: string]: unknown },
+): Promise<void> {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from(table).insert({
+      participant_id: participantId,
+      garmin_user_id: garminUserId,
+      summary_id: summary.summaryId ?? null,
+      calendar_date: summary.calendarDate ?? null,
+      raw_data: summary,
+    });
+    if (error) {
+      console.error(`[RAW_INSERT] Failed to insert into ${table}:`, error.message);
+    }
+  } catch (err) {
+    console.error(`[RAW_INSERT] Unexpected error inserting into ${table}:`, err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Daily Summary Processing
 // ---------------------------------------------------------------------------
 
@@ -236,8 +270,8 @@ export function mapSummaryToMetrics(
     body_battery_charged: summary.bodyBatteryChargedValue ?? null,
     body_battery_drained: summary.bodyBatteryDrainedValue ?? null,
 
-    // Raw data for debugging
-    raw_data: summary,
+    // NOTE: raw_data is no longer written here — full payloads are stored
+    // in the append-only garmin_raw_dailies table instead.
 
     // Timestamps
     updated_at: new Date().toISOString(),
@@ -293,7 +327,10 @@ export async function processDailySummary(
 
     result.participantId = participant.id;
 
-    // 2. Upsert into garmin_metrics
+    // 2. Store raw payload (append-only, never fails the main flow)
+    await insertRawRecord('garmin_raw_dailies', participant.id, summary.userId, summary);
+
+    // 3. Upsert into garmin_metrics
     const metricsRow = mapSummaryToMetrics(summary, participant.id);
 
     const { error: upsertError } = await supabase
@@ -308,7 +345,7 @@ export async function processDailySummary(
 
     result.status = 'success';
 
-    // 3. Log success
+    // 4. Log success
     await supabase.from('ingestion_logs').insert({
       participant_id: participant.id,
       status: 'success',
@@ -431,6 +468,8 @@ export async function processSleepSummary(
 
     result.participantId = participant.id;
 
+    await insertRawRecord('garmin_raw_sleeps', participant.id, summary.userId, summary);
+
     const metricsRow = mapSleepToMetrics(summary, participant.id);
 
     const { error: upsertError } = await supabase
@@ -537,6 +576,8 @@ export async function processHrvSummary(
     }
 
     result.participantId = participant.id;
+
+    await insertRawRecord('garmin_raw_hrv', participant.id, summary.userId, summary);
 
     const metricsRow = mapHrvToMetrics(summary, participant.id);
 
