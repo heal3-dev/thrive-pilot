@@ -7,10 +7,14 @@ export type Flag = {
 export type Metric = {
   id: string;
   metric_date: string;
-  steps: number | null;
   resting_heart_rate: number | null;
   average_stress_level: number | null;
   sleep_duration_seconds: number | null;
+  sleep_score: number | null;
+  body_battery_charged: number | null;
+  body_battery_drained: number | null;
+  hrv_last_night_average: number | null;
+  hrv_last_night_5_min_high: number | null;
 };
 
 /**

@@ -38,10 +38,10 @@ export async function GET(
 
   const isConnected = Boolean(participant.garmin_user_id) || Boolean(tokenData);
 
-  // 3. Fetch Metrics (Last 30 days)
+  // 3. Fetch Metrics (Last 30 days) — all pilot fields
   const { data: metrics, error: mError } = await supabase
     .from("garmin_metrics")
-    .select("id, metric_date, steps, resting_heart_rate, average_stress_level, sleep_duration_seconds")
+    .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, hrv_last_night_average, hrv_last_night_5_min_high")
     .eq("participant_id", id)
     .order("metric_date", { ascending: false })
     .limit(30);
@@ -56,10 +56,14 @@ export async function GET(
   const typedMetrics: Metric[] = metricsData.map(m => ({
     id: m.id,
     metric_date: m.metric_date,
-    steps: m.steps,
     resting_heart_rate: m.resting_heart_rate,
     average_stress_level: m.average_stress_level,
     sleep_duration_seconds: m.sleep_duration_seconds,
+    sleep_score: m.sleep_score,
+    body_battery_charged: m.body_battery_charged,
+    body_battery_drained: m.body_battery_drained,
+    hrv_last_night_average: m.hrv_last_night_average,
+    hrv_last_night_5_min_high: m.hrv_last_night_5_min_high,
   }));
   const flags = calculateFlags(typedMetrics);
 

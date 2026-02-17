@@ -18,10 +18,14 @@ type Participant = {
 type Metric = {
   id: string;
   metric_date: string;
-  steps: number | null;
   resting_heart_rate: number | null;
   average_stress_level: number | null;
   sleep_duration_seconds: number | null;
+  sleep_score: number | null;
+  body_battery_charged: number | null;
+  body_battery_drained: number | null;
+  hrv_last_night_average: number | null;
+  hrv_last_night_5_min_high: number | null;
 };
 
 type Flag = {
@@ -176,31 +180,47 @@ export default function ParticipantDetailsPage() {
             <table className="w-full text-sm text-left">
               <thead className="text-slate-500 bg-slate-50 border-b border-slate-100">
                 <tr>
-                  <th className="px-6 py-3 font-medium">Date</th>
-                  <th className="px-6 py-3 font-medium">Steps</th>
-                  <th className="px-6 py-3 font-medium">RHR (bpm)</th>
-                  <th className="px-6 py-3 font-medium">Stress (avg)</th>
-                  <th className="px-6 py-3 font-medium">Sleep (hrs)</th>
+                  <th className="px-5 py-3 font-medium">Date</th>
+                  <th className="px-5 py-3 font-medium">Sleep</th>
+                  <th className="px-5 py-3 font-medium">Stress</th>
+                  <th className="px-5 py-3 font-medium">HRV</th>
+                  <th className="px-5 py-3 font-medium">RHR</th>
+                  <th className="px-5 py-3 font-medium">Body Battery</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {metrics.map((m) => (
                   <tr key={m.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-3 text-slate-900 font-medium">
+                    <td className="px-5 py-3 text-slate-900 font-medium">
                       {m.metric_date}
                     </td>
-                    <td className="px-6 py-3 text-slate-600">
-                      {m.steps?.toLocaleString() ?? "-"}
+                    <td className="px-5 py-3 text-slate-600">
+                      {m.sleep_duration_seconds
+                        ? `${(m.sleep_duration_seconds / 3600).toFixed(1)}h`
+                        : "-"}
+                      {m.sleep_score != null && (
+                        <span className="ml-1 text-xs text-slate-400">({m.sleep_score})</span>
+                      )}
                     </td>
-                    <td className="px-6 py-3 text-slate-600">
+                    <td className="px-5 py-3 text-slate-600">
+                      {m.average_stress_level != null && m.average_stress_level >= 0
+                        ? m.average_stress_level
+                        : "-"}
+                    </td>
+                    <td className="px-5 py-3 text-slate-600">
+                      {m.hrv_last_night_average != null
+                        ? m.hrv_last_night_average
+                        : "-"}
+                      {m.hrv_last_night_5_min_high != null && (
+                        <span className="ml-1 text-xs text-slate-400">(peak {m.hrv_last_night_5_min_high})</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-slate-600">
                       {m.resting_heart_rate ?? "-"}
                     </td>
-                    <td className="px-6 py-3 text-slate-600">
-                      {m.average_stress_level ?? "-"}
-                    </td>
-                    <td className="px-6 py-3 text-slate-600">
-                      {m.sleep_duration_seconds
-                        ? (m.sleep_duration_seconds / 3600).toFixed(1)
+                    <td className="px-5 py-3 text-slate-600">
+                      {m.body_battery_charged != null || m.body_battery_drained != null
+                        ? `+${m.body_battery_charged ?? 0} / -${m.body_battery_drained ?? 0}`
                         : "-"}
                     </td>
                   </tr>
