@@ -211,8 +211,9 @@ export function mapSummaryToMetrics(
     active_calories: summary.activeKilocalories ?? null,
     bmr_calories: summary.bmrKilocalories ?? null,
     total_calories:
-      summary.totalKilocalories ??
-      ((summary.activeKilocalories ?? 0) + (summary.bmrKilocalories ?? 0)) || null,
+      summary.totalKilocalories ?? (
+        ((summary.activeKilocalories ?? 0) + (summary.bmrKilocalories ?? 0)) || null
+      ),
 
     // Heart rate
     resting_heart_rate: summary.restingHeartRateInBeatsPerMinute ?? null,
