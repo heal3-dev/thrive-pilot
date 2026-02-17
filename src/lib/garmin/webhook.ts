@@ -77,12 +77,54 @@ export interface GarminDailySummary {
   [key: string]: unknown;
 }
 
-/** Top-level webhook payload from Garmin. */
-export interface GarminWebhookPayload {
-  dailies: GarminDailySummary[];
+/** A single sleep summary sent by Garmin in the HEALTH - Sleeps webhook. */
+export interface GarminSleepSummary {
+  userId: string;
+  userAccessToken?: string;
+  summaryId: string;
+  calendarDate: string; // "YYYY-MM-DD"
+  startTimeInSeconds?: number;
+  startTimeOffsetInSeconds?: number;
+  durationInSeconds?: number;
+  unmeasurableSleepInSeconds?: number;
+  deepSleepDurationInSeconds?: number;
+  lightSleepDurationInSeconds?: number;
+  remSleepInSeconds?: number;
+  awakeDurationInSeconds?: number;
+  validation?: string; // ENHANCED_FINAL, AUTO_FINAL, etc.
+  overallSleepScore?: { value?: number; qualifierKey?: string };
+  sleepScores?: Record<string, { qualifierKey?: string }>;
+  privacyProtected?: boolean;
+  [key: string]: unknown;
 }
 
-/** Result of processing a single daily summary. */
+/** A single HRV summary sent by Garmin in the HEALTH - HRV Summary webhook. */
+export interface GarminHrvSummary {
+  userId: string;
+  userAccessToken?: string;
+  summaryId: string;
+  calendarDate: string; // "YYYY-MM-DD"
+  startTimeInSeconds?: number;
+  startTimeOffsetInSeconds?: number;
+  durationInSeconds?: number;
+  weeklyAvg?: number;
+  lastNight?: number;
+  lastNightAvg?: number;
+  lastNight5MinHigh?: number;
+  hrvAlgorithmVersion?: string;
+  status?: string; // BALANCED, UNBALANCED, LOW, etc.
+  privacyProtected?: boolean;
+  [key: string]: unknown;
+}
+
+/** Top-level webhook payload from Garmin. */
+export interface GarminWebhookPayload {
+  dailies?: GarminDailySummary[];
+  sleeps?: GarminSleepSummary[];
+  hrv?: GarminHrvSummary[];
+}
+
+/** Result of processing a single summary. */
 export interface ProcessingResult {
   summaryId: string;
   userId: string;
@@ -294,6 +336,244 @@ export async function processDailySummary(
         duration_ms: Date.now() - startMs,
         date_processed: summary.calendarDate,
         source: 'webhook',
+      });
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Sleep Summary Processing
+// ---------------------------------------------------------------------------
+
+/**
+ * Map a Garmin sleep summary to garmin_metrics columns.
+ * Sleep data is merged into the same row as daily data (keyed by date).
+ */
+export function mapSleepToMetrics(
+  summary: GarminSleepSummary,
+  participantId: string,
+) {
+  return {
+    participant_id: participantId,
+    metric_date: summary.calendarDate,
+
+    // Sleep totals
+    sleep_duration_seconds: summary.durationInSeconds ?? null,
+    sleep_score: summary.overallSleepScore?.value ?? null,
+    sleep_score_qualifier: summary.overallSleepScore?.qualifierKey ?? null,
+
+    // Sleep breakdown
+    deep_sleep_seconds: summary.deepSleepDurationInSeconds ?? null,
+    light_sleep_seconds: summary.lightSleepDurationInSeconds ?? null,
+    rem_sleep_seconds: summary.remSleepInSeconds ?? null,
+    awake_seconds: summary.awakeDurationInSeconds ?? null,
+
+    // Metadata
+    sleep_validation: summary.validation ?? null,
+    sleep_start_time: summary.startTimeInSeconds
+      ? new Date(summary.startTimeInSeconds * 1000).toISOString()
+      : null,
+
+    // Raw data
+    raw_data: summary,
+
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Process a single Garmin sleep summary.
+ * Merges sleep data into the garmin_metrics row for the same calendar date.
+ */
+export async function processSleepSummary(
+  summary: GarminSleepSummary,
+): Promise<ProcessingResult> {
+  const startMs = Date.now();
+  const supabase = getSupabaseAdmin();
+
+  const result: ProcessingResult = {
+    summaryId: summary.summaryId,
+    userId: summary.userId,
+    calendarDate: summary.calendarDate,
+    participantId: null,
+    status: 'failed',
+  };
+
+  if (summary.privacyProtected) {
+    result.status = 'skipped';
+    result.error = 'Privacy-protected summary';
+    return result;
+  }
+
+  // Prefer finalized sleep records over tentative ones
+  const validation = summary.validation ?? '';
+  if (validation.includes('TENTATIVE')) {
+    result.status = 'skipped';
+    result.error = `Skipping tentative sleep record (${validation})`;
+    return result;
+  }
+
+  try {
+    const { data: participant, error: lookupError } = await supabase
+      .from('participants')
+      .select('id')
+      .eq('garmin_user_id', summary.userId)
+      .maybeSingle();
+
+    if (lookupError) throw new Error(`Participant lookup failed: ${lookupError.message}`);
+
+    if (!participant) {
+      result.status = 'skipped';
+      result.error = `No participant found for Garmin userId ${summary.userId}`;
+      return result;
+    }
+
+    result.participantId = participant.id;
+
+    const metricsRow = mapSleepToMetrics(summary, participant.id);
+
+    const { error: upsertError } = await supabase
+      .from('garmin_metrics')
+      .upsert(metricsRow, { onConflict: 'participant_id,metric_date' });
+
+    if (upsertError) throw new Error(`Upsert failed: ${upsertError.message}`);
+
+    result.status = 'success';
+
+    await supabase.from('ingestion_logs').insert({
+      participant_id: participant.id,
+      status: 'success',
+      metrics_imported: 1,
+      duration_ms: Date.now() - startMs,
+      date_processed: summary.calendarDate,
+      source: 'webhook-sleeps',
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result.error = message;
+    console.error('[GARMIN_WEBHOOK] processSleepSummary error:', {
+      summaryId: summary.summaryId,
+      userId: summary.userId,
+      error: message,
+    });
+
+    if (result.participantId) {
+      await supabase.from('ingestion_logs').insert({
+        participant_id: result.participantId,
+        status: 'failed',
+        error_message: message,
+        duration_ms: Date.now() - startMs,
+        date_processed: summary.calendarDate,
+        source: 'webhook-sleeps',
+      });
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// HRV Summary Processing
+// ---------------------------------------------------------------------------
+
+/**
+ * Map a Garmin HRV summary to garmin_metrics columns.
+ */
+export function mapHrvToMetrics(
+  summary: GarminHrvSummary,
+  participantId: string,
+) {
+  return {
+    participant_id: participantId,
+    metric_date: summary.calendarDate,
+
+    hrv_weekly_average: summary.weeklyAvg ?? null,
+    hrv_last_night: summary.lastNight ?? null,
+    hrv_last_night_average: summary.lastNightAvg ?? null,
+    hrv_last_night_5_min_high: summary.lastNight5MinHigh ?? null,
+    hrv_status: summary.status ?? null,
+
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Process a single Garmin HRV summary.
+ */
+export async function processHrvSummary(
+  summary: GarminHrvSummary,
+): Promise<ProcessingResult> {
+  const startMs = Date.now();
+  const supabase = getSupabaseAdmin();
+
+  const result: ProcessingResult = {
+    summaryId: summary.summaryId ?? `hrv-${summary.calendarDate}`,
+    userId: summary.userId,
+    calendarDate: summary.calendarDate,
+    participantId: null,
+    status: 'failed',
+  };
+
+  if (summary.privacyProtected) {
+    result.status = 'skipped';
+    result.error = 'Privacy-protected summary';
+    return result;
+  }
+
+  try {
+    const { data: participant, error: lookupError } = await supabase
+      .from('participants')
+      .select('id')
+      .eq('garmin_user_id', summary.userId)
+      .maybeSingle();
+
+    if (lookupError) throw new Error(`Participant lookup failed: ${lookupError.message}`);
+
+    if (!participant) {
+      result.status = 'skipped';
+      result.error = `No participant found for Garmin userId ${summary.userId}`;
+      return result;
+    }
+
+    result.participantId = participant.id;
+
+    const metricsRow = mapHrvToMetrics(summary, participant.id);
+
+    const { error: upsertError } = await supabase
+      .from('garmin_metrics')
+      .upsert(metricsRow, { onConflict: 'participant_id,metric_date' });
+
+    if (upsertError) throw new Error(`Upsert failed: ${upsertError.message}`);
+
+    result.status = 'success';
+
+    await supabase.from('ingestion_logs').insert({
+      participant_id: participant.id,
+      status: 'success',
+      metrics_imported: 1,
+      duration_ms: Date.now() - startMs,
+      date_processed: summary.calendarDate,
+      source: 'webhook-hrv',
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result.error = message;
+    console.error('[GARMIN_WEBHOOK] processHrvSummary error:', {
+      summaryId: summary.summaryId,
+      userId: summary.userId,
+      error: message,
+    });
+
+    if (result.participantId) {
+      await supabase.from('ingestion_logs').insert({
+        participant_id: result.participantId,
+        status: 'failed',
+        error_message: message,
+        duration_ms: Date.now() - startMs,
+        date_processed: summary.calendarDate,
+        source: 'webhook-hrv',
       });
     }
   }
