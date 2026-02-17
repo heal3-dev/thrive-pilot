@@ -62,8 +62,9 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - api/sms (skip auth check for public webhooks if any)
+     * - api/garmin/webhooks (Garmin push webhooks — no auth cookies)
+     * - api/garmin/callback (OAuth callback — external redirect)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/garmin/webhooks|api/garmin/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

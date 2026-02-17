@@ -20,7 +20,7 @@ import {
   type GarminDailySummary,
   mapSummaryToMetrics,
 } from '@/lib/garmin/webhook';
-import { GarminClient } from '@/lib/garmin/garmin-client';
+import { GarminClient, GarminBackfillConflictError } from '@/lib/garmin/garmin-client';
 import { GarminTokenRevokedError } from '@/lib/garmin/token-manager';
 
 // ---------------------------------------------------------------------------
@@ -58,6 +58,8 @@ export interface BackfillResult {
   daysSkipped: number;
   errors: string[];
   durationMs: number;
+  /** True when Garmin accepted the request asynchronously (data will arrive via webhook). */
+  asyncSubmitted?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,15 +241,43 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
   try {
     summaries = await fetchDailiesFromGarmin(client, startEpoch, endEpoch);
   } catch (err) {
-    // Re-throw revocation errors directly so the caller can handle them
+    // Re-throw specific errors directly so the caller can handle them
     if (err instanceof GarminTokenRevokedError) {
+      throw err;
+    }
+    if (err instanceof GarminBackfillConflictError) {
       throw err;
     }
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(`Failed to fetch data from Garmin: ${message}`);
   }
 
-  // --- Upsert into database ---
+  // --- Handle async backfill (Garmin returned 202 / empty) ---
+  // The Garmin backfill endpoint is asynchronous for the Push model: it
+  // returns 202 Accepted and queues the data for delivery via webhook.
+  // If summaries is empty AND no error was thrown, the request was accepted.
+  if (summaries.length === 0) {
+    console.log('[GARMIN_PULL] Backfill accepted (async) — data will arrive via webhook', {
+      participantId,
+      startDate,
+      endDate,
+    });
+
+    return {
+      participantId,
+      startDate,
+      endDate,
+      daysRequested: days,
+      daysImported: 0,
+      daysFailed: 0,
+      daysSkipped: 0,
+      errors: [],
+      durationMs: Date.now() - startMs,
+      asyncSubmitted: true,
+    };
+  }
+
+  // --- Upsert into database (data returned inline — Ping/Pull model) ---
   const { imported, failed, skipped, errors } = await upsertDailies(
     participantId,
     summaries,

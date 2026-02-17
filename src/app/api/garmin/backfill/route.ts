@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/app/api/admin/_utils';
 import { runBackfill } from '@/lib/garmin/pull-client';
 import { GarminTokenRevokedError } from '@/lib/garmin/token-manager';
+import { GarminBackfillConflictError } from '@/lib/garmin/garmin-client';
 
 // ---------------------------------------------------------------------------
 // Validation helpers
@@ -130,8 +131,17 @@ export async function POST(request: NextRequest) {
       imported: result.daysImported,
       failed: result.daysFailed,
       skipped: result.daysSkipped,
+      asyncSubmitted: result.asyncSubmitted,
       durationMs: result.durationMs,
     });
+
+    // If the backfill was accepted asynchronously, tell the admin
+    if (result.asyncSubmitted) {
+      return NextResponse.json({
+        message: 'Backfill request submitted to Garmin. Data will arrive via webhook within a few minutes.',
+        result,
+      });
+    }
 
     return NextResponse.json({
       message: `Backfill complete: ${result.daysImported} day(s) imported, ${result.daysFailed} failed, ${result.daysSkipped} skipped`,
@@ -141,11 +151,24 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[GARMIN_BACKFILL] Error:', { participant_id, error: message });
 
-    // Return 409 for revoked tokens (participant needs to reconnect)
+    // 409 — Garmin rejected the backfill as a duplicate (cooldown period)
+    if (err instanceof GarminBackfillConflictError) {
+      return NextResponse.json(
+        {
+          error: message,
+          code: 'BACKFILL_DUPLICATE',
+          processedAt: err.processedAt,
+        },
+        { status: 409 },
+      );
+    }
+
+    // 409 — Token has been revoked (participant needs to reconnect)
     if (err instanceof GarminTokenRevokedError) {
       return NextResponse.json(
         {
           error: 'Garmin connection has been revoked. The participant needs to reconnect.',
+          code: 'TOKEN_REVOKED',
           details: message,
         },
         { status: 409 },

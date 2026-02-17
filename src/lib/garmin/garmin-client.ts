@@ -18,6 +18,48 @@ import {
 } from '@/lib/garmin/token-manager';
 
 // ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown when Garmin returns 409 Conflict for a backfill request.
+ *
+ * Garmin's backfill endpoint is asynchronous — data is pushed to your webhook
+ * after the request is accepted.  A 409 means a backfill for this user was
+ * already submitted recently and Garmin won't accept another until the
+ * cooldown expires (typically ~24 hours).
+ */
+export class GarminBackfillConflictError extends Error {
+  /** Raw response body from Garmin (JSON string with errorMessage). */
+  readonly garminBody: string;
+  /** Parsed timestamp of when the previous backfill was processed (if parseable). */
+  readonly processedAt: string | null;
+
+  constructor(body: string) {
+    // Try to extract a human-readable message from the Garmin error payload
+    let parsed: { errorMessage?: string } | null = null;
+    try {
+      parsed = JSON.parse(body);
+    } catch { /* ignore */ }
+
+    const garminMsg = parsed?.errorMessage ?? body;
+
+    // Try to extract the "processed at" timestamp
+    const tsMatch = garminMsg.match(/processed at (\d{4}-\d{2}-\d{2}T[\d:]+Z)/);
+    const processedAt = tsMatch?.[1] ?? null;
+
+    const friendly = processedAt
+      ? `A backfill was already submitted at ${processedAt}. Garmin only allows one backfill per user per ~24 hours. Please try again later.`
+      : `Garmin rejected the backfill as a duplicate. Please wait ~24 hours before retrying.`;
+
+    super(friendly);
+    this.name = 'GarminBackfillConflictError';
+    this.garminBody = body;
+    this.processedAt = processedAt;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -191,6 +233,11 @@ export class GarminClient {
       throw new Error('Garmin API rate limit exceeded (HTTP 429)');
     }
 
+    if (response.status === 409) {
+      const body = await response.text().catch(() => '');
+      throw new GarminBackfillConflictError(body);
+    }
+
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       throw new Error(
@@ -198,7 +245,9 @@ export class GarminClient {
       );
     }
 
-    if (response.status === 204) {
+    // 202 Accepted = async operation submitted (e.g. backfill queued for
+    // delivery via webhook).  Return null so callers can detect this.
+    if (response.status === 202 || response.status === 204) {
       return null as T;
     }
 
