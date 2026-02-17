@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/ui/back-button";
 
 // Types
 type Mentor = {
@@ -374,17 +375,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 mb-3 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onBack}
-            className="cursor-pointer"
-          >
-            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back
-          </Button>
+          <BackButton onClick={onBack} />
         </div>
         <div className="flex items-center gap-2">
           {/* View mode toggle */}

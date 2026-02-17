@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/ui/back-button";
 
 type Participant = {
   id: string;
@@ -115,12 +115,7 @@ export default function ParticipantDetailsPage() {
   if (error || !participant) {
     return (
       <div className="p-8 max-w-6xl mx-auto">
-        <button onClick={() => router.back()} className="inline-flex items-center gap-2 px-4 py-2 mb-4 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full shadow-sm hover:bg-slate-50 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          Back
-        </button>
+        <BackButton onClick={() => router.back()} className="mb-4" />
         <div className="bg-white rounded-xl border border-red-200 p-8 text-center">
           <p className="text-red-600 font-medium">{error || "Participant not found"}</p>
         </div>
@@ -132,12 +127,7 @@ export default function ParticipantDetailsPage() {
     <div className="p-8 space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <button onClick={() => router.back()} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full shadow-sm hover:bg-slate-50 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          Back
-        </button>
+        <BackButton onClick={() => router.back()} />
         <div className="text-right">
           <h1 className="text-2xl font-bold text-slate-900 flex items-center justify-end gap-3">
             {participant.name || participant.email}
