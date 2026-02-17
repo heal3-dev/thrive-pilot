@@ -104,21 +104,21 @@ export interface GarminSleepSummary {
   [key: string]: unknown;
 }
 
-/** A single HRV summary sent by Garmin in the HEALTH - HRV Summary webhook. */
+/**
+ * A single HRV summary sent by Garmin in the HEALTH - HRV Summary webhook.
+ *
+ * Field names match the official Garmin Health API "ClientHRVSummary" schema.
+ */
 export interface GarminHrvSummary {
   userId: string;
-  userAccessToken?: string;
   summaryId: string;
   calendarDate: string; // "YYYY-MM-DD"
   startTimeInSeconds?: number;
   startTimeOffsetInSeconds?: number;
   durationInSeconds?: number;
-  weeklyAvg?: number;
-  lastNight?: number;
   lastNightAvg?: number;
   lastNight5MinHigh?: number;
-  hrvAlgorithmVersion?: string;
-  status?: string; // BALANCED, UNBALANCED, LOW, etc.
+  hrvValues?: Record<string, number>;
   privacyProtected?: boolean;
   [key: string]: unknown;
 }
@@ -478,6 +478,9 @@ export async function processSleepSummary(
 
 /**
  * Map a Garmin HRV summary to garmin_metrics columns.
+ *
+ * Only `lastNightAvg` and `lastNight5MinHigh` are scalar values in the
+ * official ClientHRVSummary schema.  The full time-series is stored in raw_data.
  */
 export function mapHrvToMetrics(
   summary: GarminHrvSummary,
@@ -487,11 +490,8 @@ export function mapHrvToMetrics(
     participant_id: participantId,
     metric_date: summary.calendarDate,
 
-    hrv_weekly_average: summary.weeklyAvg ?? null,
-    hrv_last_night: summary.lastNight ?? null,
     hrv_last_night_average: summary.lastNightAvg ?? null,
     hrv_last_night_5_min_high: summary.lastNight5MinHigh ?? null,
-    hrv_status: summary.status ?? null,
 
     updated_at: new Date().toISOString(),
   };
