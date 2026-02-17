@@ -114,10 +114,13 @@ export default function ParticipantDetailsPage() {
 
   if (error || !participant) {
     return (
-      <div className="p-8 max-w-5xl mx-auto">
-        <Button variant="ghost" onClick={() => router.back()} className="mb-4">
-          ← Back
-        </Button>
+      <div className="p-8 max-w-6xl mx-auto">
+        <button onClick={() => router.back()} className="inline-flex items-center gap-2 px-4 py-2 mb-4 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full shadow-sm hover:bg-slate-50 transition-colors">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
         <div className="bg-white rounded-xl border border-red-200 p-8 text-center">
           <p className="text-red-600 font-medium">{error || "Participant not found"}</p>
         </div>
@@ -129,38 +132,39 @@ export default function ParticipantDetailsPage() {
     <div className="p-8 space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.back()}>
-            ← Back
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              {participant.name || participant.email}
-              {flags.map((flag, idx) => (
-                <span 
-                  key={idx}
-                  className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-medium border ${
-                    flag.severity === 'alert' 
-                      ? 'bg-red-50 text-red-700 border-red-200' 
-                      : flag.severity === 'warning'
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-blue-50 text-blue-700 border-blue-200'
-                  }`}
-                  title={flag.message}
-                >
-                  {flag.message}
-                </span>
-              ))}
-            </h1>
-            <p className="text-slate-500 text-sm">
-              Garmin Status:{" "}
-              {participant.is_connected ? (
-                <span className="text-teal-600 font-medium">Connected</span>
-              ) : (
-                <span className="text-slate-400">Not Connected</span>
-              )}
-            </p>
-          </div>
+        <button onClick={() => router.back()} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full shadow-sm hover:bg-slate-50 transition-colors">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+        <div className="text-right">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center justify-end gap-3">
+            {participant.name || participant.email}
+            {flags.map((flag, idx) => (
+              <span 
+                key={idx}
+                className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-medium border ${
+                  flag.severity === 'alert' 
+                    ? 'bg-red-50 text-red-700 border-red-200' 
+                    : flag.severity === 'warning'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                }`}
+                title={flag.message}
+              >
+                {flag.message}
+              </span>
+            ))}
+          </h1>
+          <p className="text-slate-500 text-sm">
+            Garmin Status:{" "}
+            {participant.is_connected ? (
+              <span className="text-teal-600 font-medium">Connected</span>
+            ) : (
+              <span className="text-slate-400">Not Connected</span>
+            )}
+          </p>
         </div>
       </div>
 

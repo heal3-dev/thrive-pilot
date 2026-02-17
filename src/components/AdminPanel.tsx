@@ -305,9 +305,12 @@ export function AdminPanel() {
         {activeTab === "messages" && <MessageViewer onBack={() => navigateToTab("dashboard")} />}
         {activeTab === "garmin-trends" && (
           <div className="space-y-4">
-             <div className="flex items-center gap-3 mb-4">
-               <button onClick={() => navigateToTab("dashboard")} className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors">
-                 ← Back
+             <div className="flex items-center justify-between mb-4">
+               <button onClick={() => navigateToTab("dashboard")} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-full shadow-sm hover:bg-slate-50 transition-colors">
+                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                 </svg>
+                 Back
                </button>
                <h2 className="text-xl font-bold text-slate-900">Participant Trends</h2>
              </div>
