@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { verifyStateToken } from '@/lib/garmin/oauth-state';
-import { exchangeCodeForToken } from '@/lib/garmin/oauth-client';
+import { exchangeCodeForToken, fetchGarminUserId } from '@/lib/garmin/oauth-client';
 
 function redirectToError(request: NextRequest, reason: string) {
   return NextResponse.redirect(
@@ -91,6 +91,31 @@ export async function GET(request: NextRequest) {
   if (tokenInsertError) {
     console.error('[GARMIN_CALLBACK] Failed to persist Garmin tokens:', tokenInsertError);
     return redirectToError(request, 'db_error');
+  }
+
+  // Fetch the Garmin API User ID and store it on the participant.
+  // This ID is used by webhooks to match incoming data to participants.
+  try {
+    const garminUserId = await fetchGarminUserId(tokens.access_token);
+    console.log('[GARMIN_CALLBACK] Fetched Garmin user ID:', {
+      participant_id: tempData.participant_id,
+      garmin_user_id: garminUserId,
+    });
+
+    const { error: userIdError } = await supabase
+      .from('participants')
+      .update({ garmin_user_id: garminUserId })
+      .eq('id', tempData.participant_id);
+
+    if (userIdError) {
+      console.error('[GARMIN_CALLBACK] Failed to save garmin_user_id:', userIdError);
+      // Non-fatal: tokens are saved, connection works, but webhook matching
+      // will fail until the user ID is set manually.
+    }
+  } catch (err) {
+    console.error('[GARMIN_CALLBACK] Failed to fetch Garmin user ID:', err);
+    // Non-fatal: continue with the flow. The admin can set the user ID
+    // manually or re-trigger the connection.
   }
 
   const { error: auditError } = await supabase.from('audit_logs').insert({

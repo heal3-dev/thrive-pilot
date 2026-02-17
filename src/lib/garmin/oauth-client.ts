@@ -110,6 +110,39 @@ export async function exchangeCodeForToken(params: {
 }
 
 /**
+ * Fetch the Garmin API User ID for the authenticated user.
+ *
+ * Each Garmin Connect user has a unique, persistent API User ID.
+ * This ID is used in webhook payloads to match data to participants.
+ *
+ * See: Garmin OAuth2 PKCE Specification — "User ID" section.
+ */
+export async function fetchGarminUserId(accessToken: string): Promise<string> {
+  const response = await fetch('https://apis.garmin.com/wellness-api/rest/user/id', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[GARMIN_OAUTH] Failed to fetch user ID:', {
+      status: response.status,
+      body: errorText,
+    });
+    throw new Error(`Failed to fetch Garmin user ID: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.userId) {
+    throw new Error('Garmin user ID response missing userId field');
+  }
+
+  return data.userId as string;
+}
+
+/**
  * Refresh an expired Garmin access token.
  */
 export async function refreshAccessToken(refreshToken: string): Promise<{
