@@ -125,12 +125,12 @@ async function fetchDailiesFromGarmin(
 
 /**
  * Upsert a batch of daily summaries into `garmin_metrics` and log results
- * to `ingestion_logs`.
+ * to `ingestion_logs`.  Uses pseudonym_id for PIPEDA compliance.
  *
  * Returns counts of imported / failed / skipped days.
  */
 async function upsertDailies(
-  participantId: string,
+  pseudonymId: string,
   summaries: GarminDailySummary[],
 ): Promise<{ imported: number; failed: number; skipped: number; errors: string[] }> {
   const supabase = getSupabaseAdmin();
@@ -142,11 +142,10 @@ async function upsertDailies(
   for (const summary of summaries) {
     const startMs = Date.now();
 
-    // Skip privacy-protected summaries
     if (summary.privacyProtected) {
       skipped++;
       await supabase.from('ingestion_logs').insert({
-        participant_id: participantId,
+        pseudonym_id: pseudonymId,
         status: 'skipped',
         error_message: 'Privacy-protected summary',
         duration_ms: Date.now() - startMs,
@@ -157,11 +156,11 @@ async function upsertDailies(
     }
 
     try {
-      const metricsRow = mapSummaryToMetrics(summary, participantId);
+      const metricsRow = mapSummaryToMetrics(summary, pseudonymId);
 
       const { error: upsertError } = await supabase
         .from('garmin_metrics')
-        .upsert(metricsRow, { onConflict: 'participant_id,metric_date' });
+        .upsert(metricsRow, { onConflict: 'pseudonym_id,metric_date' });
 
       if (upsertError) {
         throw new Error(`Upsert failed: ${upsertError.message}`);
@@ -170,7 +169,7 @@ async function upsertDailies(
       imported++;
 
       await supabase.from('ingestion_logs').insert({
-        participant_id: participantId,
+        pseudonym_id: pseudonymId,
         status: 'success',
         metrics_imported: 1,
         duration_ms: Date.now() - startMs,
@@ -183,7 +182,7 @@ async function upsertDailies(
       errors.push(`${summary.calendarDate}: ${message}`);
 
       await supabase.from('ingestion_logs').insert({
-        participant_id: participantId,
+        pseudonym_id: pseudonymId,
         status: 'failed',
         error_message: message,
         duration_ms: Date.now() - startMs,
@@ -225,6 +224,19 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
   if (days > MAX_RANGE_DAYS) {
     throw new Error(`Date range exceeds maximum of ${MAX_RANGE_DAYS} days`);
   }
+
+  // --- Resolve pseudonym_id for health data storage ---
+  const supabase = getSupabaseAdmin();
+  const { data: pseudonymRow } = await supabase
+    .from('participant_pseudonyms')
+    .select('pseudonym_id')
+    .eq('participant_id', participantId)
+    .maybeSingle();
+
+  if (!pseudonymRow?.pseudonym_id) {
+    throw new Error(`No pseudonym found for participant ${participantId}`);
+  }
+  const pseudonymId = pseudonymRow.pseudonym_id;
 
   // --- Create GarminClient (handles token refresh + 401 retry) ---
   const client = new GarminClient(participantId);
@@ -279,7 +291,7 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
 
   // --- Upsert into database (data returned inline — Ping/Pull model) ---
   const { imported, failed, skipped, errors } = await upsertDailies(
-    participantId,
+    pseudonymId,
     summaries,
   );
 

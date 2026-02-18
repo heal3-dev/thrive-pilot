@@ -49,35 +49,53 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch assignments" }, { status: 500 });
   }
 
-  // Fetch active Garmin connections to expose connected state in admin UI.
+  // Fetch pseudonym mappings to bridge PII ↔ health data
+  const { data: pseudonymData } = await admin
+    .from("participant_pseudonyms")
+    .select("participant_id, pseudonym_id");
+
+  const participantToPseudonym = new Map<string, string>();
+  const pseudonymToParticipant = new Map<string, string>();
+  for (const row of pseudonymData ?? []) {
+    participantToPseudonym.set(row.participant_id, row.pseudonym_id);
+    pseudonymToParticipant.set(row.pseudonym_id, row.participant_id);
+  }
+
+  // Fetch active Garmin connections (via pseudonym_id on tokens table)
   const { data: garminTokensData, error: garminTokensError } = await admin
     .from("garmin_tokens")
-    .select("participant_id")
+    .select("pseudonym_id")
     .is("revoked_at", null);
 
   if (garminTokensError) {
     return NextResponse.json({ error: "Failed to fetch Garmin connections" }, { status: 500 });
   }
 
-  // --- NEW: Fetch recent metrics for Flagging Logic ---
-  // Fetch last 4 days of metrics to be safe for "last 3 days" calculation
+  const connectedPseudonymIds = new Set(
+    (garminTokensData ?? []).map((token) => token.pseudonym_id)
+  );
+
+  // Fetch recent metrics for flagging (last 4 days via pseudonym_id)
   const fourDaysAgo = new Date();
   fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
   const dateStr = fourDaysAgo.toISOString().split('T')[0];
 
   const { data: metricsData } = await admin
     .from("garmin_metrics")
-    .select("participant_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, hrv_last_night_average, hrv_last_night_5_min_high")
+    .select("pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, hrv_last_night_average, hrv_last_night_5_min_high")
     .gte("metric_date", dateStr)
     .order("metric_date", { ascending: false });
 
+  // Map metrics back to participant_id for flag calculation
   const metricsByParticipant = new Map<string, Metric[]>();
   if (metricsData) {
     for (const m of metricsData) {
-      if (!metricsByParticipant.has(m.participant_id)) {
-        metricsByParticipant.set(m.participant_id, []);
+      const participantId = pseudonymToParticipant.get(m.pseudonym_id);
+      if (!participantId) continue;
+      if (!metricsByParticipant.has(participantId)) {
+        metricsByParticipant.set(participantId, []);
       }
-      metricsByParticipant.get(m.participant_id)?.push({
+      metricsByParticipant.get(participantId)?.push({
         id: "temp",
         metric_date: m.metric_date,
         resting_heart_rate: m.resting_heart_rate,
@@ -91,11 +109,6 @@ export async function GET(request: Request) {
       });
     }
   }
-  // ----------------------------------------------------
-
-  const connectedParticipantIds = new Set(
-    (garminTokensData ?? []).map((token) => token.participant_id)
-  );
 
   // Create a map of participant_id -> latest assignment
   const assignmentMap = new Map<string, { mentor_id: string; mentor_name: string | null; mentor_email: string | null; assigned_at: string | null; unassigned_at: string | null }>();
@@ -124,7 +137,7 @@ export async function GET(request: Request) {
     return {
       ...p,
       garmin_connected:
-        connectedParticipantIds.has(p.id) || Boolean(p.garmin_user_id),
+        Boolean(p.garmin_user_id) || connectedPseudonymIds.has(participantToPseudonym.get(p.id) ?? ''),
       assigned_mentor: assignmentMap.get(p.id) ?? null,
       flags, // Attach flags
     };

@@ -110,7 +110,7 @@ async function _doRefresh(tokenId: string): Promise<RefreshResult> {
   // 1. Fetch the current token row
   const { data: token, error: fetchError } = await supabase
     .from('garmin_tokens')
-    .select('id, participant_id, refresh_token, revoked_at')
+    .select('id, pseudonym_id, refresh_token, revoked_at')
     .eq('id', tokenId)
     .maybeSingle();
 
@@ -213,7 +213,7 @@ export async function revokeGarminToken(
     })
     .eq('id', tokenId)
     .is('revoked_at', null) // Only revoke if not already revoked
-    .select('participant_id')
+    .select('pseudonym_id')
     .maybeSingle();
 
   if (updateError) {
@@ -228,8 +228,17 @@ export async function revokeGarminToken(
 
   console.warn('[TOKEN_MANAGER] Token revoked:', { tokenId, reason });
 
-  // 2. Send alert email to participant
-  await sendRevocationAlert(token.participant_id, reason);
+  // 2. Resolve participant_id from pseudonym for email alert
+  if (token.pseudonym_id) {
+    const { data: mapping } = await supabase
+      .from('participant_pseudonyms')
+      .select('participant_id')
+      .eq('pseudonym_id', token.pseudonym_id)
+      .maybeSingle();
+    if (mapping) {
+      await sendRevocationAlert(mapping.participant_id, reason);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +248,9 @@ export async function revokeGarminToken(
 /**
  * Get a valid access token for a participant, refreshing if expired.
  *
+ * Resolves participant_id → pseudonym_id internally so callers don't
+ * need to know about the pseudonym layer.
+ *
  * @returns The token row (with fresh access_token) or null if no valid token
  * @throws {GarminTokenRevokedError} if the token is revoked during refresh
  */
@@ -247,10 +259,22 @@ export async function getValidToken(
 ): Promise<{ tokenId: string; accessToken: string } | null> {
   const supabase = getSupabaseAdmin();
 
+  // Resolve pseudonym_id (tokens table uses pseudonym_id, not participant_id)
+  const { data: mapping } = await supabase
+    .from('participant_pseudonyms')
+    .select('pseudonym_id')
+    .eq('participant_id', participantId)
+    .maybeSingle();
+
+  if (!mapping?.pseudonym_id) {
+    console.error('[TOKEN_MANAGER] No pseudonym found for participant', participantId);
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('garmin_tokens')
     .select('id, access_token, refresh_token, expires_at, revoked_at')
-    .eq('participant_id', participantId)
+    .eq('pseudonym_id', mapping.pseudonym_id)
     .is('revoked_at', null)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -265,7 +289,6 @@ export async function getValidToken(
     return null;
   }
 
-  // Check if token is expired (with 60s buffer to avoid edge-case expiry mid-request)
   const isExpired =
     data.expires_at &&
     new Date(data.expires_at).getTime() < Date.now() + 60_000;
@@ -274,8 +297,7 @@ export async function getValidToken(
     return { tokenId: data.id, accessToken: data.access_token as string };
   }
 
-  // Token expired — refresh
-  console.warn('[TOKEN_MANAGER] Token expired for participant', participantId, '— refreshing');
+  console.warn('[TOKEN_MANAGER] Token expired — refreshing');
 
   const result = await refreshGarminToken(data.id);
   return { tokenId: data.id, accessToken: result.accessToken };

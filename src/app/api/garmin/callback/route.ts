@@ -78,10 +78,35 @@ export async function GET(request: NextRequest) {
       ? tokens.scope.split(' ').filter(Boolean)
       : [];
 
+  // Ensure a pseudonym mapping exists for this participant (create if needed).
+  // All health/token data is stored under pseudonym_id for PIPEDA compliance.
+  const { data: existingPseudonym } = await supabase
+    .from('participant_pseudonyms')
+    .select('pseudonym_id')
+    .eq('participant_id', tempData.participant_id)
+    .maybeSingle();
+
+  let pseudonymId: string;
+  if (existingPseudonym?.pseudonym_id) {
+    pseudonymId = existingPseudonym.pseudonym_id;
+  } else {
+    const { data: newPseudonym, error: pseudonymError } = await supabase
+      .from('participant_pseudonyms')
+      .insert({ participant_id: tempData.participant_id })
+      .select('pseudonym_id')
+      .single();
+
+    if (pseudonymError || !newPseudonym) {
+      console.error('[GARMIN_CALLBACK] Failed to create pseudonym:', pseudonymError);
+      return redirectToError(request, 'db_error');
+    }
+    pseudonymId = newPseudonym.pseudonym_id;
+  }
+
   const { error: tokenInsertError } = await supabase
     .from('garmin_tokens')
     .insert({
-      participant_id: tempData.participant_id,
+      pseudonym_id: pseudonymId,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token ?? null,
       expires_at: expiresAt,
@@ -94,7 +119,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Fetch the Garmin API User ID and store it on the participant.
-  // This ID is used by webhooks to match incoming data to participants.
+  // This ID is needed by webhooks to resolve incoming data.
   try {
     const garminUserId = await fetchGarminUserId(tokens.access_token);
     console.log('[GARMIN_CALLBACK] Fetched Garmin user ID:', {
@@ -109,13 +134,9 @@ export async function GET(request: NextRequest) {
 
     if (userIdError) {
       console.error('[GARMIN_CALLBACK] Failed to save garmin_user_id:', userIdError);
-      // Non-fatal: tokens are saved, connection works, but webhook matching
-      // will fail until the user ID is set manually.
     }
   } catch (err) {
     console.error('[GARMIN_CALLBACK] Failed to fetch Garmin user ID:', err);
-    // Non-fatal: continue with the flow. The admin can set the user ID
-    // manually or re-trigger the connection.
   }
 
   const { error: auditError } = await supabase.from('audit_logs').insert({

@@ -1,12 +1,12 @@
 /**
  * Garmin Webhook Utilities
  *
- * Handles signature verification and daily-summary processing
+ * Handles signature verification and daily/sleep/HRV processing
  * for the Garmin Health API push (webhook) model.
  *
- * Garmin signs every webhook request with an HMAC-SHA1 of the raw
- * body using the OAuth consumer secret.  We verify this to prevent
- * spoofing.
+ * Privacy: All health tables use pseudonym_id (not participant_id)
+ * to decouple PII from health data.  The mapping lives in
+ * participant_pseudonyms and is only accessible via service_role.
  */
 
 import crypto from 'crypto';
@@ -181,30 +181,67 @@ export function verifyGarminSignature(
 }
 
 // ---------------------------------------------------------------------------
-// Raw record storage (append-only)
+// Pseudonym resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a participant_id to its pseudonym_id from the mapping table.
+ * Returns null if no mapping exists.
+ */
+async function resolvePseudonymId(participantId: string): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('participant_pseudonyms')
+    .select('pseudonym_id')
+    .eq('participant_id', participantId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[PSEUDONYM] Lookup failed:', error.message);
+    return null;
+  }
+
+  return data?.pseudonym_id ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Raw record storage (append-only, pseudonymized)
 // ---------------------------------------------------------------------------
 
 type RawTable = 'garmin_raw_dailies' | 'garmin_raw_sleeps' | 'garmin_raw_hrv';
 
 /**
+ * Sanitize a webhook payload before storage: strip OAuth tokens and other
+ * sensitive fields that should never be persisted.
+ */
+function sanitizePayload(
+  summary: Record<string, unknown>,
+): Record<string, unknown> {
+  const sanitized = { ...summary };
+  delete sanitized.userAccessToken;
+  return sanitized;
+}
+
+/**
  * Insert a raw webhook payload into the appropriate append-only table.
- * This preserves every payload for debugging and potential reprocessing.
+ * Uses pseudonym_id (not participant_id) for PIPEDA compliance.
+ * Strips sensitive fields (userAccessToken) before storage.
  * Failures are logged but never block the main processing flow.
  */
 async function insertRawRecord(
   table: RawTable,
-  participantId: string | null,
+  pseudonymId: string | null,
   garminUserId: string,
   summary: { summaryId?: string; calendarDate?: string; [key: string]: unknown },
 ): Promise<void> {
   try {
     const supabase = getSupabaseAdmin();
     const { error } = await supabase.from(table).insert({
-      participant_id: participantId,
+      pseudonym_id: pseudonymId,
       garmin_user_id: garminUserId,
       summary_id: summary.summaryId ?? null,
       calendar_date: summary.calendarDate ?? null,
-      raw_data: summary,
+      raw_data: sanitizePayload(summary),
     });
     if (error) {
       console.error(`[RAW_INSERT] Failed to insert into ${table}:`, error.message);
@@ -221,14 +258,15 @@ async function insertRawRecord(
 /**
  * Map a Garmin daily summary to our `garmin_metrics` column format.
  *
+ * Uses pseudonym_id (not participant_id) for PIPEDA compliance.
  * Exported so the backfill/pull logic can reuse the same mapping.
  */
 export function mapSummaryToMetrics(
   summary: GarminDailySummary,
-  participantId: string
+  pseudonymId: string
 ) {
   return {
-    participant_id: participantId,
+    pseudonym_id: pseudonymId,
     metric_date: summary.calendarDate,
 
     // Activity
@@ -270,9 +308,6 @@ export function mapSummaryToMetrics(
     body_battery_charged: summary.bodyBatteryChargedValue ?? null,
     body_battery_drained: summary.bodyBatteryDrainedValue ?? null,
 
-    // NOTE: raw_data is no longer written here — full payloads are stored
-    // in the append-only garmin_raw_dailies table instead.
-
     // Timestamps
     updated_at: new Date().toISOString(),
   };
@@ -281,10 +316,10 @@ export function mapSummaryToMetrics(
 /**
  * Process a single Garmin daily summary:
  *   1. Look up participant by garmin_user_id
- *   2. Upsert into garmin_metrics
- *   3. Log result to ingestion_logs
- *
- * Returns a processing result for the caller.
+ *   2. Resolve pseudonym_id for health data storage
+ *   3. Insert raw record (pseudonymized)
+ *   4. Upsert extracted fields into garmin_metrics (pseudonymized)
+ *   5. Log result to ingestion_logs (pseudonymized)
  */
 export async function processDailySummary(
   summary: GarminDailySummary
@@ -300,7 +335,6 @@ export async function processDailySummary(
     status: 'failed',
   };
 
-  // Skip privacy-protected summaries
   if (summary.privacyProtected) {
     result.status = 'skipped';
     result.error = 'Privacy-protected summary';
@@ -308,7 +342,7 @@ export async function processDailySummary(
   }
 
   try {
-    // 1. Resolve Garmin userId → participant_id
+    // 1. Resolve Garmin userId → participant_id (PII zone lookup)
     const { data: participant, error: lookupError } = await supabase
       .from('participants')
       .select('id')
@@ -327,16 +361,22 @@ export async function processDailySummary(
 
     result.participantId = participant.id;
 
-    // 2. Store raw payload (append-only, never fails the main flow)
-    await insertRawRecord('garmin_raw_dailies', participant.id, summary.userId, summary);
+    // 2. Resolve pseudonym_id (the only ID stored in health tables)
+    const pseudonymId = await resolvePseudonymId(participant.id);
+    if (!pseudonymId) {
+      throw new Error(`No pseudonym found for participant ${participant.id}`);
+    }
 
-    // 3. Upsert into garmin_metrics
-    const metricsRow = mapSummaryToMetrics(summary, participant.id);
+    // 3. Store raw payload (append-only, pseudonymized, tokens stripped)
+    await insertRawRecord('garmin_raw_dailies', pseudonymId, summary.userId, summary);
+
+    // 4. Upsert into garmin_metrics (pseudonymized)
+    const metricsRow = mapSummaryToMetrics(summary, pseudonymId);
 
     const { error: upsertError } = await supabase
       .from('garmin_metrics')
       .upsert(metricsRow, {
-        onConflict: 'participant_id,metric_date',
+        onConflict: 'pseudonym_id,metric_date',
       });
 
     if (upsertError) {
@@ -345,9 +385,9 @@ export async function processDailySummary(
 
     result.status = 'success';
 
-    // 4. Log success
+    // 5. Log success (pseudonymized)
     await supabase.from('ingestion_logs').insert({
-      participant_id: participant.id,
+      pseudonym_id: pseudonymId,
       status: 'success',
       metrics_imported: 1,
       duration_ms: Date.now() - startMs,
@@ -359,20 +399,21 @@ export async function processDailySummary(
     result.error = message;
     console.error('[GARMIN_WEBHOOK] processDailySummary error:', {
       summaryId: summary.summaryId,
-      userId: summary.userId,
       error: message,
     });
 
-    // Log failure
     if (result.participantId) {
-      await supabase.from('ingestion_logs').insert({
-        participant_id: result.participantId,
-        status: 'failed',
-        error_message: message,
-        duration_ms: Date.now() - startMs,
-        date_processed: summary.calendarDate,
-        source: 'webhook',
-      });
+      const pId = await resolvePseudonymId(result.participantId);
+      if (pId) {
+        await supabase.from('ingestion_logs').insert({
+          pseudonym_id: pId,
+          status: 'failed',
+          error_message: message,
+          duration_ms: Date.now() - startMs,
+          date_processed: summary.calendarDate,
+          source: 'webhook',
+        });
+      }
     }
   }
 
@@ -389,10 +430,10 @@ export async function processDailySummary(
  */
 export function mapSleepToMetrics(
   summary: GarminSleepSummary,
-  participantId: string,
+  pseudonymId: string,
 ) {
   return {
-    participant_id: participantId,
+    pseudonym_id: pseudonymId,
     metric_date: summary.calendarDate,
 
     // Sleep totals
@@ -411,9 +452,6 @@ export function mapSleepToMetrics(
     sleep_start_time: summary.startTimeInSeconds
       ? new Date(summary.startTimeInSeconds * 1000).toISOString()
       : null,
-
-    // NOTE: Do NOT set raw_data here — it would overwrite the dailies payload.
-    // raw_data is owned by the dailies endpoint only.
 
     updated_at: new Date().toISOString(),
   };
@@ -443,7 +481,6 @@ export async function processSleepSummary(
     return result;
   }
 
-  // Prefer finalized sleep records over tentative ones
   const validation = summary.validation ?? '';
   if (validation.includes('TENTATIVE')) {
     result.status = 'skipped';
@@ -468,20 +505,25 @@ export async function processSleepSummary(
 
     result.participantId = participant.id;
 
-    await insertRawRecord('garmin_raw_sleeps', participant.id, summary.userId, summary);
+    const pseudonymId = await resolvePseudonymId(participant.id);
+    if (!pseudonymId) {
+      throw new Error(`No pseudonym found for participant ${participant.id}`);
+    }
 
-    const metricsRow = mapSleepToMetrics(summary, participant.id);
+    await insertRawRecord('garmin_raw_sleeps', pseudonymId, summary.userId, summary);
+
+    const metricsRow = mapSleepToMetrics(summary, pseudonymId);
 
     const { error: upsertError } = await supabase
       .from('garmin_metrics')
-      .upsert(metricsRow, { onConflict: 'participant_id,metric_date' });
+      .upsert(metricsRow, { onConflict: 'pseudonym_id,metric_date' });
 
     if (upsertError) throw new Error(`Upsert failed: ${upsertError.message}`);
 
     result.status = 'success';
 
     await supabase.from('ingestion_logs').insert({
-      participant_id: participant.id,
+      pseudonym_id: pseudonymId,
       status: 'success',
       metrics_imported: 1,
       duration_ms: Date.now() - startMs,
@@ -493,19 +535,21 @@ export async function processSleepSummary(
     result.error = message;
     console.error('[GARMIN_WEBHOOK] processSleepSummary error:', {
       summaryId: summary.summaryId,
-      userId: summary.userId,
       error: message,
     });
 
     if (result.participantId) {
-      await supabase.from('ingestion_logs').insert({
-        participant_id: result.participantId,
-        status: 'failed',
-        error_message: message,
-        duration_ms: Date.now() - startMs,
-        date_processed: summary.calendarDate,
-        source: 'webhook-sleeps',
-      });
+      const pId = await resolvePseudonymId(result.participantId);
+      if (pId) {
+        await supabase.from('ingestion_logs').insert({
+          pseudonym_id: pId,
+          status: 'failed',
+          error_message: message,
+          duration_ms: Date.now() - startMs,
+          date_processed: summary.calendarDate,
+          source: 'webhook-sleeps',
+        });
+      }
     }
   }
 
@@ -520,14 +564,14 @@ export async function processSleepSummary(
  * Map a Garmin HRV summary to garmin_metrics columns.
  *
  * Only `lastNightAvg` and `lastNight5MinHigh` are scalar values in the
- * official ClientHRVSummary schema.  The full time-series is stored in raw_data.
+ * official ClientHRVSummary schema.
  */
 export function mapHrvToMetrics(
   summary: GarminHrvSummary,
-  participantId: string,
+  pseudonymId: string,
 ) {
   return {
-    participant_id: participantId,
+    pseudonym_id: pseudonymId,
     metric_date: summary.calendarDate,
 
     hrv_last_night_average: summary.lastNightAvg ?? null,
@@ -577,20 +621,25 @@ export async function processHrvSummary(
 
     result.participantId = participant.id;
 
-    await insertRawRecord('garmin_raw_hrv', participant.id, summary.userId, summary);
+    const pseudonymId = await resolvePseudonymId(participant.id);
+    if (!pseudonymId) {
+      throw new Error(`No pseudonym found for participant ${participant.id}`);
+    }
 
-    const metricsRow = mapHrvToMetrics(summary, participant.id);
+    await insertRawRecord('garmin_raw_hrv', pseudonymId, summary.userId, summary);
+
+    const metricsRow = mapHrvToMetrics(summary, pseudonymId);
 
     const { error: upsertError } = await supabase
       .from('garmin_metrics')
-      .upsert(metricsRow, { onConflict: 'participant_id,metric_date' });
+      .upsert(metricsRow, { onConflict: 'pseudonym_id,metric_date' });
 
     if (upsertError) throw new Error(`Upsert failed: ${upsertError.message}`);
 
     result.status = 'success';
 
     await supabase.from('ingestion_logs').insert({
-      participant_id: participant.id,
+      pseudonym_id: pseudonymId,
       status: 'success',
       metrics_imported: 1,
       duration_ms: Date.now() - startMs,
@@ -602,19 +651,21 @@ export async function processHrvSummary(
     result.error = message;
     console.error('[GARMIN_WEBHOOK] processHrvSummary error:', {
       summaryId: summary.summaryId,
-      userId: summary.userId,
       error: message,
     });
 
     if (result.participantId) {
-      await supabase.from('ingestion_logs').insert({
-        participant_id: result.participantId,
-        status: 'failed',
-        error_message: message,
-        duration_ms: Date.now() - startMs,
-        date_processed: summary.calendarDate,
-        source: 'webhook-hrv',
-      });
+      const pId = await resolvePseudonymId(result.participantId);
+      if (pId) {
+        await supabase.from('ingestion_logs').insert({
+          pseudonym_id: pId,
+          status: 'failed',
+          error_message: message,
+          duration_ms: Date.now() - startMs,
+          date_processed: summary.calendarDate,
+          source: 'webhook-hrv',
+        });
+      }
     }
   }
 

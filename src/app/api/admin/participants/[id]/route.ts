@@ -13,7 +13,7 @@ export async function GET(
   const supabase = guard.admin;
   const { id } = await params;
 
-  // 1. Fetch Participant
+  // 1. Fetch Participant (PII zone)
   const { data: participant, error: pError } = await supabase
     .from("participants")
     .select("id, name, email, garmin_user_id, garmin_connected_at")
@@ -29,41 +29,54 @@ export async function GET(
     return NextResponse.json({ error: "Participant not found" }, { status: 404 });
   }
 
-  // 2. Check Garmin Tokens
-  const { data: tokenData } = await supabase
-    .from("garmin_tokens")
-    .select("participant_id")
+  // 2. Resolve pseudonym_id for health data queries
+  const { data: pseudonymRow } = await supabase
+    .from("participant_pseudonyms")
+    .select("pseudonym_id")
     .eq("participant_id", id)
     .maybeSingle();
 
-  const isConnected = Boolean(participant.garmin_user_id) || Boolean(tokenData);
+  const pseudonymId = pseudonymRow?.pseudonym_id;
 
-  // 3. Fetch Metrics (Last 30 days) — all pilot fields
-  const { data: metrics, error: mError } = await supabase
-    .from("garmin_metrics")
-    .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, hrv_last_night_average, hrv_last_night_5_min_high")
-    .eq("participant_id", id)
-    .order("metric_date", { ascending: false })
-    .limit(30);
+  // 3. Check Garmin connection (via pseudonym on tokens table)
+  let isConnected = Boolean(participant.garmin_user_id);
+  if (!isConnected && pseudonymId) {
+    const { data: tokenData } = await supabase
+      .from("garmin_tokens")
+      .select("pseudonym_id")
+      .eq("pseudonym_id", pseudonymId)
+      .maybeSingle();
+    isConnected = Boolean(tokenData);
+  }
 
-  if (mError) {
-    console.error(`[PARTICIPANT_DETAILS] Error fetching metrics for ${id}:`, mError);
-    // Don't fail the whole request if metrics fail, just return empty array
+  // 4. Fetch Metrics (Last 30 days) via pseudonym_id
+  let metricsData: Record<string, unknown>[] = [];
+  if (pseudonymId) {
+    const { data: metrics, error: mError } = await supabase
+      .from("garmin_metrics")
+      .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, hrv_last_night_average, hrv_last_night_5_min_high")
+      .eq("pseudonym_id", pseudonymId)
+      .order("metric_date", { ascending: false })
+      .limit(30);
+
+    if (mError) {
+      console.error(`[PARTICIPANT_DETAILS] Error fetching metrics:`, mError);
+    }
+    metricsData = metrics || [];
   }
 
   // Calculate flags
-  const metricsData = metrics || [];
   const typedMetrics: Metric[] = metricsData.map(m => ({
-    id: m.id,
-    metric_date: m.metric_date,
-    resting_heart_rate: m.resting_heart_rate,
-    average_stress_level: m.average_stress_level,
-    sleep_duration_seconds: m.sleep_duration_seconds,
-    sleep_score: m.sleep_score,
-    body_battery_charged: m.body_battery_charged,
-    body_battery_drained: m.body_battery_drained,
-    hrv_last_night_average: m.hrv_last_night_average,
-    hrv_last_night_5_min_high: m.hrv_last_night_5_min_high,
+    id: m.id as string,
+    metric_date: m.metric_date as string,
+    resting_heart_rate: m.resting_heart_rate as number | null,
+    average_stress_level: m.average_stress_level as number | null,
+    sleep_duration_seconds: m.sleep_duration_seconds as number | null,
+    sleep_score: m.sleep_score as number | null,
+    body_battery_charged: m.body_battery_charged as number | null,
+    body_battery_drained: m.body_battery_drained as number | null,
+    hrv_last_night_average: m.hrv_last_night_average as number | null,
+    hrv_last_night_5_min_high: m.hrv_last_night_5_min_high as number | null,
   }));
   const flags = calculateFlags(typedMetrics);
 
@@ -74,4 +87,3 @@ export async function GET(
     flags,
   });
 }
-

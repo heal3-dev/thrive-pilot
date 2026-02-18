@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
 
   console.log('[GARMIN_WEBHOOK] Body received', {
     length: rawBody.length,
-    preview: rawBody.slice(0, 200),
+    preview: rawBody.slice(0, 200).replace(/"userAccessToken":"[^"]*"/g, '"userAccessToken":"[REDACTED]"'),
   });
 
   // -----------------------------------------------------------------------
