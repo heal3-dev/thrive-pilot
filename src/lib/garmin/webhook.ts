@@ -124,11 +124,30 @@ export interface GarminHrvSummary {
   [key: string]: unknown;
 }
 
+/**
+ * A single stress detail summary sent by Garmin in the HEALTH - Stress webhook.
+ *
+ * We only extract body battery values from this payload.
+ * The full stress time-series is stored in raw_data for potential future use.
+ */
+export interface GarminStressDetailSummary {
+  userId: string;
+  summaryId?: string;
+  calendarDate: string;
+  startTimeInSeconds?: number;
+  startTimeOffsetInSeconds?: number;
+  durationInSeconds?: number;
+  timeOffsetBodyBatteryValues?: Record<string, number>;
+  privacyProtected?: boolean;
+  [key: string]: unknown;
+}
+
 /** Top-level webhook payload from Garmin. */
 export interface GarminWebhookPayload {
   dailies?: GarminDailySummary[];
   sleeps?: GarminSleepSummary[];
   hrv?: GarminHrvSummary[];
+  stressDetails?: GarminStressDetailSummary[];
 }
 
 /** Result of processing a single summary. */
@@ -667,6 +686,153 @@ export async function processHrvSummary(
           duration_ms: Date.now() - startMs,
           date_processed: summary.calendarDate,
           source: 'webhook-hrv',
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Stress Detail Processing (Body Battery score extraction)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the most recent body battery score from a stress detail summary.
+ * TimeOffsetBodyBatteryValues is a map of offset→value; the highest offset
+ * is the most recent reading.
+ */
+function extractBodyBatteryScore(
+  values: Record<string, number> | undefined,
+): { mostRecent: number | null; highest: number | null; lowest: number | null } {
+  if (!values || Object.keys(values).length === 0) {
+    return { mostRecent: null, highest: null, lowest: null };
+  }
+
+  const entries = Object.entries(values)
+    .map(([k, v]) => [Number(k), v] as const)
+    .sort((a, b) => a[0] - b[0]);
+
+  const allValues = entries.map(([, v]) => v);
+  const mostRecent = entries[entries.length - 1][1];
+  const highest = Math.max(...allValues);
+  const lowest = Math.min(...allValues);
+
+  return { mostRecent, highest, lowest };
+}
+
+/**
+ * Map a Garmin stress detail summary to garmin_metrics body battery columns.
+ */
+export function mapStressToMetrics(
+  summary: GarminStressDetailSummary,
+  pseudonymId: string,
+) {
+  const bb = extractBodyBatteryScore(summary.timeOffsetBodyBatteryValues);
+
+  return {
+    pseudonym_id: pseudonymId,
+    metric_date: summary.calendarDate,
+
+    body_battery_most_recent: bb.mostRecent,
+    body_battery_highest: bb.highest,
+    body_battery_lowest: bb.lowest,
+
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Process a single Garmin stress detail summary.
+ * Extracts body battery score and merges into garmin_metrics.
+ */
+export async function processStressDetailSummary(
+  summary: GarminStressDetailSummary,
+): Promise<ProcessingResult> {
+  const startMs = Date.now();
+  const supabase = getSupabaseAdmin();
+
+  const result: ProcessingResult = {
+    summaryId: summary.summaryId ?? `stress-${summary.calendarDate}`,
+    userId: summary.userId,
+    calendarDate: summary.calendarDate,
+    participantId: null,
+    status: 'failed',
+  };
+
+  if (summary.privacyProtected) {
+    result.status = 'skipped';
+    result.error = 'Privacy-protected summary';
+    return result;
+  }
+
+  // Skip if no body battery data in this summary
+  if (!summary.timeOffsetBodyBatteryValues ||
+      Object.keys(summary.timeOffsetBodyBatteryValues).length === 0) {
+    result.status = 'skipped';
+    result.error = 'No body battery data in stress summary';
+    return result;
+  }
+
+  try {
+    const { data: participant, error: lookupError } = await supabase
+      .from('participants')
+      .select('id')
+      .eq('garmin_user_id', summary.userId)
+      .maybeSingle();
+
+    if (lookupError) throw new Error(`Participant lookup failed: ${lookupError.message}`);
+
+    if (!participant) {
+      result.status = 'skipped';
+      result.error = `No participant found for Garmin userId ${summary.userId}`;
+      return result;
+    }
+
+    result.participantId = participant.id;
+
+    const pseudonymId = await resolvePseudonymId(participant.id);
+    if (!pseudonymId) {
+      throw new Error(`No pseudonym found for participant ${participant.id}`);
+    }
+
+    const metricsRow = mapStressToMetrics(summary, pseudonymId);
+
+    const { error: upsertError } = await supabase
+      .from('garmin_metrics')
+      .upsert(metricsRow, { onConflict: 'pseudonym_id,metric_date' });
+
+    if (upsertError) throw new Error(`Upsert failed: ${upsertError.message}`);
+
+    result.status = 'success';
+
+    await supabase.from('ingestion_logs').insert({
+      pseudonym_id: pseudonymId,
+      status: 'success',
+      metrics_imported: 1,
+      duration_ms: Date.now() - startMs,
+      date_processed: summary.calendarDate,
+      source: 'webhook-stress',
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result.error = message;
+    console.error('[GARMIN_WEBHOOK] processStressDetailSummary error:', {
+      summaryId: summary.summaryId,
+      error: message,
+    });
+
+    if (result.participantId) {
+      const pId = await resolvePseudonymId(result.participantId);
+      if (pId) {
+        await supabase.from('ingestion_logs').insert({
+          pseudonym_id: pId,
+          status: 'failed',
+          error_message: message,
+          duration_ms: Date.now() - startMs,
+          date_processed: summary.calendarDate,
+          source: 'webhook-stress',
         });
       }
     }

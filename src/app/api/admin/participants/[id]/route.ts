@@ -56,7 +56,7 @@ export async function GET(
   if (pseudonymId) {
     const { data: metrics, error: mError } = await supabase
       .from("garmin_metrics")
-      .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, hrv_last_night_average, hrv_last_night_5_min_high")
+      .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
       .eq("pseudonym_id", pseudonymId)
       .order("metric_date", { ascending: false })
       .limit(30);
