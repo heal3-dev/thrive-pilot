@@ -88,7 +88,7 @@ export async function GET(request: Request) {
 
   const { data: metricsData } = await admin
     .from("garmin_metrics")
-    .select("pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, hrv_last_night_average, hrv_last_night_5_min_high")
+    .select("pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
     .gte("metric_date", dateStr)
     .order("metric_date", { ascending: false });
 
