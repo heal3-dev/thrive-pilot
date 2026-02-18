@@ -1,8 +1,8 @@
 "use client";
 
 import { useDashboard } from "./layout";
-import { MentorInbox } from "@/components/MentorInbox";
 import { AdminPanel } from "@/components/AdminPanel";
+import { MentorPanel } from "@/components/MentorPanel";
 
 export default function DashboardPage() {
   const { mentor } = useDashboard();
@@ -18,13 +18,13 @@ export default function DashboardPage() {
         <p className="mt-2 text-base text-slate-500">
           {isAdmin
             ? "Manage mentors, participants, and system settings."
-            : "View and respond to your participant conversations."}
+            : "Manage your inbox and participant health trends."}
         </p>
       </div>
 
       {/* Role-based Content */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {isAdmin ? <AdminPanel /> : <MentorInbox />}
+        {isAdmin ? <AdminPanel /> : <MentorPanel />}
       </div>
     </div>
   );

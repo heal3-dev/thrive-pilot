@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 import type { Participant, SMSMessage } from "@/types";
 
 type ParticipantWithAssignment = Participant & {
@@ -16,10 +17,23 @@ type OptimisticSMSMessage = SMSMessage & {
   error?: string;
 };
 
+type HealthMetric = {
+  id: string;
+  metric_date: string;
+  resting_heart_rate: number | null;
+  average_stress_level: number | null;
+  sleep_duration_seconds: number | null;
+  sleep_score: number | null;
+  body_battery_charged: number | null;
+  body_battery_drained: number | null;
+  hrv_last_night_average: number | null;
+  hrv_last_night_5_min_high: number | null;
+};
+
 /**
  * MentorInbox - Displays participant conversations for mentors
  */
-export function MentorInbox() {
+export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?: boolean }) {
   const [participants, setParticipants] = useState<ParticipantWithAssignment[]>([]);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantWithAssignment | null>(null);
   const [messages, setMessages] = useState<OptimisticSMSMessage[]>([]);
@@ -32,6 +46,10 @@ export function MentorInbox() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showHealthPanel, setShowHealthPanel] = useState(false);
+  const [healthMetrics, setHealthMetrics] = useState<HealthMetric[]>([]);
+  const [isLoadingHealthMetrics, setIsLoadingHealthMetrics] = useState(false);
+  const [healthMetricsError, setHealthMetricsError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Message templates
@@ -151,6 +169,39 @@ export function MentorInbox() {
     }
   }, []);
 
+  const fetchHealthMetrics = useCallback(async (participantId: string) => {
+    setIsLoadingHealthMetrics(true);
+    setHealthMetricsError(null);
+    setHealthMetrics([]);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        throw new Error("Authentication required");
+      }
+
+      const response = await fetch(`/api/mentor/participants/${participantId}/metrics`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to load health trends");
+      }
+
+      const json = await response.json();
+      setHealthMetrics((json.metrics as HealthMetric[]) ?? []);
+    } catch (err) {
+      setHealthMetrics([]);
+      setHealthMetricsError(err instanceof Error ? err.message : "Failed to load health trends");
+    } finally {
+      setIsLoadingHealthMetrics(false);
+    }
+  }, []);
+
   // Fetch messages when selected participant changes
   useEffect(() => {
     if (selectedParticipant) {
@@ -159,6 +210,11 @@ export function MentorInbox() {
       setMessages([]);
     }
   }, [selectedParticipant, fetchMessages]);
+
+  useEffect(() => {
+    if (!enableHealthPanel || !showHealthPanel || !selectedParticipant) return;
+    fetchHealthMetrics(selectedParticipant.id);
+  }, [enableHealthPanel, showHealthPanel, selectedParticipant, fetchHealthMetrics]);
 
   // Realtime updates for assigned participants
   // NOTE: Requires Realtime enabled on sms_messages table in Supabase Dashboard
@@ -468,7 +524,8 @@ export function MentorInbox() {
   }
 
   return (
-    // Fill the available dashboard content height; scroll only inside panels.
+    <>
+    {/* Fill the available dashboard content height; scroll only inside panels. */}
     <div className="bg-white rounded-2xl border-2 border-slate-100 h-full min-h-0 flex flex-col md:flex-row overflow-hidden">
       {/* Sidebar - Participant List */}
       <div className="w-full md:w-72 md:border-r-2 border-slate-100 flex flex-col shrink-0 min-h-0">
@@ -553,6 +610,19 @@ export function MentorInbox() {
                     <p className="text-xs text-slate-500">{formatPhone(selectedParticipant.phone_number)}</p>
                   </div>
                 </div>
+                {enableHealthPanel && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowHealthPanel((prev) => !prev)}
+                    className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                  >
+                    <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                    {showHealthPanel ? "Hide Health Trend" : "View Health Trend"}
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -722,6 +792,72 @@ export function MentorInbox() {
           </div>
         )}
       </div>
+
+      {enableHealthPanel && showHealthPanel && selectedParticipant && (
+        <div className="hidden lg:flex w-[380px] border-l-2 border-slate-100 bg-white flex-col min-h-0">
+          <div className="px-4 py-3 border-b-2 border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-slate-900">Health Data</h3>
+              <p className="text-xs text-slate-500">Last 30 days for selected participant</p>
+            </div>
+            <button
+              onClick={() => setShowHealthPanel(false)}
+              className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              aria-label="Close health trend panel"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-auto">
+            {healthMetricsError ? (
+              <div className="p-6 text-sm text-red-600">{healthMetricsError}</div>
+            ) : (
+              <ParticipantMetricsTable
+                metrics={healthMetrics}
+                isLoading={isLoadingHealthMetrics}
+                emptyMessage="No metrics found for this participant yet."
+                className="h-full"
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
+
+    {enableHealthPanel && showHealthPanel && selectedParticipant && (
+      <div className="lg:hidden fixed inset-0 z-[60] bg-black/40">
+        <div className="absolute inset-y-0 right-0 w-full sm:w-[90%] bg-white shadow-xl flex flex-col">
+          <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-slate-900">Health Data</h3>
+              <p className="text-xs text-slate-500">{selectedParticipant.name || "Participant"}</p>
+            </div>
+            <button
+              onClick={() => setShowHealthPanel(false)}
+              className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              aria-label="Close health trend panel"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto">
+            {healthMetricsError ? (
+              <div className="p-6 text-sm text-red-600">{healthMetricsError}</div>
+            ) : (
+              <ParticipantMetricsTable
+                metrics={healthMetrics}
+                isLoading={isLoadingHealthMetrics}
+                emptyMessage="No metrics found for this participant yet."
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

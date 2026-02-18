@@ -97,7 +97,7 @@ export function ParticipantManagement({
   initialGarminFilter = "all"
 }: { 
   initialModal?: "add" | "invite";
-  mode?: "management" | "trends";
+  mode?: "management" | "trends" | "mentor-trends";
   initialGarminFilter?: "all" | "connected" | "disconnected";
 }) {
   const router = useRouter();
@@ -150,7 +150,8 @@ export function ParticipantManagement({
 
   const fetchParticipants = useCallback(async () => {
     try {
-      const json = await adminFetch("/api/admin/participants");
+      const endpoint = mode === "mentor-trends" ? "/api/mentor/participants" : "/api/admin/participants";
+      const json = await adminFetch(endpoint);
       setParticipants((json.participants as ParticipantRow[]) ?? []);
       setMentors((json.mentors as Mentor[]) ?? []);
       setError(null);
@@ -160,24 +161,28 @@ export function ParticipantManagement({
     } finally {
       setIsLoading(false);
     }
-  }, [adminFetch]);
+  }, [adminFetch, mode]);
 
   useEffect(() => {
     fetchParticipants();
   }, [fetchParticipants]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel("participants-management")
+    let channel = supabase
+      .channel(mode === "mentor-trends" ? "mentor-participants-management" : "participants-management")
       .on("postgres_changes", { event: "*", schema: "public", table: "participants" }, () => fetchParticipants())
-      .on("postgres_changes", { event: "*", schema: "public", table: "mentor_assignments" }, () => fetchParticipants())
-      .on("postgres_changes", { event: "*", schema: "public", table: "mentors" }, () => fetchParticipants())
-      .subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "mentor_assignments" }, () => fetchParticipants());
+
+    if (mode !== "mentor-trends") {
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table: "mentors" }, () => fetchParticipants());
+    }
+
+    const subscription = channel.subscribe();
 
     return () => {
-      void supabase.removeChannel(channel);
+      void supabase.removeChannel(subscription);
     };
-  }, [fetchParticipants]);
+  }, [fetchParticipants, mode]);
 
   const filteredParticipants = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -410,6 +415,7 @@ export function ParticipantManagement({
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              disabled={mode === "mentor-trends"}
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
@@ -417,20 +423,32 @@ export function ParticipantManagement({
               <option value="unverified">Unverified</option>
             </select>
 
+            {mode !== "mentor-trends" && (
+              <select
+                value={mentorFilter}
+                onChange={(e) => setMentorFilter(e.target.value)}
+                className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              >
+                <option value="all">All Mentors</option>
+                <option value="unassigned">Unassigned</option>
+                {mentors
+                  .filter((m) => m.is_active !== false && m.role !== "admin")
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name || m.email || "Unnamed mentor"}
+                    </option>
+                  ))}
+              </select>
+            )}
+
             <select
-              value={mentorFilter}
-              onChange={(e) => setMentorFilter(e.target.value)}
+              value={garminFilter}
+              onChange={(e) => setGarminFilter(e.target.value as "all" | "connected" | "disconnected")}
               className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
             >
-              <option value="all">All Mentors</option>
-              <option value="unassigned">Unassigned</option>
-              {mentors
-                .filter((m) => m.is_active !== false && m.role !== "admin")
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name || m.email || "Unnamed mentor"}
-                  </option>
-                ))}
+              <option value="all">All Garmin</option>
+              <option value="connected">Connected</option>
+              <option value="disconnected">Disconnected</option>
             </select>
           </div>
 
@@ -491,7 +509,7 @@ export function ParticipantManagement({
               {filteredParticipants.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
-                    {searchQuery || statusFilter !== "all" || mentorFilter !== "all"
+                    {searchQuery || statusFilter !== "all" || mentorFilter !== "all" || garminFilter !== "all"
                       ? "No participants match your filters"
                       : "No participants found"}
                   </td>
@@ -557,42 +575,49 @@ export function ParticipantManagement({
                       </div>
                     </td>
                     <td className="px-3 py-4 text-center">
-                      {!p.is_unverified && (
+                      {!p.is_unverified && mode === "mentor-trends" && (
+                        <span className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
+                          isConnected ? "bg-teal-100 text-teal-700" : "bg-slate-100 text-slate-600"
+                        }`}>
+                          {isConnected ? "Connected" : "Not Connected"}
+                        </span>
+                      )}
+                      {!p.is_unverified && mode !== "mentor-trends" && (
                         isConnected ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                               onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
-                                disabled={backfillLoadingId === p.id}
-                                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center"
-                              >
-                                {backfillLoadingId === p.id ? (
-                                  <span className="flex items-center gap-1">
-                                    <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                    Syncing
-                                  </span>
-                                ) : (
-                                  "Sync History"
-                                )}
-                              </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
+                            disabled={backfillLoadingId === p.id}
+                            className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center"
+                          >
+                            {backfillLoadingId === p.id ? (
+                              <span className="flex items-center gap-1">
+                                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                Syncing
+                              </span>
+                            ) : (
+                              "Sync History"
+                            )}
+                          </Button>
                         ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => { e.stopPropagation(); handleConnectGarmin(p); }}
-                                className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center"
-                              >
-                                Connect Garmin
-                              </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleConnectGarmin(p); }}
+                            className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center"
+                          >
+                            Connect Garmin
+                          </Button>
                         )
                       )}
                     </td>
                     <td className="px-3 py-4">
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        {mode === "trends" ? (
+                        {mode === "trends" || mode === "mentor-trends" ? (
                           <Button
                              variant="outline"
                              size="sm"

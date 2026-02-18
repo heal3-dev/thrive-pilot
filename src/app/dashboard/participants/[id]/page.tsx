@@ -4,7 +4,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useDashboard } from "@/app/dashboard/layout";
 import { BackButton } from "@/components/ui/back-button";
+import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 
 type Participant = {
   id: string;
@@ -37,6 +39,7 @@ type Flag = {
 export default function ParticipantDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const { mentor } = useDashboard();
   const id = params.id as string;
 
   const [participant, setParticipant] = useState<Participant | null>(null);
@@ -57,7 +60,12 @@ export default function ParticipantDetailsPage() {
           return;
         }
 
-        const res = await fetch(`/api/admin/participants/${id}`, {
+        const detailsEndpoint =
+          mentor.role === "admin"
+            ? `/api/admin/participants/${id}`
+            : `/api/mentor/participants/${id}/metrics`;
+
+        const res = await fetch(detailsEndpoint, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -70,7 +78,7 @@ export default function ParticipantDetailsPage() {
             try {
               const errJson = await res.json();
               setError(errJson.error || `Failed to load details (${res.status})`);
-            } catch (e) {
+            } catch {
               setError(`Failed to load details (${res.status})`);
             }
           }
@@ -96,7 +104,7 @@ export default function ParticipantDetailsPage() {
     if (id) {
       fetchData();
     }
-  }, [id]);
+  }, [id, mentor.role]);
 
   if (isLoading) {
     return (
@@ -164,65 +172,11 @@ export default function ParticipantDetailsPage() {
           <h3 className="font-semibold text-slate-800">Recent Daily Metrics</h3>
           <span className="text-xs text-slate-400">Last 30 entries</span>
         </div>
-        
-        {metrics.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
-            No metrics found. {(participant.garmin_user_id) && "Wait for daily sync."}
-          </div>
-        ) : (
-          <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
-            <table className="w-full text-sm text-left min-w-[700px]">
-              <thead className="text-slate-500 bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
-                <tr>
-                  <th className="px-5 py-3 font-medium">Date</th>
-                  <th className="px-5 py-3 font-medium">Sleep</th>
-                  <th className="px-5 py-3 font-medium">Stress</th>
-                  <th className="px-5 py-3 font-medium">HRV</th>
-                  <th className="px-5 py-3 font-medium">RHR</th>
-                  <th className="px-5 py-3 font-medium">Body Battery</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {metrics.map((m) => (
-                  <tr key={m.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3 text-slate-900 font-medium">
-                      {m.metric_date}
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">
-                      {m.sleep_duration_seconds
-                        ? `${(m.sleep_duration_seconds / 3600).toFixed(1)}h`
-                        : "-"}
-                      {m.sleep_score != null && (
-                        <span className="ml-1 text-xs text-slate-400">({m.sleep_score})</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">
-                      {m.average_stress_level != null && m.average_stress_level >= 0
-                        ? m.average_stress_level
-                        : "-"}
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">
-                      {m.hrv_last_night_average != null
-                        ? m.hrv_last_night_average
-                        : "-"}
-                      {m.hrv_last_night_5_min_high != null && (
-                        <span className="ml-1 text-xs text-slate-400">(peak {m.hrv_last_night_5_min_high})</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">
-                      {m.resting_heart_rate ?? "-"}
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">
-                      {m.body_battery_charged != null || m.body_battery_drained != null
-                        ? `+${m.body_battery_charged ?? 0} / -${m.body_battery_drained ?? 0}`
-                        : "-"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+
+        <ParticipantMetricsTable
+          metrics={metrics}
+          emptyMessage={`No metrics found.${participant.garmin_user_id ? " Wait for daily sync." : ""}`}
+        />
       </div>
     </div>
   );
