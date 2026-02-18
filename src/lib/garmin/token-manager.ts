@@ -12,6 +12,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { refreshAccessToken } from '@/lib/garmin/oauth-client';
 import { sendEmail } from '@/lib/email/send';
+import { hashParticipantId, decryptParticipantId } from '@/lib/pseudonym-crypto';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -228,15 +229,20 @@ export async function revokeGarminToken(
 
   console.warn('[TOKEN_MANAGER] Token revoked:', { tokenId, reason });
 
-  // 2. Resolve participant_id from pseudonym for email alert
+  // 2. Resolve participant_id from pseudonym for email alert (requires decryption)
   if (token.pseudonym_id) {
-    const { data: mapping } = await supabase
-      .from('participant_pseudonyms')
-      .select('participant_id')
-      .eq('pseudonym_id', token.pseudonym_id)
-      .maybeSingle();
-    if (mapping) {
-      await sendRevocationAlert(mapping.participant_id, reason);
+    try {
+      const { data: mapping } = await supabase
+        .from('participant_pseudonyms')
+        .select('participant_id_encrypted')
+        .eq('pseudonym_id', token.pseudonym_id)
+        .maybeSingle();
+      if (mapping?.participant_id_encrypted) {
+        const participantId = decryptParticipantId(mapping.participant_id_encrypted);
+        await sendRevocationAlert(participantId, reason);
+      }
+    } catch (err) {
+      console.error('[TOKEN_MANAGER] Failed to decrypt participant_id for revocation alert:', err);
     }
   }
 }
@@ -259,15 +265,16 @@ export async function getValidToken(
 ): Promise<{ tokenId: string; accessToken: string } | null> {
   const supabase = getSupabaseAdmin();
 
-  // Resolve pseudonym_id (tokens table uses pseudonym_id, not participant_id)
+  // Resolve pseudonym_id via HMAC hash (participant_id is encrypted in DB)
+  const hash = hashParticipantId(participantId);
   const { data: mapping } = await supabase
     .from('participant_pseudonyms')
     .select('pseudonym_id')
-    .eq('participant_id', participantId)
+    .eq('participant_id_hash', hash)
     .maybeSingle();
 
   if (!mapping?.pseudonym_id) {
-    console.error('[TOKEN_MANAGER] No pseudonym found for participant', participantId);
+    console.error('[TOKEN_MANAGER] No pseudonym found for participant');
     return null;
   }
 

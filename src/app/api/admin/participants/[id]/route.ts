@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/app/api/admin/_utils";
 import { calculateFlags, type Metric } from "@/lib/flags/rules";
+import { hashParticipantId } from "@/lib/pseudonym-crypto";
 
 export async function GET(
   request: NextRequest,
@@ -29,11 +30,12 @@ export async function GET(
     return NextResponse.json({ error: "Participant not found" }, { status: 404 });
   }
 
-  // 2. Resolve pseudonym_id for health data queries
+  // 2. Resolve pseudonym_id via HMAC hash
+  const pidHash = hashParticipantId(id);
   const { data: pseudonymRow } = await supabase
     .from("participant_pseudonyms")
     .select("pseudonym_id")
-    .eq("participant_id", id)
+    .eq("participant_id_hash", pidHash)
     .maybeSingle();
 
   const pseudonymId = pseudonymRow?.pseudonym_id;

@@ -11,6 +11,7 @@
 
 import crypto from 'crypto';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { hashParticipantId } from '@/lib/pseudonym-crypto';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,14 +187,16 @@ export function verifyGarminSignature(
 
 /**
  * Resolve a participant_id to its pseudonym_id from the mapping table.
+ * Uses HMAC hash for lookup -- participant_id is never stored in plaintext.
  * Returns null if no mapping exists.
  */
 async function resolvePseudonymId(participantId: string): Promise<string | null> {
   const supabase = getSupabaseAdmin();
+  const hash = hashParticipantId(participantId);
   const { data, error } = await supabase
     .from('participant_pseudonyms')
     .select('pseudonym_id')
-    .eq('participant_id', participantId)
+    .eq('participant_id_hash', hash)
     .maybeSingle();
 
   if (error) {

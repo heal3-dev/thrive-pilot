@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getInviteRedirect, requireAdmin } from "../_utils";
 import { twilioClient, TWILIO_PHONE_NUMBER } from "@/lib/twilio";
+import { decryptParticipantId } from "@/lib/pseudonym-crypto";
 
 const createParticipantSchema = z.object({
   email: z.string().email(),
@@ -49,16 +50,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch assignments" }, { status: 500 });
   }
 
-  // Fetch pseudonym mappings to bridge PII ↔ health data
+  // Fetch pseudonym mappings — decrypt participant_id to bridge PII ↔ health data
   const { data: pseudonymData } = await admin
     .from("participant_pseudonyms")
-    .select("participant_id, pseudonym_id");
+    .select("participant_id_encrypted, pseudonym_id");
 
   const participantToPseudonym = new Map<string, string>();
   const pseudonymToParticipant = new Map<string, string>();
   for (const row of pseudonymData ?? []) {
-    participantToPseudonym.set(row.participant_id, row.pseudonym_id);
-    pseudonymToParticipant.set(row.pseudonym_id, row.participant_id);
+    try {
+      const participantId = decryptParticipantId(row.participant_id_encrypted);
+      participantToPseudonym.set(participantId, row.pseudonym_id);
+      pseudonymToParticipant.set(row.pseudonym_id, participantId);
+    } catch {
+      console.error('[PARTICIPANTS] Failed to decrypt pseudonym row');
+    }
   }
 
   // Fetch active Garmin connections (via pseudonym_id on tokens table)

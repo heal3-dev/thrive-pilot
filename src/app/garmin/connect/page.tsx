@@ -6,6 +6,7 @@ import {
   generateCodeVerifier, 
   generateCodeChallenge 
 } from '@/lib/garmin/oauth-client';
+import { hashParticipantId } from '@/lib/pseudonym-crypto';
 
 export default async function GarminConnectPage({
   searchParams,
@@ -33,13 +34,24 @@ export default async function GarminConnectPage({
     redirect('/garmin/error?reason=missing_context');
   }
   
-  // Step 3: Check if already connected
-  const { data: existingToken } = await supabase
-    .from('garmin_tokens')
-    .select('id')
-    .eq('participant_id', participantId)
-    .is('revoked_at', null)
+  // Step 3: Check if already connected (resolve via pseudonym)
+  const pidHash = hashParticipantId(participantId);
+  const { data: pseudonymRow } = await supabase
+    .from('participant_pseudonyms')
+    .select('pseudonym_id')
+    .eq('participant_id_hash', pidHash)
     .maybeSingle();
+
+  let existingToken = null;
+  if (pseudonymRow?.pseudonym_id) {
+    const { data } = await supabase
+      .from('garmin_tokens')
+      .select('id')
+      .eq('pseudonym_id', pseudonymRow.pseudonym_id)
+      .is('revoked_at', null)
+      .maybeSingle();
+    existingToken = data;
+  }
     
   if (existingToken) {
     console.log('[GARMIN_CONNECT] Already connected:', participantId);

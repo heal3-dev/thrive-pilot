@@ -16,6 +16,7 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { hashParticipantId } from '@/lib/pseudonym-crypto';
 import {
   type GarminDailySummary,
   mapSummaryToMetrics,
@@ -225,12 +226,13 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
     throw new Error(`Date range exceeds maximum of ${MAX_RANGE_DAYS} days`);
   }
 
-  // --- Resolve pseudonym_id for health data storage ---
+  // --- Resolve pseudonym_id via HMAC hash ---
   const supabase = getSupabaseAdmin();
+  const hash = hashParticipantId(participantId);
   const { data: pseudonymRow } = await supabase
     .from('participant_pseudonyms')
     .select('pseudonym_id')
-    .eq('participant_id', participantId)
+    .eq('participant_id_hash', hash)
     .maybeSingle();
 
   if (!pseudonymRow?.pseudonym_id) {

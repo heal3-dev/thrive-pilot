@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { verifyStateToken } from '@/lib/garmin/oauth-state';
 import { exchangeCodeForToken, fetchGarminUserId } from '@/lib/garmin/oauth-client';
+import { hashParticipantId, encryptParticipantId } from '@/lib/pseudonym-crypto';
 
 function redirectToError(request: NextRequest, reason: string) {
   return NextResponse.redirect(
@@ -79,11 +80,14 @@ export async function GET(request: NextRequest) {
       : [];
 
   // Ensure a pseudonym mapping exists for this participant (create if needed).
-  // All health/token data is stored under pseudonym_id for PIPEDA compliance.
+  // participant_id is stored as HMAC hash (for lookups) + AES-encrypted (for decryption).
+  const pidHash = hashParticipantId(tempData.participant_id);
+  const pidEncrypted = encryptParticipantId(tempData.participant_id);
+
   const { data: existingPseudonym } = await supabase
     .from('participant_pseudonyms')
     .select('pseudonym_id')
-    .eq('participant_id', tempData.participant_id)
+    .eq('participant_id_hash', pidHash)
     .maybeSingle();
 
   let pseudonymId: string;
@@ -92,7 +96,10 @@ export async function GET(request: NextRequest) {
   } else {
     const { data: newPseudonym, error: pseudonymError } = await supabase
       .from('participant_pseudonyms')
-      .insert({ participant_id: tempData.participant_id })
+      .insert({
+        participant_id_hash: pidHash,
+        participant_id_encrypted: pidEncrypted,
+      })
       .select('pseudonym_id')
       .single();
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAdmin } from '@/app/api/admin/_utils';
 import { sendEmail } from '@/lib/email/send';
 import { garminInviteTemplate } from '@/lib/email/templates/garmin-invite';
+import { hashParticipantId } from '@/lib/pseudonym-crypto';
 
 const inviteSchema = z.object({
   participant_id: z.string().uuid(),
@@ -39,19 +40,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Participant email does not match request' }, { status: 400 });
   }
   
-  // 2. Check if already connected
-  const { data: existingToken } = await admin
-    .from('garmin_tokens')
-    .select('id')
-    .eq('participant_id', payload.participant_id)
-    .is('revoked_at', null)
+  // 2. Check if already connected (resolve via pseudonym)
+  const pidHash = hashParticipantId(payload.participant_id);
+  const { data: pseudonymRow } = await admin
+    .from('participant_pseudonyms')
+    .select('pseudonym_id')
+    .eq('participant_id_hash', pidHash)
     .maybeSingle();
-    
-  if (existingToken) {
-    return NextResponse.json(
-      { error: 'Garmin already connected for this participant' },
-      { status: 400 }
-    );
+
+  if (pseudonymRow?.pseudonym_id) {
+    const { data: existingToken } = await admin
+      .from('garmin_tokens')
+      .select('id')
+      .eq('pseudonym_id', pseudonymRow.pseudonym_id)
+      .is('revoked_at', null)
+      .maybeSingle();
+
+    if (existingToken) {
+      return NextResponse.json(
+        { error: 'Garmin already connected for this participant' },
+        { status: 400 }
+      );
+    }
   }
   
   // 3. Rate limit: max 3 invites per day (check audit_logs)
