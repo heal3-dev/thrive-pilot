@@ -34,6 +34,11 @@ type HealthMetric = {
  * MentorInbox - Displays participant conversations for mentors
  */
 export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?: boolean }) {
+  const MIN_HEALTH_PANEL_WIDTH = 300;
+  const MIN_CHAT_PANEL_WIDTH = 420;
+  const SIDEBAR_WIDTH = 288;
+  const HEALTH_PANEL_WIDTH_STORAGE_KEY = "mentorInbox.healthPanelWidth";
+
   const [participants, setParticipants] = useState<ParticipantWithAssignment[]>([]);
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantWithAssignment | null>(null);
   const [messages, setMessages] = useState<OptimisticSMSMessage[]>([]);
@@ -47,10 +52,13 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [showTemplates, setShowTemplates] = useState(false);
   const [showHealthPanel, setShowHealthPanel] = useState(false);
+  const [healthPanelWidth, setHealthPanelWidth] = useState(380);
+  const [isResizingHealthPanel, setIsResizingHealthPanel] = useState(false);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetric[]>([]);
   const [isLoadingHealthMetrics, setIsLoadingHealthMetrics] = useState(false);
   const [healthMetricsError, setHealthMetricsError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const desktopLayoutRef = useRef<HTMLDivElement>(null);
 
   // Message templates
   const messageTemplates = [
@@ -201,6 +209,63 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
       setIsLoadingHealthMetrics(false);
     }
   }, []);
+
+  const clampHealthPanelWidth = useCallback((width: number) => {
+    const containerWidth = desktopLayoutRef.current?.clientWidth ?? 1400;
+    const maxHealthPanelWidth = Math.max(
+      MIN_HEALTH_PANEL_WIDTH,
+      containerWidth - SIDEBAR_WIDTH - MIN_CHAT_PANEL_WIDTH
+    );
+
+    return Math.min(Math.max(width, MIN_HEALTH_PANEL_WIDTH), maxHealthPanelWidth);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedWidth = window.localStorage.getItem(HEALTH_PANEL_WIDTH_STORAGE_KEY);
+    if (!savedWidth) return;
+
+    const parsed = Number(savedWidth);
+    if (!Number.isFinite(parsed)) return;
+    setHealthPanelWidth(clampHealthPanelWidth(parsed));
+  }, [clampHealthPanelWidth]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      HEALTH_PANEL_WIDTH_STORAGE_KEY,
+      String(Math.round(healthPanelWidth))
+    );
+  }, [healthPanelWidth]);
+
+  useEffect(() => {
+    if (!isResizingHealthPanel) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const container = desktopLayoutRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const nextWidth = rect.right - event.clientX;
+      setHealthPanelWidth(clampHealthPanelWidth(nextWidth));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingHealthPanel(false);
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingHealthPanel, clampHealthPanelWidth]);
 
   // Fetch messages when selected participant changes
   useEffect(() => {
@@ -526,7 +591,12 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   return (
     <>
     {/* Fill the available dashboard content height; scroll only inside panels. */}
-    <div className="bg-white rounded-2xl border-2 border-slate-100 h-full min-h-0 flex flex-col md:flex-row overflow-hidden">
+    <div
+      ref={desktopLayoutRef}
+      className={`bg-white rounded-2xl border-2 border-slate-100 h-full min-h-0 flex flex-col md:flex-row overflow-hidden ${
+        isResizingHealthPanel ? "cursor-col-resize" : ""
+      }`}
+    >
       {/* Sidebar - Participant List */}
       <div className="w-full md:w-72 md:border-r-2 border-slate-100 flex flex-col shrink-0 min-h-0">
         <div className="p-4 border-b-2 border-slate-100">
@@ -794,7 +864,23 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
       </div>
 
       {enableHealthPanel && showHealthPanel && selectedParticipant && (
-        <div className="hidden lg:flex w-[380px] border-l-2 border-slate-100 bg-white flex-col min-h-0">
+        <>
+        <div
+          className="hidden lg:block w-2 cursor-col-resize bg-slate-100 hover:bg-teal-200 active:bg-teal-300 transition-colors relative"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize health data panel"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            setIsResizingHealthPanel(true);
+          }}
+        >
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-16 w-1 rounded-full bg-slate-300/80" />
+        </div>
+        <div
+          className="hidden lg:flex border-l border-slate-100 bg-white flex-col min-h-0"
+          style={{ width: `${healthPanelWidth}px` }}
+        >
           <div className="px-4 py-3 border-b-2 border-slate-100 flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-slate-900">Health Data</h3>
@@ -823,6 +909,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
             )}
           </div>
         </div>
+        </>
       )}
     </div>
 
