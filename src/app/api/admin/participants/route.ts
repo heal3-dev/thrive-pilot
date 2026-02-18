@@ -110,6 +110,7 @@ export async function GET(request: Request) {
         sleep_score: m.sleep_score,
         body_battery_charged: m.body_battery_charged,
         body_battery_drained: m.body_battery_drained,
+        body_battery_most_recent: m.body_battery_most_recent,
         hrv_last_night_average: m.hrv_last_night_average,
         hrv_last_night_5_min_high: m.hrv_last_night_5_min_high,
       });

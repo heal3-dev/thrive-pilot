@@ -77,6 +77,7 @@ export async function GET(
     sleep_score: m.sleep_score as number | null,
     body_battery_charged: m.body_battery_charged as number | null,
     body_battery_drained: m.body_battery_drained as number | null,
+    body_battery_most_recent: m.body_battery_most_recent as number | null,
     hrv_last_night_average: m.hrv_last_night_average as number | null,
     hrv_last_night_5_min_high: m.hrv_last_night_5_min_high as number | null,
   }));
