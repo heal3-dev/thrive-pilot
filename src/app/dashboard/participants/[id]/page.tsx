@@ -26,6 +26,7 @@ type Metric = {
   sleep_score: number | null;
   body_battery_charged: number | null;
   body_battery_drained: number | null;
+  body_battery_most_recent: number | null;
   hrv_last_night_average: number | null;
   hrv_last_night_5_min_high: number | null;
 };

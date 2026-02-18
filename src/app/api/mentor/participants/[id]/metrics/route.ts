@@ -77,7 +77,7 @@ export async function GET(
     const { data: metrics, error: metricsError } = await admin
       .from("garmin_metrics")
       .select(
-        "id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, hrv_last_night_average, hrv_last_night_5_min_high"
+        "id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high"
       )
       .eq("pseudonym_id", pseudonymId)
       .order("metric_date", { ascending: false })
@@ -98,6 +98,7 @@ export async function GET(
     sleep_score: m.sleep_score as number | null,
     body_battery_charged: m.body_battery_charged as number | null,
     body_battery_drained: m.body_battery_drained as number | null,
+    body_battery_most_recent: m.body_battery_most_recent as number | null,
     hrv_last_night_average: m.hrv_last_night_average as number | null,
     hrv_last_night_5_min_high: m.hrv_last_night_5_min_high as number | null,
   }));
