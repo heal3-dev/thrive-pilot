@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { verifyStateToken } from '@/lib/garmin/oauth-state';
 import { exchangeCodeForToken, fetchGarminUserId } from '@/lib/garmin/oauth-client';
 import { hashParticipantId, encryptParticipantId } from '@/lib/pseudonym-crypto';
@@ -22,7 +23,12 @@ export async function GET(request: NextRequest) {
     return redirectToError(request, 'invalid_callback');
   }
 
+  // User-scoped client for state verification (respects RLS).
   const supabase = await createClient();
+  // Service-role client for privileged DB operations (bypasses RLS).
+  // Needed because the invite flow uses a temporary session that lacks
+  // INSERT privileges on participant_pseudonyms, garmin_tokens, etc.
+  const adminClient = getSupabaseAdmin();
 
   // Verify state token from encrypted HttpOnly cookie to prevent CSRF.
   const oauthState = await verifyStateToken(state);
@@ -30,7 +36,7 @@ export async function GET(request: NextRequest) {
     return redirectToError(request, 'csrf_failure');
   }
 
-  const { data: tempData, error: tempError } = await supabase
+  const { data: tempData, error: tempError } = await adminClient
     .from('garmin_oauth_temp')
     .select('state_token, code_verifier, participant_id, expires_at')
     .eq('state_token', state)
@@ -54,7 +60,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (new Date(tempData.expires_at).getTime() < Date.now()) {
-    await supabase
+    await adminClient
       .from('garmin_oauth_temp')
       .delete()
       .eq('state_token', state);
@@ -84,7 +90,7 @@ export async function GET(request: NextRequest) {
   const pidHash = hashParticipantId(tempData.participant_id);
   const pidEncrypted = encryptParticipantId(tempData.participant_id);
 
-  const { data: existingPseudonym } = await supabase
+  const { data: existingPseudonym } = await adminClient
     .from('participant_pseudonyms')
     .select('pseudonym_id')
     .eq('participant_id_hash', pidHash)
@@ -94,7 +100,7 @@ export async function GET(request: NextRequest) {
   if (existingPseudonym?.pseudonym_id) {
     pseudonymId = existingPseudonym.pseudonym_id;
   } else {
-    const { data: newPseudonym, error: pseudonymError } = await supabase
+    const { data: newPseudonym, error: pseudonymError } = await adminClient
       .from('participant_pseudonyms')
       .insert({
         participant_id_hash: pidHash,
@@ -110,7 +116,7 @@ export async function GET(request: NextRequest) {
     pseudonymId = newPseudonym.pseudonym_id;
   }
 
-  const { error: tokenInsertError } = await supabase
+  const { error: tokenInsertError } = await adminClient
     .from('garmin_tokens')
     .insert({
       pseudonym_id: pseudonymId,
@@ -134,7 +140,7 @@ export async function GET(request: NextRequest) {
       garmin_user_id: garminUserId,
     });
 
-    const { error: userIdError } = await supabase
+    const { error: userIdError } = await adminClient
       .from('participants')
       .update({ garmin_user_id: garminUserId })
       .eq('id', tempData.participant_id);
@@ -146,7 +152,7 @@ export async function GET(request: NextRequest) {
     console.error('[GARMIN_CALLBACK] Failed to fetch Garmin user ID:', err);
   }
 
-  const { error: auditError } = await supabase.from('audit_logs').insert({
+  const { error: auditError } = await adminClient.from('audit_logs').insert({
     user_id: oauthState.user_id,
     action: 'garmin_connected',
     table_name: 'garmin_tokens',
@@ -161,7 +167,7 @@ export async function GET(request: NextRequest) {
     console.error('[GARMIN_CALLBACK] Failed to write audit log:', auditError);
   }
 
-  const { error: cleanupError } = await supabase
+  const { error: cleanupError } = await adminClient
     .from('garmin_oauth_temp')
     .delete()
     .eq('state_token', state);
