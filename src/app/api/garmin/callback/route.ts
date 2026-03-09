@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { verifyStateToken } from '@/lib/garmin/oauth-state';
 import { exchangeCodeForToken, fetchGarminUserId } from '@/lib/garmin/oauth-client';
 import { hashParticipantId, encryptParticipantId } from '@/lib/pseudonym-crypto';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 function redirectToError(request: NextRequest, reason: string) {
   return NextResponse.redirect(
@@ -15,6 +16,23 @@ function redirectToSuccess(request: NextRequest) {
   return NextResponse.redirect(new URL('/garmin/success', request.url));
 }
 
+/**
+ * Sign out any temporary session then redirect to the error page.
+ * Prevents stale invite cookies from blocking subsequent admin logins.
+ */
+async function signOutAndRedirectToError(
+  supabase: SupabaseClient,
+  request: NextRequest,
+  reason: string
+) {
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // Best-effort; don't let signOut failure block the redirect.
+  }
+  return redirectToError(request, reason);
+}
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code');
   const state = request.nextUrl.searchParams.get('state');
@@ -23,7 +41,7 @@ export async function GET(request: NextRequest) {
     return redirectToError(request, 'invalid_callback');
   }
 
-  // User-scoped client for state verification (respects RLS).
+  // User-scoped client for session cleanup (respects RLS).
   const supabase = await createClient();
   // Service-role client for privileged DB operations (bypasses RLS).
   // Needed because the invite flow uses a temporary session that lacks
@@ -33,7 +51,7 @@ export async function GET(request: NextRequest) {
   // Verify state token from encrypted HttpOnly cookie to prevent CSRF.
   const oauthState = await verifyStateToken(state);
   if (!oauthState) {
-    return redirectToError(request, 'csrf_failure');
+    return signOutAndRedirectToError(supabase, request, 'csrf_failure');
   }
 
   const { data: tempData, error: tempError } = await adminClient
@@ -44,11 +62,11 @@ export async function GET(request: NextRequest) {
 
   if (tempError) {
     console.error('[GARMIN_CALLBACK] Failed to read OAuth temp state:', tempError);
-    return redirectToError(request, 'db_error');
+    return signOutAndRedirectToError(supabase, request, 'db_error');
   }
 
   if (!tempData) {
-    return redirectToError(request, 'session_expired');
+    return signOutAndRedirectToError(supabase, request, 'session_expired');
   }
 
   if (oauthState.participant_id !== tempData.participant_id) {
@@ -56,7 +74,7 @@ export async function GET(request: NextRequest) {
       cookie_participant_id: oauthState.participant_id,
       temp_participant_id: tempData.participant_id,
     });
-    return redirectToError(request, 'csrf_failure');
+    return signOutAndRedirectToError(supabase, request, 'csrf_failure');
   }
 
   if (new Date(tempData.expires_at).getTime() < Date.now()) {
@@ -64,7 +82,7 @@ export async function GET(request: NextRequest) {
       .from('garmin_oauth_temp')
       .delete()
       .eq('state_token', state);
-    return redirectToError(request, 'session_expired');
+    return signOutAndRedirectToError(supabase, request, 'session_expired');
   }
 
   let tokens: Awaited<ReturnType<typeof exchangeCodeForToken>>;
@@ -75,7 +93,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[GARMIN_CALLBACK] Token exchange failed:', error);
-    return redirectToError(request, 'token_exchange_failed');
+    return signOutAndRedirectToError(supabase, request, 'token_exchange_failed');
   }
 
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
@@ -111,7 +129,7 @@ export async function GET(request: NextRequest) {
 
     if (pseudonymError || !newPseudonym) {
       console.error('[GARMIN_CALLBACK] Failed to create pseudonym:', pseudonymError);
-      return redirectToError(request, 'db_error');
+      return signOutAndRedirectToError(supabase, request, 'db_error');
     }
     pseudonymId = newPseudonym.pseudonym_id;
   }
@@ -128,7 +146,7 @@ export async function GET(request: NextRequest) {
 
   if (tokenInsertError) {
     console.error('[GARMIN_CALLBACK] Failed to persist Garmin tokens:', tokenInsertError);
-    return redirectToError(request, 'db_error');
+    return signOutAndRedirectToError(supabase, request, 'db_error');
   }
 
   // Fetch the Garmin API User ID and store it on the participant.
@@ -183,3 +201,4 @@ export async function GET(request: NextRequest) {
 
   return redirectToSuccess(request);
 }
+
