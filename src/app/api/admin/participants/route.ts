@@ -81,10 +81,11 @@ export async function GET(request: Request) {
     (garminTokensData ?? []).map((token) => token.pseudonym_id)
   );
 
-  // Fetch recent metrics for flagging (last 4 days via pseudonym_id)
-  const fourDaysAgo = new Date();
-  fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
-  const dateStr = fourDaysAgo.toISOString().split('T')[0];
+  // Fetch recent metrics for flagging (last 33 days via pseudonym_id)
+  // Need 3 evaluation days + up to 30 baseline days for baseline-relative flags.
+  const thirtyThreeDaysAgo = new Date();
+  thirtyThreeDaysAgo.setDate(thirtyThreeDaysAgo.getDate() - 33);
+  const dateStr = thirtyThreeDaysAgo.toISOString().split('T')[0];
 
   const { data: metricsData } = await admin
     .from("garmin_metrics")

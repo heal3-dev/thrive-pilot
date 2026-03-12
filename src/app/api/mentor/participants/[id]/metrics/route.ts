@@ -81,7 +81,7 @@ export async function GET(
       )
       .eq("pseudonym_id", pseudonymId)
       .order("metric_date", { ascending: false })
-      .limit(30);
+      .limit(33);
 
     if (metricsError) {
       return NextResponse.json({ error: "Failed to fetch metrics" }, { status: 500 });

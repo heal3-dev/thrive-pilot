@@ -59,7 +59,7 @@ export async function GET(
       .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
       .eq("pseudonym_id", pseudonymId)
       .order("metric_date", { ascending: false })
-      .limit(30);
+      .limit(33);
 
     if (mError) {
       console.error(`[PARTICIPANT_DETAILS] Error fetching metrics:`, mError);

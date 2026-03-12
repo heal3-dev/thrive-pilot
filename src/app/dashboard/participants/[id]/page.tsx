@@ -32,7 +32,7 @@ type Metric = {
 };
 
 type Flag = {
-  type: 'LOW_SLEEP' | 'HIGH_STRESS' | 'NO_DATA';
+  type: 'LOW_HRV' | 'HIGH_RHR' | 'LOW_SLEEP' | 'LOW_SLEEP_SCORE' | 'HIGH_STRESS' | 'LOW_BODY_BATTERY' | 'NO_DATA';
   message: string;
   severity: 'warning' | 'alert' | 'info';
 };
