@@ -188,6 +188,8 @@ export function ParticipantManagement({
   }, [fetchParticipants]);
 
   useEffect(() => {
+    if (demoMode) return;
+
     let channel = supabase
       .channel(mode === "mentor-trends" ? "mentor-participants-management" : "participants-management")
       .on("postgres_changes", { event: "*", schema: "public", table: "participants" }, () => fetchParticipants())
@@ -202,7 +204,7 @@ export function ParticipantManagement({
     return () => {
       void supabase.removeChannel(subscription);
     };
-  }, [fetchParticipants, mode]);
+  }, [fetchParticipants, mode, demoMode]);
 
   const filteredParticipants = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
