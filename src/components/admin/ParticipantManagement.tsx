@@ -27,8 +27,7 @@ type AssignedMentor = {
 };
 
 import type { Flag } from "@/lib/flags/rules";
-
-// ... (imports)
+import { DEMO_PARTICIPANTS } from "@/lib/demo-data";
 
 type ParticipantRow = Participant & {
   assigned_mentor: AssignedMentor | null;
@@ -94,11 +93,13 @@ function isValidPhone(phone: string): boolean {
 export function ParticipantManagement({ 
   initialModal,
   mode = "management",
-  initialGarminFilter = "all"
+  initialGarminFilter = "all",
+  demoMode = false,
 }: { 
   initialModal?: "add" | "invite";
   mode?: "management" | "trends" | "mentor-trends";
   initialGarminFilter?: "all" | "connected" | "disconnected";
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
@@ -149,6 +150,25 @@ export function ParticipantManagement({
   );
 
   const fetchParticipants = useCallback(async () => {
+    if (demoMode) {
+      const demoRows: ParticipantRow[] = DEMO_PARTICIPANTS.map((p) => ({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        phone_number: p.phone_number,
+        garmin_user_id: p.garmin_user_id,
+        is_active: true,
+        garmin_connected: true,
+        assigned_mentor: null,
+        flags: p.flags,
+        created_at: p.garmin_connected_at,
+      }));
+      setParticipants(demoRows);
+      setMentors([]);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
     try {
       const endpoint = mode === "mentor-trends" ? "/api/mentor/participants" : "/api/admin/participants";
       const json = await adminFetch(endpoint);
@@ -161,7 +181,7 @@ export function ParticipantManagement({
     } finally {
       setIsLoading(false);
     }
-  }, [adminFetch, mode]);
+  }, [adminFetch, mode, demoMode]);
 
   useEffect(() => {
     fetchParticipants();

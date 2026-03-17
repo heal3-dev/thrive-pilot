@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useDashboard } from "@/app/dashboard/layout";
 import { BackButton } from "@/components/ui/back-button";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
+import { getDemoParticipant } from "@/lib/demo-data";
 
 type Participant = {
   id: string;
@@ -50,6 +51,27 @@ export default function ParticipantDetailsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Handle demo participants (no API call needed)
+    if (id.startsWith('demo-')) {
+      const demo = getDemoParticipant(id);
+      if (demo) {
+        setParticipant({
+          id: demo.id,
+          name: demo.name,
+          email: demo.email,
+          garmin_user_id: demo.garmin_user_id,
+          garmin_connected_at: demo.garmin_connected_at,
+          is_connected: true,
+        });
+        setMetrics(demo.metrics);
+        setFlags(demo.flags);
+      } else {
+        setError("Demo participant not found");
+      }
+      setIsLoading(false);
+      return;
+    }
+
     async function fetchData() {
       try {
         const { data: { session } } = await supabase.auth.getSession();

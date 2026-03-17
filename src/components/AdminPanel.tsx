@@ -34,6 +34,42 @@ function getTabFromHash(): AdminTab {
 }
 
 /**
+ * Garmin Trends tab with demo mode toggle.
+ */
+function GarminTrendsTab({ onBack }: { onBack: () => void }) {
+  const [demoMode, setDemoMode] = useState(false);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-4">
+        <BackButton onClick={onBack} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setDemoMode(!demoMode)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+              demoMode
+                ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            {demoMode ? 'Exit Demo' : 'Demo Mode'}
+          </button>
+          <h2 className="text-xl font-bold text-slate-900">
+            Participant Trends
+            {demoMode && (
+              <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                DEMO
+              </span>
+            )}
+          </h2>
+        </div>
+      </div>
+      <ParticipantManagement mode="trends" initialGarminFilter="connected" demoMode={demoMode} />
+    </div>
+  );
+}
+
+/**
  * AdminPanel - Admin dashboard with stats and navigation
  * Implements TICKET #15A: Admin Dashboard - Stats & Navigation
  */
@@ -314,13 +350,7 @@ export function AdminPanel() {
         )}
         {activeTab === "messages" && <MessageViewer onBack={() => navigateToTab("dashboard")} />}
         {activeTab === "garmin-trends" && (
-          <div className="space-y-4">
-             <div className="flex items-center justify-between mb-4">
-               <BackButton onClick={() => navigateToTab("dashboard")} />
-               <h2 className="text-xl font-bold text-slate-900">Participant Trends</h2>
-             </div>
-             <ParticipantManagement mode="trends" initialGarminFilter="connected" />
-          </div>
+          <GarminTrendsTab onBack={() => navigateToTab("dashboard")} />
         )}
       </div>
 
