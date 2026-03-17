@@ -284,13 +284,13 @@ export function getDemoFlags(participantId: string): Flag[] {
 
 function buildDemoParticipants(): DemoParticipant[] {
   const raw: { id: string; name: string; email: string; phone: string }[] = [
-    { id: 'demo-alex', name: 'Alex M.', email: 'alex.m@demo.thrive', phone: '+1 (403) 555-0101' },
-    { id: 'demo-jordan', name: 'Jordan K.', email: 'jordan.k@demo.thrive', phone: '+1 (403) 555-0102' },
-    { id: 'demo-sam', name: 'Sam R.', email: 'sam.r@demo.thrive', phone: '+1 (403) 555-0103' },
-    { id: 'demo-chris', name: 'Chris P.', email: 'chris.p@demo.thrive', phone: '+1 (403) 555-0104' },
-    { id: 'demo-morgan', name: 'Morgan T.', email: 'morgan.t@demo.thrive', phone: '+1 (403) 555-0105' },
-    { id: 'demo-riley', name: 'Riley D.', email: 'riley.d@demo.thrive', phone: '+1 (403) 555-0106' },
-    { id: 'demo-taylor', name: 'Taylor W.', email: 'taylor.w@demo.thrive', phone: '+1 (403) 555-0107' },
+    { id: 'demo-alex', name: 'Alex M.', email: 'alex.m@heal-3.com', phone: '+1 (403) 555-0101' },
+    { id: 'demo-jordan', name: 'Jordan K.', email: 'jordan.k@heal-3.com', phone: '+1 (403) 555-0102' },
+    { id: 'demo-sam', name: 'Sam R.', email: 'sam.r@heal-3.com', phone: '+1 (403) 555-0103' },
+    { id: 'demo-chris', name: 'Chris P.', email: 'chris.p@heal-3.com', phone: '+1 (403) 555-0104' },
+    { id: 'demo-morgan', name: 'Morgan T.', email: 'morgan.t@heal-3.com', phone: '+1 (403) 555-0105' },
+    { id: 'demo-riley', name: 'Riley D.', email: 'riley.d@heal-3.com', phone: '+1 (403) 555-0106' },
+    { id: 'demo-taylor', name: 'Taylor W.', email: 'taylor.w@heal-3.com', phone: '+1 (403) 555-0107' },
   ];
 
   return raw.map((p) => {
