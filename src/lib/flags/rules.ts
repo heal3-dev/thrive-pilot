@@ -39,13 +39,13 @@ function average(values: number[]): number | null {
 }
 
 /**
- * Calculates a participant's individual baseline using a 7-day rolling average
+ * Calculates a participant's individual baseline using a 30-day rolling average
  * (excluding the most recent 3 days which are the evaluation window).
  * If there is not enough data, falls back to population defaults.
  */
 export function calculateBaseline(metrics: Metric[]) {
-  // metrics are expected to be sorted descending by date, so days 3-9 (0-indexed) are the 7 days prior to the 3-day eval window.
-  const baselineValues = metrics.slice(3, 10);
+  // metrics are expected to be sorted descending by date, so days 3-32 (0-indexed) are the 30 days prior to the 3-day eval window.
+  const baselineValues = metrics.slice(3, 33);
 
   const hrvValues = baselineValues.map(m => m.hrv_last_night_average).filter((v): v is number => v !== null);
   const rhrValues = baselineValues.map(m => m.resting_heart_rate).filter((v): v is number => v !== null);
