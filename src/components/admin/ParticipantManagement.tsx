@@ -565,7 +565,14 @@ export function ParticipantManagement({
                     <td className="px-3 py-4">
                       <div className="flex flex-col gap-1 items-start">
                         {p.is_unverified ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
+                          <span
+                             className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold border ${
+                               // Assuming 'unverified' status should be treated as a 'warning' for styling purposes
+                               // Or if there's a p.unverified_severity property, it could be used here.
+                               // For now, applying the amber styling as it was before, but with border.
+                               'bg-amber-50 text-amber-700 border-amber-200'
+                             }`}
+                          >
                             Unverified
                           </span>
                         ) : p.is_active === false ? (
