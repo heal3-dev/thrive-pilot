@@ -8,6 +8,7 @@ import { useDashboard } from "@/app/dashboard/layout";
 import { BackButton } from "@/components/ui/back-button";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 import { getDemoParticipant } from "@/lib/demo-data";
+import { type Metric, type Flag } from "@/lib/flags/rules";
 
 type Participant = {
   id: string;
@@ -16,26 +17,6 @@ type Participant = {
   garmin_user_id: string | null;
   garmin_connected_at: string | null;
   is_connected?: boolean;
-};
-
-type Metric = {
-  id: string;
-  metric_date: string;
-  resting_heart_rate: number | null;
-  average_stress_level: number | null;
-  sleep_duration_seconds: number | null;
-  sleep_score: number | null;
-  body_battery_charged: number | null;
-  body_battery_drained: number | null;
-  body_battery_most_recent: number | null;
-  hrv_last_night_average: number | null;
-  hrv_last_night_5_min_high: number | null;
-};
-
-type Flag = {
-  type: 'LOW_HRV' | 'HIGH_RHR' | 'LOW_SLEEP' | 'LOW_SLEEP_SCORE' | 'HIGH_STRESS' | 'LOW_BODY_BATTERY' | 'NO_DATA';
-  message: string;
-  severity: 'warning' | 'alert' | 'info';
 };
 
 export default function ParticipantDetailsPage() {

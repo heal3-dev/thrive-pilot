@@ -37,7 +37,18 @@ function getTabFromHash(): AdminTab {
  * Garmin Trends tab with demo mode toggle.
  */
 function GarminTrendsTab({ onBack }: { onBack: () => void }) {
-  const [demoMode, setDemoMode] = useState(false);
+  const [demoMode, setDemoMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("adminDemoMode") === "true";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("adminDemoMode", String(demoMode));
+    }
+  }, [demoMode]);
 
   return (
     <div className="space-y-4">
