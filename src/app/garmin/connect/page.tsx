@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { generateStateToken } from '@/lib/garmin/oauth-state';
 import { 
   getAuthorizationUrl, 
@@ -69,7 +70,9 @@ export default async function GarminConnectPage({
   const codeChallenge = generateCodeChallenge(codeVerifier);
   
   // Store code verifier temporarily for callback verification
-  const { error: tempInsertError } = await supabase
+  // Use admin client to bypass RLS (this table is service_role only)
+  const adminDb = getSupabaseAdmin();
+  const { error: tempInsertError } = await adminDb
     .from('garmin_oauth_temp')
     .insert({
       state_token: state,
