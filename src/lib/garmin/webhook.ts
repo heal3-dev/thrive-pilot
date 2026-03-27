@@ -12,6 +12,7 @@
 import crypto from 'crypto';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { hashParticipantId } from '@/lib/pseudonym-crypto';
+import * as Sentry from "@sentry/nextjs";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -423,6 +424,15 @@ export async function processDailySummary(
       summaryId: summary.summaryId,
       error: message,
     });
+    
+    Sentry.captureException(error, {
+      extra: {
+        summaryId: summary.summaryId,
+        userId: summary.userId,
+        calendarDate: summary.calendarDate,
+        processor: 'processDailySummary'
+      }
+    });
 
     if (result.participantId) {
       const pId = await resolvePseudonymId(result.participantId);
@@ -559,6 +569,15 @@ export async function processSleepSummary(
       summaryId: summary.summaryId,
       error: message,
     });
+    
+    Sentry.captureException(error, {
+      extra: {
+        summaryId: summary.summaryId,
+        userId: summary.userId,
+        calendarDate: summary.calendarDate,
+        processor: 'processSleepSummary'
+      }
+    });
 
     if (result.participantId) {
       const pId = await resolvePseudonymId(result.participantId);
@@ -674,6 +693,15 @@ export async function processHrvSummary(
     console.error('[GARMIN_WEBHOOK] processHrvSummary error:', {
       summaryId: summary.summaryId,
       error: message,
+    });
+    
+    Sentry.captureException(error, {
+      extra: {
+        summaryId: summary.summaryId,
+        userId: summary.userId,
+        calendarDate: summary.calendarDate,
+        processor: 'processHrvSummary'
+      }
     });
 
     if (result.participantId) {
@@ -821,6 +849,15 @@ export async function processStressDetailSummary(
     console.error('[GARMIN_WEBHOOK] processStressDetailSummary error:', {
       summaryId: summary.summaryId,
       error: message,
+    });
+    
+    Sentry.captureException(error, {
+      extra: {
+        summaryId: summary.summaryId,
+        userId: summary.userId,
+        calendarDate: summary.calendarDate,
+        processor: 'processStressDetailSummary'
+      }
     });
 
     if (result.participantId) {

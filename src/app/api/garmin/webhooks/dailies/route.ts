@@ -20,6 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from "@sentry/nextjs";
 import {
   verifyGarminSignature,
   processDailySummary,
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest) {
     rawBody = await request.text();
   } catch (err) {
     console.error('[GARMIN_WEBHOOK] Failed to read request body:', err);
+    Sentry.captureException(err, { extra: { context: "Failed to read request body" } });
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 
@@ -102,6 +104,7 @@ export async function POST(request: NextRequest) {
       isValid = verifyGarminSignature(rawBody, signature);
     } catch (error) {
       console.error('[GARMIN_WEBHOOK] Signature verification error:', error);
+      Sentry.captureException(error, { extra: { context: "Signature verification error" } });
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
@@ -134,8 +137,9 @@ export async function POST(request: NextRequest) {
   let payload: GarminWebhookPayload;
   try {
     payload = JSON.parse(rawBody) as GarminWebhookPayload;
-  } catch {
+  } catch (err) {
     console.error('[GARMIN_WEBHOOK] Invalid JSON body');
+    Sentry.captureException(err, { extra: { context: "Invalid JSON body", rawBody } });
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 

@@ -8,10 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   processSleepSummary,
-  type GarminWebhookPayload,
   type ProcessingResult,
 } from '@/lib/garmin/webhook';
 import { verifyWebhookAuth } from '@/lib/garmin/webhook-auth';
+import * as Sentry from "@sentry/nextjs";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     rawBody = await request.text();
   } catch (err) {
     console.error(`[${TAG}] Failed to read body:`, err);
+    Sentry.captureException(err, { extra: { context: "Failed to read request body", TAG } });
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 
@@ -48,11 +49,12 @@ export async function POST(request: NextRequest) {
   if (!auth.ok) return auth.response;
 
   // 3. Parse payload
-  let payload: GarminWebhookPayload;
+  let payload: any;
   try {
-    payload = JSON.parse(rawBody) as GarminWebhookPayload;
-  } catch {
+    payload = JSON.parse(rawBody);
+  } catch (err) {
     console.error(`[${TAG}] Invalid JSON body`);
+    Sentry.captureException(err, { extra: { context: "Invalid JSON body", TAG, rawBody } });
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
@@ -74,6 +76,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[${TAG}] Unexpected error:`, { summaryId: summary.summaryId, error: message });
+      Sentry.captureException(error, { extra: { context: "Unexpected error", TAG, summaryId: summary.summaryId } });
       results.push({
         summaryId: summary.summaryId ?? 'unknown',
         userId: summary.userId ?? 'unknown',
