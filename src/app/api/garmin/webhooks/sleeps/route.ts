@@ -49,16 +49,16 @@ export async function POST(request: NextRequest) {
   if (!auth.ok) return auth.response;
 
   // 3. Parse payload
-  let payload: any;
+  let payload: unknown;
   try {
-    payload = JSON.parse(rawBody);
+    payload = JSON.parse(rawBody) as unknown;
   } catch (err) {
     console.error(`[${TAG}] Invalid JSON body`);
     Sentry.captureException(err, { extra: { context: "Invalid JSON body", TAG, rawBody } });
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const sleeps = payload.sleeps;
+  const sleeps = (payload as { sleeps?: unknown }).sleeps;
   if (!Array.isArray(sleeps) || sleeps.length === 0) {
     console.log(`[${TAG}] No sleeps in payload — returning 200`);
     return NextResponse.json({ message: 'No sleeps to process' }, { status: 200 });

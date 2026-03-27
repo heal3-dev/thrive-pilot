@@ -47,16 +47,16 @@ export async function POST(request: NextRequest) {
   const auth = verifyWebhookAuth(request, rawBody, TAG);
   if (!auth.ok) return auth.response;
 
-  let payload: any;
+  let payload: unknown;
   try {
-    payload = JSON.parse(rawBody);
+    payload = JSON.parse(rawBody) as unknown;
   } catch (err) {
     console.error(`[${TAG}] Invalid JSON body`);
     Sentry.captureException(err, { extra: { context: "Invalid JSON body", TAG, rawBody } });
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const stressDetails = payload.stressDetails;
+  const stressDetails = (payload as { stressDetails?: unknown })?.stressDetails;
   if (!Array.isArray(stressDetails) || stressDetails.length === 0) {
     console.log(`[${TAG}] No stressDetails in payload — returning 200`);
     return NextResponse.json({ message: 'No stress data to process' }, { status: 200 });

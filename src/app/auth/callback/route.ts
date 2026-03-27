@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import type { EmailOtpType } from '@supabase/supabase-js'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -22,9 +23,10 @@ export async function GET(request: Request) {
 
   // OTP/token hash flow (magic links, invites with token_hash)
   if (token_hash && type) {
+    const otpType = type as EmailOtpType;
     const { error } = await supabase.auth.verifyOtp({
       token_hash,
-      type: type as any,
+      type: otpType,
     })
     if (error) {
       console.error('[AUTH_CALLBACK] OTP verification error:', error)
