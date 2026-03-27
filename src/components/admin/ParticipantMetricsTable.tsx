@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef, useCallback, useEffect } from "react";
+
 type ParticipantMetric = {
   id: string;
   metric_date: string;
@@ -17,6 +19,9 @@ type ParticipantMetric = {
 type ParticipantMetricsTableProps = {
   metrics: ParticipantMetric[];
   isLoading?: boolean;
+  isLoadingMore?: boolean;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
   emptyMessage?: string;
   className?: string;
 };
@@ -24,9 +29,30 @@ type ParticipantMetricsTableProps = {
 export function ParticipantMetricsTable({
   metrics,
   isLoading = false,
+  isLoadingMore = false,
+  hasMore = false,
+  onLoadMore,
   emptyMessage = "No metrics found.",
   className,
 }: ParticipantMetricsTableProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current || !hasMore || isLoadingMore || !onLoadMore) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    // Trigger when within 100px of the bottom
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+      onLoadMore();
+    }
+  }, [hasMore, isLoadingMore, onLoadMore]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
+
   if (isLoading) {
     return (
       <div className={className}>
@@ -53,7 +79,7 @@ export function ParticipantMetricsTable({
 
   return (
     <div className={className}>
-      <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+      <div ref={scrollRef} className="overflow-x-auto max-h-[70vh] overflow-y-auto">
         <table className="w-full text-sm text-left min-w-[700px]">
           <thead className="text-slate-500 bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
             <tr>
@@ -101,6 +127,26 @@ export function ParticipantMetricsTable({
             ))}
           </tbody>
         </table>
+
+        {/* Loading more indicator */}
+        {isLoadingMore && (
+          <div className="flex items-center justify-center py-4 border-t border-slate-100">
+            <div className="flex items-center gap-2 text-slate-400 text-sm">
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Loading more...
+            </div>
+          </div>
+        )}
+
+        {/* All loaded indicator */}
+        {!hasMore && metrics.length > 0 && !isLoadingMore && (
+          <div className="flex items-center justify-center py-3 border-t border-slate-100">
+            <span className="text-xs text-slate-400">All {metrics.length} entries loaded</span>
+          </div>
+        )}
       </div>
     </div>
   );

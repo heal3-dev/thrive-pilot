@@ -72,8 +72,20 @@ export async function GET(
     isConnected = Boolean(tokenData);
   }
 
+  // Pagination support
+  const offset = parseInt(request.nextUrl.searchParams.get("offset") || "0", 10);
+  const limit = parseInt(request.nextUrl.searchParams.get("limit") || "30", 10);
+  const clampedLimit = Math.min(Math.max(limit, 1), 100);
+
   let metricsData: Record<string, unknown>[] = [];
+  let totalCount = 0;
   if (pseudonymId) {
+    const { count } = await admin
+      .from("garmin_metrics")
+      .select("id", { count: "exact", head: true })
+      .eq("pseudonym_id", pseudonymId);
+    totalCount = count ?? 0;
+
     const { data: metrics, error: metricsError } = await admin
       .from("garmin_metrics")
       .select(
@@ -81,7 +93,7 @@ export async function GET(
       )
       .eq("pseudonym_id", pseudonymId)
       .order("metric_date", { ascending: false })
-      .limit(33);
+      .range(offset, offset + clampedLimit - 1);
 
     if (metricsError) {
       return NextResponse.json({ error: "Failed to fetch metrics" }, { status: 500 });
@@ -107,6 +119,7 @@ export async function GET(
     participant,
     is_connected: isConnected,
     metrics: metricsData,
-    flags: calculateFlags(typedMetrics),
+    flags: offset === 0 ? calculateFlags(typedMetrics) : [],
+    pagination: { offset, limit: clampedLimit, total: totalCount, hasMore: offset + clampedLimit < totalCount },
   });
 }

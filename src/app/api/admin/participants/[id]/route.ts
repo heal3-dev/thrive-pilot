@@ -51,15 +51,27 @@ export async function GET(
     isConnected = Boolean(tokenData);
   }
 
-  // 4. Fetch Metrics (Last 30 days) via pseudonym_id
+  // 4. Fetch Metrics via pseudonym_id (supports pagination)
+  const offset = parseInt(request.nextUrl.searchParams.get("offset") || "0", 10);
+  const limit = parseInt(request.nextUrl.searchParams.get("limit") || "30", 10);
+  const clampedLimit = Math.min(Math.max(limit, 1), 100);
+
   let metricsData: Record<string, unknown>[] = [];
+  let totalCount = 0;
   if (pseudonymId) {
+    // Get total count for pagination
+    const { count } = await supabase
+      .from("garmin_metrics")
+      .select("id", { count: "exact", head: true })
+      .eq("pseudonym_id", pseudonymId);
+    totalCount = count ?? 0;
+
     const { data: metrics, error: mError } = await supabase
       .from("garmin_metrics")
       .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
       .eq("pseudonym_id", pseudonymId)
       .order("metric_date", { ascending: false })
-      .limit(33);
+      .range(offset, offset + clampedLimit - 1);
 
     if (mError) {
       console.error(`[PARTICIPANT_DETAILS] Error fetching metrics:`, mError);
@@ -67,7 +79,7 @@ export async function GET(
     metricsData = metrics || [];
   }
 
-  // Calculate flags
+  // Calculate flags only on first page (most recent data)
   const typedMetrics: Metric[] = metricsData.map(m => ({
     id: m.id as string,
     metric_date: m.metric_date as string,
@@ -81,12 +93,13 @@ export async function GET(
     hrv_last_night_average: m.hrv_last_night_average as number | null,
     hrv_last_night_5_min_high: m.hrv_last_night_5_min_high as number | null,
   }));
-  const flags = calculateFlags(typedMetrics);
+  const flags = offset === 0 ? calculateFlags(typedMetrics) : [];
 
   return NextResponse.json({
     participant,
     is_connected: isConnected,
     metrics: metricsData,
     flags,
+    pagination: { offset, limit: clampedLimit, total: totalCount, hasMore: offset + clampedLimit < totalCount },
   });
 }

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useDashboard } from "@/app/dashboard/layout";
@@ -9,6 +9,8 @@ import { BackButton } from "@/components/ui/back-button";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 import { getDemoParticipant } from "@/lib/demo-data";
 import { type Metric, type Flag } from "@/lib/flags/rules";
+
+const PAGE_SIZE = 30;
 
 type Participant = {
   id: string;
@@ -29,8 +31,22 @@ export default function ParticipantDetailsPage() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [flags, setFlags] = useState<Flag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const getEndpoint = useCallback(
+    (offset: number) => {
+      const base =
+        mentor.role === "admin"
+          ? `/api/admin/participants/${id}`
+          : `/api/mentor/participants/${id}/metrics`;
+      return `${base}?offset=${offset}&limit=${PAGE_SIZE}`;
+    },
+    [id, mentor.role]
+  );
+
+  // Initial load
   useEffect(() => {
     // Handle demo participants (no API call needed)
     if (id.startsWith('demo-')) {
@@ -64,12 +80,7 @@ export default function ParticipantDetailsPage() {
           return;
         }
 
-        const detailsEndpoint =
-          mentor.role === "admin"
-            ? `/api/admin/participants/${id}`
-            : `/api/mentor/participants/${id}/metrics`;
-
-        const res = await fetch(detailsEndpoint, {
+        const res = await fetch(getEndpoint(0), {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -97,6 +108,7 @@ export default function ParticipantDetailsPage() {
         });
         setMetrics(json.metrics);
         setFlags(json.flags || []);
+        setHasMore(json.pagination?.hasMore ?? false);
       } catch (err) {
         console.error("Error loading details:", err);
         setError("An error occurred");
@@ -108,7 +120,33 @@ export default function ParticipantDetailsPage() {
     if (id) {
       fetchData();
     }
-  }, [id, mentor.role]);
+  }, [id, mentor.role, getEndpoint]);
+
+  // Load more handler
+  const handleLoadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore || id.startsWith('demo-')) return;
+    setIsLoadingMore(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+
+      const res = await fetch(getEndpoint(metrics.length), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) return;
+
+      const json = await res.json();
+      setMetrics(prev => [...prev, ...json.metrics]);
+      setHasMore(json.pagination?.hasMore ?? false);
+    } catch (err) {
+      console.error("Error loading more metrics:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, hasMore, id, metrics.length, getEndpoint]);
 
   if (isLoading) {
     return (
@@ -178,6 +216,9 @@ export default function ParticipantDetailsPage() {
 
         <ParticipantMetricsTable
           metrics={metrics}
+          isLoadingMore={isLoadingMore}
+          hasMore={hasMore}
+          onLoadMore={handleLoadMore}
           emptyMessage={`No metrics found.${participant.garmin_user_id ? " Wait for daily sync." : ""}`}
         />
       </div>
