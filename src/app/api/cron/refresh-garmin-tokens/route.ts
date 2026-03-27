@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { refreshGarminToken, GarminTokenRevokedError } from '@/lib/garmin/token-manager';
 
@@ -17,10 +18,28 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
+  const checkInId = Sentry.captureCheckIn(
+    {
+      monitorSlug: 'refresh-garmin-tokens',
+      status: 'in_progress',
+    },
+    {
+      schedule: { type: 'crontab', value: '0 6 * * *' },
+      checkinMargin: 10,
+      maxRuntime: 60,
+      timezone: 'UTC',
+    },
+  );
+
   // Verify the request is from Vercel Cron
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     console.warn('[CRON_REFRESH] Unauthorized request');
+    Sentry.captureCheckIn({
+      checkInId,
+      monitorSlug: 'refresh-garmin-tokens',
+      status: 'error',
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -34,11 +53,22 @@ export async function GET(request: NextRequest) {
 
   if (fetchError) {
     console.error('[CRON_REFRESH] Failed to fetch tokens:', fetchError.message);
+    Sentry.captureException(fetchError, { extra: { context: 'Failed to fetch tokens' } });
+    Sentry.captureCheckIn({
+      checkInId,
+      monitorSlug: 'refresh-garmin-tokens',
+      status: 'error',
+    });
     return NextResponse.json({ error: 'Failed to fetch tokens' }, { status: 500 });
   }
 
   if (!tokens || tokens.length === 0) {
     console.log('[CRON_REFRESH] No active tokens to refresh');
+    Sentry.captureCheckIn({
+      checkInId,
+      monitorSlug: 'refresh-garmin-tokens',
+      status: 'ok',
+    });
     return NextResponse.json({ message: 'No tokens to refresh', refreshed: 0, failed: 0, skipped: 0 });
   }
 
@@ -76,6 +106,12 @@ export async function GET(request: NextRequest) {
   }
 
   console.log('[CRON_REFRESH] Complete', { total: tokens.length, refreshed, failed, skipped });
+
+  Sentry.captureCheckIn({
+    checkInId,
+    monitorSlug: 'refresh-garmin-tokens',
+    status: failed > 0 ? 'error' : 'ok',
+  });
 
   return NextResponse.json({
     message: 'Token refresh complete',

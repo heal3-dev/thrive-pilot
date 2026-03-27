@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { verifyStateToken } from '@/lib/garmin/oauth-state';
@@ -38,6 +39,10 @@ export async function GET(request: NextRequest) {
   const state = request.nextUrl.searchParams.get('state');
 
   if (!code || !state) {
+    Sentry.captureMessage("[GARMIN_CALLBACK] Missing code/state", {
+      level: "warning",
+    });
+    await Sentry.flush(1500);
     return redirectToError(request, 'invalid_callback');
   }
 
@@ -51,8 +56,17 @@ export async function GET(request: NextRequest) {
   // Verify state token from encrypted HttpOnly cookie to prevent CSRF.
   const oauthState = await verifyStateToken(state);
   if (!oauthState) {
+    Sentry.captureMessage("[GARMIN_CALLBACK] CSRF state verification failed", {
+      level: "warning",
+    });
+    await Sentry.flush(1500);
     return signOutAndRedirectToError(supabase, request, 'csrf_failure');
   }
+
+  Sentry.setUser({ id: oauthState.user_id });
+  Sentry.setTag("flow", "garmin_connect");
+  Sentry.setTag("route", "api/garmin/callback");
+  Sentry.setContext('garmin', { participant_id_hash: hashParticipantId(oauthState.participant_id) });
 
   const { data: tempData, error: tempError } = await adminClient
     .from('garmin_oauth_temp')
@@ -62,10 +76,18 @@ export async function GET(request: NextRequest) {
 
   if (tempError) {
     console.error('[GARMIN_CALLBACK] Failed to read OAuth temp state:', tempError);
+    Sentry.captureException(tempError, {
+      extra: { context: "Failed to read OAuth temp state" },
+    });
+    await Sentry.flush(1500);
     return signOutAndRedirectToError(supabase, request, 'db_error');
   }
 
   if (!tempData) {
+    Sentry.captureMessage("[GARMIN_CALLBACK] No temp OAuth state row found", {
+      level: "warning",
+    });
+    await Sentry.flush(1500);
     return signOutAndRedirectToError(supabase, request, 'session_expired');
   }
 
@@ -74,6 +96,14 @@ export async function GET(request: NextRequest) {
       cookie_participant_id: oauthState.participant_id,
       temp_participant_id: tempData.participant_id,
     });
+    Sentry.captureMessage("[GARMIN_CALLBACK] State participant mismatch", {
+      level: "warning",
+      extra: {
+        cookie_participant_id: oauthState.participant_id,
+        temp_participant_id: tempData.participant_id,
+      },
+    });
+    await Sentry.flush(1500);
     return signOutAndRedirectToError(supabase, request, 'csrf_failure');
   }
 
@@ -82,6 +112,11 @@ export async function GET(request: NextRequest) {
       .from('garmin_oauth_temp')
       .delete()
       .eq('state_token', state);
+    Sentry.captureMessage("[GARMIN_CALLBACK] Temp OAuth state expired", {
+      level: "warning",
+      extra: { expires_at: tempData.expires_at },
+    });
+    await Sentry.flush(1500);
     return signOutAndRedirectToError(supabase, request, 'session_expired');
   }
 
@@ -93,6 +128,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[GARMIN_CALLBACK] Token exchange failed:', error);
+    Sentry.captureException(error, {
+      extra: { context: "Token exchange failed" },
+    });
+    await Sentry.flush(1500);
     return signOutAndRedirectToError(supabase, request, 'token_exchange_failed');
   }
 
@@ -129,10 +168,16 @@ export async function GET(request: NextRequest) {
 
     if (pseudonymError || !newPseudonym) {
       console.error('[GARMIN_CALLBACK] Failed to create pseudonym:', pseudonymError);
+      Sentry.captureException(pseudonymError ?? new Error("Failed to create pseudonym"), {
+        extra: { context: "Failed to create pseudonym" },
+      });
+      await Sentry.flush(1500);
       return signOutAndRedirectToError(supabase, request, 'db_error');
     }
     pseudonymId = newPseudonym.pseudonym_id;
   }
+
+  Sentry.setContext('garmin', { participant_id_hash: pidHash, pseudonym_id: pseudonymId });
 
   const { error: tokenInsertError } = await adminClient
     .from('garmin_tokens')
@@ -146,6 +191,10 @@ export async function GET(request: NextRequest) {
 
   if (tokenInsertError) {
     console.error('[GARMIN_CALLBACK] Failed to persist Garmin tokens:', tokenInsertError);
+    Sentry.captureException(tokenInsertError, {
+      extra: { context: "Failed to persist Garmin tokens" },
+    });
+    await Sentry.flush(1500);
     return signOutAndRedirectToError(supabase, request, 'db_error');
   }
 
@@ -165,9 +214,15 @@ export async function GET(request: NextRequest) {
 
     if (userIdError) {
       console.error('[GARMIN_CALLBACK] Failed to save garmin_user_id:', userIdError);
+      Sentry.captureException(userIdError, {
+        extra: { context: "Failed to save garmin_user_id" },
+      });
     }
   } catch (err) {
     console.error('[GARMIN_CALLBACK] Failed to fetch Garmin user ID:', err);
+    Sentry.captureException(err, {
+      extra: { context: "Failed to fetch Garmin user ID" },
+    });
   }
 
   const { error: auditError } = await adminClient.from('audit_logs').insert({
@@ -183,6 +238,9 @@ export async function GET(request: NextRequest) {
 
   if (auditError) {
     console.error('[GARMIN_CALLBACK] Failed to write audit log:', auditError);
+    Sentry.captureException(auditError, {
+      extra: { context: "Failed to write audit log" },
+    });
   }
 
   const { error: cleanupError } = await adminClient
@@ -192,11 +250,17 @@ export async function GET(request: NextRequest) {
 
   if (cleanupError) {
     console.error('[GARMIN_CALLBACK] Failed to clean up temp OAuth state:', cleanupError);
+    Sentry.captureException(cleanupError, {
+      extra: { context: "Failed to clean up temp OAuth state" },
+    });
   }
 
   const { error: signOutError } = await supabase.auth.signOut();
   if (signOutError) {
     console.error('[GARMIN_CALLBACK] Failed to sign out temporary session:', signOutError);
+    Sentry.captureException(signOutError, {
+      extra: { context: "Failed to sign out temporary session" },
+    });
   }
 
   return redirectToSuccess(request);
