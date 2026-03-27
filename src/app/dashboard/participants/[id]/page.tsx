@@ -172,9 +172,8 @@ export default function ParticipantDetailsPage() {
 
       {/* Metrics Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="font-semibold text-slate-800">Recent Daily Metrics</h3>
-          <span className="text-xs text-slate-400">Last 30 entries</span>
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-800">Daily Metrics</h3>
         </div>
 
         <ParticipantMetricsTable
