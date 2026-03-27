@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { generateStateToken } from '@/lib/garmin/oauth-state';
+import * as Sentry from '@sentry/nextjs';
 import { 
   getAuthorizationUrl, 
   generateCodeVerifier, 
@@ -24,19 +25,34 @@ export default async function GarminConnectPage({
   
   if (sessionError || !session || !user) {
     console.error('[GARMIN_CONNECT] No valid session:', sessionError);
+    if (sessionError) {
+      Sentry.captureException(sessionError, {
+        extra: { context: "No valid session during Garmin connect" },
+      });
+      await Sentry.flush(1500);
+    } else {
+      Sentry.captureMessage("[GARMIN_CONNECT] No valid session during Garmin connect", "warning");
+      await Sentry.flush(1500);
+    }
     redirect('/garmin/error?reason=invalid_link');
   }
   
+  Sentry.setUser({ id: user.id });
+  Sentry.setTag("flow", "garmin_connect");
+
   // Step 2: Get participant_id from URL searchParams (passed through auth callback)
   const participantId = params.participant_id;
   
   if (!participantId) {
     console.error('[GARMIN_CONNECT] Missing participant_id in searchParams');
+    Sentry.captureMessage("[GARMIN_CONNECT] Missing participant_id in searchParams", "warning");
+    await Sentry.flush(1500);
     redirect('/garmin/error?reason=missing_context');
   }
   
   // Step 3: Check if already connected (resolve via pseudonym)
   const pidHash = hashParticipantId(participantId);
+  Sentry.setContext('garmin', { participant_id_hash: pidHash });
   const { data: pseudonymRow } = await supabase
     .from('participant_pseudonyms')
     .select('pseudonym_id')
@@ -83,6 +99,10 @@ export default async function GarminConnectPage({
 
   if (tempInsertError) {
     console.error('[GARMIN_CONNECT] Failed to persist OAuth temp state:', tempInsertError);
+    Sentry.captureException(tempInsertError, {
+      extra: { context: "Failed to persist garmin_oauth_temp row" },
+    });
+    await Sentry.flush(1500);
     redirect('/garmin/error?reason=db_error');
   }
   

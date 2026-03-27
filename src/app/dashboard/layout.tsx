@@ -2,6 +2,7 @@
 
 import { useEffect, useState, createContext, useContext } from "react";
 import { useRouter } from "next/navigation";
+import * as Sentry from "@sentry/nextjs";
 import { signOut, getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,9 @@ export default function DashboardLayout({
         return;
       }
 
+      Sentry.setUser({ id: authUser.id });
+      Sentry.setTag("role", mentorData.role ?? "unknown");
+
       setUser(authUser);
       setMentor(mentorData);
       setIsLoading(false);
@@ -67,6 +71,7 @@ export default function DashboardLayout({
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
+    Sentry.setUser(null);
     await signOut();
     router.replace("/");
   };
