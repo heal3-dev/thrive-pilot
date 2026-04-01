@@ -231,7 +231,11 @@ async function resolvePseudonymId(participantId: string): Promise<string | null>
 // Raw record storage (append-only, pseudonymized)
 // ---------------------------------------------------------------------------
 
-type RawTable = 'garmin_raw_dailies' | 'garmin_raw_sleeps' | 'garmin_raw_hrv';
+type RawTable =
+  | 'garmin_raw_dailies'
+  | 'garmin_raw_sleeps'
+  | 'garmin_raw_hrv'
+  | 'garmin_raw_stress';
 
 /**
  * Sanitize a webhook payload before storage: strip OAuth tokens and other
@@ -733,9 +737,9 @@ export async function processHrvSummary(
  */
 function extractBodyBatteryScore(
   values: Record<string, number> | undefined,
-): { mostRecent: number | null; highest: number | null; lowest: number | null } {
+): { mostRecent: number | null; highest: number | null; lowest: number | null; start: number | null } {
   if (!values || Object.keys(values).length === 0) {
-    return { mostRecent: null, highest: null, lowest: null };
+    return { mostRecent: null, highest: null, lowest: null, start: null };
   }
 
   const entries = Object.entries(values)
@@ -743,11 +747,12 @@ function extractBodyBatteryScore(
     .sort((a, b) => a[0] - b[0]);
 
   const allValues = entries.map(([, v]) => v);
+  const start = entries[0][1];
   const mostRecent = entries[entries.length - 1][1];
   const highest = Math.max(...allValues);
   const lowest = Math.min(...allValues);
 
-  return { mostRecent, highest, lowest };
+  return { mostRecent, highest, lowest, start };
 }
 
 /**
@@ -766,6 +771,8 @@ export function mapStressToMetrics(
     body_battery_most_recent: bb.mostRecent,
     body_battery_highest: bb.highest,
     body_battery_lowest: bb.lowest,
+    body_battery_start: bb.start,
+    body_battery_time_offset_values: summary.timeOffsetBodyBatteryValues ?? null,
 
     updated_at: new Date().toISOString(),
   };
@@ -824,6 +831,8 @@ export async function processStressDetailSummary(
     if (!pseudonymId) {
       throw new Error(`No pseudonym found for participant ${participant.id}`);
     }
+
+    await insertRawRecord('garmin_raw_stress', pseudonymId, summary.userId, summary);
 
     const metricsRow = mapStressToMetrics(summary, pseudonymId);
 

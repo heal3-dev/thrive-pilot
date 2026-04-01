@@ -21,9 +21,11 @@ import {
   type GarminDailySummary,
   type GarminSleepSummary,
   type GarminHrvSummary,
+  type GarminStressDetailSummary,
   mapSummaryToMetrics,
   mapSleepToMetrics,
   mapHrvToMetrics,
+  mapStressToMetrics,
 } from '@/lib/garmin/webhook';
 import { GarminClient, GarminBackfillConflictError } from '@/lib/garmin/garmin-client';
 import { GarminTokenRevokedError } from '@/lib/garmin/token-manager';
@@ -35,6 +37,8 @@ import { GarminTokenRevokedError } from '@/lib/garmin/token-manager';
 const BACKFILL_DAILIES_PATH = '/wellness-api/rest/backfill/dailies';
 const BACKFILL_SLEEPS_PATH = '/wellness-api/rest/backfill/sleeps';
 const BACKFILL_HRV_PATH = '/wellness-api/rest/backfill/hrv';
+const BACKFILL_STRESS_DETAILS_PATH = '/wellness-api/rest/backfill/stressDetails';
+const BACKFILL_STRESS_FALLBACK_PATH = '/wellness-api/rest/backfill/stress';
 
 /** Max date range Garmin allows per backfill request (roughly 90 days). */
 const MAX_RANGE_DAYS = 90;
@@ -70,6 +74,7 @@ export interface BackfillResult {
   /** Breakdown of results by data type. */
   sleeps?: { imported: number; failed: number; skipped: number; asyncSubmitted?: boolean };
   hrv?: { imported: number; failed: number; skipped: number; asyncSubmitted?: boolean };
+  stress?: { imported: number; failed: number; skipped: number; asyncSubmitted?: boolean };
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +95,11 @@ function daysBetween(start: string, end: string): number {
 /** Sleep for `ms` milliseconds. */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isGarminNotFoundError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return /Garmin API error: 404\b/.test(err.message);
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +191,55 @@ async function fetchHrvFromGarmin(
   }
 
   console.warn('[GARMIN_PULL] Unexpected HRV response shape:', JSON.stringify(data).slice(0, 200));
+  return [];
+}
+
+/**
+ * Call the Garmin Backfill Stress Details endpoint and return the array of stress detail
+ * summaries (which include body battery time series).
+ *
+ * Garmin's documentation/partners have used slightly different endpoint names over time,
+ * so we try the canonical path first and fall back if Garmin responds 404.
+ */
+async function fetchStressDetailsFromGarmin(
+  client: GarminClient,
+  startEpoch: number,
+  endEpoch: number,
+): Promise<GarminStressDetailSummary[]> {
+  const candidates = [BACKFILL_STRESS_DETAILS_PATH, BACKFILL_STRESS_FALLBACK_PATH];
+
+  let lastErr: unknown = null;
+  for (const path of candidates) {
+    try {
+      const data = await client.get<
+        GarminStressDetailSummary[] | { stressDetails: GarminStressDetailSummary[] } | null
+      >(path, {
+        params: {
+          summaryStartTimeInSeconds: String(startEpoch),
+          summaryEndTimeInSeconds: String(endEpoch),
+        },
+      });
+
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray((data as { stressDetails?: GarminStressDetailSummary[] }).stressDetails)) {
+        return (data as { stressDetails: GarminStressDetailSummary[] }).stressDetails;
+      }
+
+      console.warn('[GARMIN_PULL] Unexpected stressDetails response shape:', JSON.stringify(data).slice(0, 200));
+      return [];
+    } catch (err) {
+      lastErr = err;
+      if (path === BACKFILL_STRESS_DETAILS_PATH && isGarminNotFoundError(err)) {
+        console.warn('[GARMIN_PULL] stressDetails endpoint not found; trying fallback path');
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  // Should be unreachable, but keep TypeScript happy.
+  if (lastErr) throw lastErr;
   return [];
 }
 
@@ -340,6 +399,100 @@ async function upsertHrv(
   return { imported, failed, skipped, errors };
 }
 
+/**
+ * Upsert a batch of stress detail summaries into `garmin_metrics`.
+ *
+ * Also stores the full payload in `garmin_raw_stress` as an audit trail.
+ */
+async function upsertStressDetails(
+  pseudonymId: string,
+  summaries: GarminStressDetailSummary[],
+): Promise<{ imported: number; failed: number; skipped: number; errors: string[] }> {
+  const supabase = getSupabaseAdmin();
+  let imported = 0;
+  let failed = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const summary of summaries) {
+    const startMs = Date.now();
+
+    if (summary.privacyProtected) {
+      skipped++;
+      await supabase.from('ingestion_logs').insert({
+        pseudonym_id: pseudonymId,
+        status: 'skipped',
+        error_message: 'Privacy-protected summary',
+        duration_ms: Date.now() - startMs,
+        date_processed: summary.calendarDate,
+        source: 'backfill-stress',
+      });
+      continue;
+    }
+
+    // Skip if no body battery time series in this summary
+    if (!summary.timeOffsetBodyBatteryValues || Object.keys(summary.timeOffsetBodyBatteryValues).length === 0) {
+      skipped++;
+      await supabase.from('ingestion_logs').insert({
+        pseudonym_id: pseudonymId,
+        status: 'skipped',
+        error_message: 'No body battery data in stress summary',
+        duration_ms: Date.now() - startMs,
+        date_processed: summary.calendarDate,
+        source: 'backfill-stress',
+      });
+      continue;
+    }
+
+    try {
+      // Store raw payload (append-only) for audit/debugging
+      const { error: rawError } = await supabase.from('garmin_raw_stress').insert({
+        pseudonym_id: pseudonymId,
+        garmin_user_id: summary.userId,
+        summary_id: summary.summaryId ?? null,
+        calendar_date: summary.calendarDate,
+        raw_data: summary,
+      });
+      if (rawError) {
+        throw new Error(`Raw insert failed: ${rawError.message}`);
+      }
+
+      const metricsRow = mapStressToMetrics(summary, pseudonymId);
+      const { error: upsertError } = await supabase
+        .from('garmin_metrics')
+        .upsert(metricsRow, { onConflict: 'pseudonym_id,metric_date' });
+
+      if (upsertError) throw new Error(`Upsert failed: ${upsertError.message}`);
+
+      imported++;
+
+      await supabase.from('ingestion_logs').insert({
+        pseudonym_id: pseudonymId,
+        status: 'success',
+        metrics_imported: 1,
+        duration_ms: Date.now() - startMs,
+        date_processed: summary.calendarDate,
+        source: 'backfill-stress',
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failed++;
+      errors.push(`stress ${summary.calendarDate}: ${message}`);
+
+      await supabase.from('ingestion_logs').insert({
+        pseudonym_id: pseudonymId,
+        status: 'failed',
+        error_message: message,
+        duration_ms: Date.now() - startMs,
+        date_processed: summary.calendarDate,
+        source: 'backfill-stress',
+      });
+    }
+  }
+
+  return { imported, failed, skipped, errors };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -443,10 +596,27 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
     }
   }
 
-  const allAsync = dailiesAsync && sleepsAsync && hrvAsync;
+  // --- Fetch stressDetails from Garmin ---
+  let stressSummaries: GarminStressDetailSummary[] = [];
+  let stressAsync = false;
+  try {
+    await sleep(RATE_LIMIT_DELAY_MS);
+    stressSummaries = await fetchStressDetailsFromGarmin(client, startEpoch, endEpoch);
+    if (stressSummaries.length === 0) stressAsync = true;
+  } catch (err) {
+    // Stress backfill failure is non-blocking
+    if (err instanceof GarminBackfillConflictError) {
+      console.warn('[GARMIN_PULL] Stress backfill conflict (cooldown):', err.message);
+      stressAsync = true;
+    } else {
+      console.error('[GARMIN_PULL] Failed to fetch stressDetails:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  const allAsync = dailiesAsync && sleepsAsync && hrvAsync && stressAsync;
 
   // --- Handle fully async backfill ---
-  if (allAsync && dailySummaries.length === 0 && sleepSummaries.length === 0 && hrvSummaries.length === 0) {
+  if (allAsync && dailySummaries.length === 0 && sleepSummaries.length === 0 && hrvSummaries.length === 0 && stressSummaries.length === 0) {
     console.log('[GARMIN_PULL] All backfills accepted async — data will arrive via webhooks', {
       participantId, startDate, endDate,
     });
@@ -464,6 +634,7 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
       asyncSubmitted: true,
       sleeps: { imported: 0, failed: 0, skipped: 0, asyncSubmitted: true },
       hrv: { imported: 0, failed: 0, skipped: 0, asyncSubmitted: true },
+      stress: { imported: 0, failed: 0, skipped: 0, asyncSubmitted: true },
     };
   }
 
@@ -480,13 +651,18 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
     ? await upsertHrv(pseudonymId, hrvSummaries)
     : { imported: 0, failed: 0, skipped: 0, errors: [] as string[] };
 
-  const allErrors = [...dailyResult.errors, ...sleepResult.errors, ...hrvResult.errors];
+  const stressResult = stressSummaries.length > 0
+    ? await upsertStressDetails(pseudonymId, stressSummaries)
+    : { imported: 0, failed: 0, skipped: 0, errors: [] as string[] };
+
+  const allErrors = [...dailyResult.errors, ...sleepResult.errors, ...hrvResult.errors, ...stressResult.errors];
 
   console.log('[GARMIN_PULL] Backfill complete:', {
     participantId,
     dailies: `${dailyResult.imported} imported, ${dailyResult.failed} failed`,
     sleeps: sleepsAsync ? 'async' : `${sleepResult.imported} imported, ${sleepResult.failed} failed`,
     hrv: hrvAsync ? 'async' : `${hrvResult.imported} imported, ${hrvResult.failed} failed`,
+    stress: stressAsync ? 'async' : `${stressResult.imported} imported, ${stressResult.failed} failed`,
   });
 
   return {
@@ -511,6 +687,12 @@ export async function runBackfill(req: BackfillRequest): Promise<BackfillResult>
       failed: hrvResult.failed,
       skipped: hrvResult.skipped,
       asyncSubmitted: hrvAsync,
+    },
+    stress: {
+      imported: stressResult.imported,
+      failed: stressResult.failed,
+      skipped: stressResult.skipped,
+      asyncSubmitted: stressAsync,
     },
   };
 }
