@@ -26,14 +26,14 @@ type AssignedMentor = {
   unassigned_at: string | null;
 };
 
-import type { Flag } from "@/lib/flags/rules";
+import type { WeeklyFlag } from "@/lib/flags/rules";
 import { DEMO_PARTICIPANTS } from "@/lib/demo-data";
 
 type ParticipantRow = Participant & {
   assigned_mentor: AssignedMentor | null;
   is_unverified?: boolean;
   garmin_connected?: boolean;
-  flags?: Flag[]; // Add flags array
+  weekly_flag?: WeeklyFlag | null;
 };
 
 type AssignmentHistoryRow = {
@@ -160,7 +160,7 @@ export function ParticipantManagement({
         is_active: true,
         garmin_connected: true,
         assigned_mentor: null,
-        flags: p.flags,
+        weekly_flag: p.weekly_flag,
         created_at: p.garmin_connected_at,
       }));
       setParticipants(demoRows);
@@ -510,11 +510,11 @@ export function ParticipantManagement({
             <colgroup>
               <col className="w-[12%]" />
               <col className="w-[15%]" />
-              <col className="w-[19%]" />
+              <col className="w-[21%]" />
               <col className="w-[17%]" />
-              <col className="w-[8%]" />
               <col className="w-[12%]" />
-              <col className="w-[17%]" />
+              <col className="w-[9%]" />
+              <col className="w-[14%]" />
             </colgroup>
             <thead className="bg-slate-100 border-b border-slate-100">
               <tr>
@@ -523,8 +523,8 @@ export function ParticipantManagement({
                 <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Email</th>
                 <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Mentor</th>
                 <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Status & Flags</th>
-                <th className="text-center px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Garmin</th>
-                <th className="text-right px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Actions</th>
+                <th className="text-center px-2 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Garmin</th>
+                <th className="text-right px-2 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -578,25 +578,32 @@ export function ParticipantManagement({
                           </span>
                         )}
                         
-                        {/* Render Flags */}
-                        {p.flags?.map((flag, idx) => (
-                           <span 
-                             key={idx}
-                             className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold border ${
-                               flag.severity === 'alert' 
-                                 ? 'bg-red-50 text-red-700 border-red-200' 
-                                 : flag.severity === 'warning'
-                                 ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                 : 'bg-blue-50 text-blue-700 border-blue-200'
-                             }`}
-                             title={flag.message}
-                           >
-                             {flag.type.replace('_', ' ')}
-                           </span>
-                        ))}
+                        {p.weekly_flag && (
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-bold border whitespace-nowrap ${
+                              p.weekly_flag.finalColor === "red"
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : p.weekly_flag.finalColor === "orange"
+                                ? "bg-orange-50 text-orange-700 border-orange-200"
+                                : p.weekly_flag.finalColor === "yellow"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            }`}
+                            title={`Weekly score: ${p.weekly_flag.weeklyScore}/24`}
+                          >
+                            Weekly{" "}
+                            {p.weekly_flag.finalColor === "green"
+                              ? "🟢"
+                              : p.weekly_flag.finalColor === "yellow"
+                              ? "🟡"
+                              : p.weekly_flag.finalColor === "orange"
+                              ? "🟠"
+                              : "🔴"}
+                          </span>
+                        )}
                       </div>
                     </td>
-                    <td className="px-3 py-4 text-center">
+                    <td className="px-2 py-4 text-center">
                       {!p.is_unverified && mode === "mentor-trends" && (
                         <span className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
                           isConnected ? "bg-teal-100 text-teal-700" : "bg-slate-100 text-slate-600"
@@ -611,7 +618,7 @@ export function ParticipantManagement({
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
                             disabled={backfillLoadingId === p.id}
-                            className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center"
+                            className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2"
                           >
                             {backfillLoadingId === p.id ? (
                               <span className="flex items-center gap-1">
@@ -630,14 +637,14 @@ export function ParticipantManagement({
                             variant="ghost"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleConnectGarmin(p); }}
-                            className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center"
+                            className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center px-2"
                           >
                             Connect Garmin
                           </Button>
                         )
                       )}
                     </td>
-                    <td className="px-3 py-4">
+                    <td className="px-2 py-4">
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                         {mode === "trends" || mode === "mentor-trends" ? (
                           <Button

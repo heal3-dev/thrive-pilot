@@ -6,7 +6,7 @@
  * to prove the flagging rules work without touching the database.
  */
 
-import { type Metric, calculateFlags, type Flag } from '@/lib/flags/rules';
+import { type Metric, computeWeeklyFlagFromMetrics, type WeeklyFlag } from '@/lib/flags/rules';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,7 +22,7 @@ export interface DemoParticipant {
   garmin_connected: boolean;
   is_active: boolean;
   phone_number: string;
-  flags: Flag[];
+  weekly_flag: WeeklyFlag | null;
   metrics: Metric[];
 }
 
@@ -40,6 +40,11 @@ function makeMetric(
   daysBack: number,
   overrides: Partial<Omit<Metric, 'id' | 'metric_date'>>,
 ): Metric {
+  const derivedMostRecent =
+    overrides.body_battery_most_recent !== undefined
+      ? overrides.body_battery_most_recent
+      : null;
+
   return {
     id: `demo-metric-${daysBack}-${Math.random().toString(36).slice(2, 8)}`,
     metric_date: daysAgo(daysBack),
@@ -47,8 +52,11 @@ function makeMetric(
     average_stress_level: null,
     sleep_duration_seconds: null,
     sleep_score: null,
+    awake_seconds: null,
     body_battery_charged: null,
     body_battery_drained: null,
+    body_battery_start: derivedMostRecent,
+    body_battery_lowest: derivedMostRecent,
     body_battery_most_recent: null,
     hrv_last_night_average: null,
     hrv_last_night_5_min_high: null,
@@ -58,7 +66,8 @@ function makeMetric(
 
 /** Generate 33 days of "normal" baseline data with customizable defaults. */
 function generateBaseline(defaults: Partial<Omit<Metric, 'id' | 'metric_date'>>): Metric[] {
-  return Array.from({ length: 33 }, (_, i) => makeMetric(i, defaults));
+  const withWASO = { awake_seconds: 1200, ...defaults }; // default 20 min awake (good WASO)
+  return Array.from({ length: 33 }, (_, i) => makeMetric(i, withWASO));
 }
 
 // ---------------------------------------------------------------------------
@@ -274,8 +283,11 @@ export function getDemoMetrics(participantId: string): Metric[] {
   return generator ? generator() : [];
 }
 
-export function getDemoFlags(participantId: string): Flag[] {
-  return calculateFlags(getDemoMetrics(participantId));
+export function getDemoWeeklyFlag(participantId: string): WeeklyFlag | null {
+  const metrics = getDemoMetrics(participantId);
+  if (!metrics.length) return null;
+  const weekEnding = new Date().toISOString().slice(0, 10);
+  return computeWeeklyFlagFromMetrics(metrics, weekEnding);
 }
 
 // ---------------------------------------------------------------------------
@@ -295,7 +307,8 @@ function buildDemoParticipants(): DemoParticipant[] {
 
   return raw.map((p) => {
     const metrics = getDemoMetrics(p.id);
-    const flags = calculateFlags(metrics);
+    const weekEnding = new Date().toISOString().slice(0, 10);
+    const weekly_flag = metrics.length ? computeWeeklyFlagFromMetrics(metrics, weekEnding) : null;
     return {
       id: p.id,
       name: p.name,
@@ -306,7 +319,7 @@ function buildDemoParticipants(): DemoParticipant[] {
       is_connected: true,
       garmin_connected: true,
       is_active: true,
-      flags,
+      weekly_flag,
       metrics,
     };
   });

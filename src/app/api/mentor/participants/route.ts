@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireMentor } from "@/app/api/_utils";
-import { calculateFlags, type Metric } from "@/lib/flags/rules";
+import { computeWeeklyFlagFromMetrics, type Metric, type WeeklyFlag } from "@/lib/flags/rules";
 import { hashParticipantId } from "@/lib/pseudonym-crypto";
 
 export async function GET(request: Request) {
@@ -83,7 +83,7 @@ export async function GET(request: Request) {
   }
 
   const fourDaysAgo = new Date();
-  fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+  fourDaysAgo.setDate(fourDaysAgo.getDate() - 42);
   const dateStr = fourDaysAgo.toISOString().split("T")[0];
 
   let metricsData: {
@@ -93,8 +93,11 @@ export async function GET(request: Request) {
     average_stress_level: number | null;
     sleep_duration_seconds: number | null;
     sleep_score: number | null;
+    awake_seconds: number | null;
     body_battery_charged: number | null;
     body_battery_drained: number | null;
+    body_battery_start: number | null;
+    body_battery_lowest: number | null;
     body_battery_most_recent: number | null;
     hrv_last_night_average: number | null;
     hrv_last_night_5_min_high: number | null;
@@ -104,7 +107,7 @@ export async function GET(request: Request) {
     const { data: fetchedMetrics, error: metricsError } = await admin
       .from("garmin_metrics")
       .select(
-        "pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high"
+        "pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high"
       )
       .in("pseudonym_id", pseudonymIds)
       .gte("metric_date", dateStr)
@@ -130,14 +133,18 @@ export async function GET(request: Request) {
       average_stress_level: metric.average_stress_level,
       sleep_duration_seconds: metric.sleep_duration_seconds,
       sleep_score: metric.sleep_score,
+      awake_seconds: (metric as unknown as { awake_seconds?: number | null }).awake_seconds ?? null,
       body_battery_charged: metric.body_battery_charged,
       body_battery_drained: metric.body_battery_drained,
+      body_battery_start: metric.body_battery_start,
+      body_battery_lowest: metric.body_battery_lowest,
       body_battery_most_recent: metric.body_battery_most_recent,
       hrv_last_night_average: metric.hrv_last_night_average,
       hrv_last_night_5_min_high: metric.hrv_last_night_5_min_high,
     });
   }
 
+  const weekEnding = new Date().toISOString().slice(0, 10);
   const participants = (participantsData ?? []).map((p) => ({
     ...p,
     garmin_connected:
@@ -152,7 +159,10 @@ export async function GET(request: Request) {
           unassigned_at: assignmentMap.get(p.id)?.unassigned_at ?? null,
         }
       : null,
-    flags: calculateFlags(metricsByParticipant.get(p.id) ?? []),
+    weekly_flag: (() => {
+      const m = metricsByParticipant.get(p.id) ?? [];
+      return m.length ? (computeWeeklyFlagFromMetrics(m, weekEnding) as WeeklyFlag) : null;
+    })(),
   }));
 
   return NextResponse.json({ participants });

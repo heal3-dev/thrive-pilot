@@ -1,8 +1,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/app/api/admin/_utils";
-import { calculateFlags, type Metric } from "@/lib/flags/rules";
+import { computeWeeklyFlagFromMetrics, type Metric, type WeeklyFlag } from "@/lib/flags/rules";
 import { hashParticipantId } from "@/lib/pseudonym-crypto";
+
+function ymdAddDays(ymd: string, deltaDays: number): string {
+  const d = new Date(`${ymd}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
+}
 
 export async function GET(
   request: NextRequest,
@@ -68,7 +74,7 @@ export async function GET(
 
     const { data: metrics, error: mError } = await supabase
       .from("garmin_metrics")
-      .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
+      .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
       .eq("pseudonym_id", pseudonymId)
       .order("metric_date", { ascending: false })
       .range(offset, offset + clampedLimit - 1);
@@ -79,27 +85,63 @@ export async function GET(
     metricsData = metrics || [];
   }
 
-  // Calculate flags only on first page (most recent data)
-  const typedMetrics: Metric[] = metricsData.map(m => ({
-    id: m.id as string,
-    metric_date: m.metric_date as string,
-    resting_heart_rate: m.resting_heart_rate as number | null,
-    average_stress_level: m.average_stress_level as number | null,
-    sleep_duration_seconds: m.sleep_duration_seconds as number | null,
-    sleep_score: m.sleep_score as number | null,
-    body_battery_charged: m.body_battery_charged as number | null,
-    body_battery_drained: m.body_battery_drained as number | null,
-    body_battery_most_recent: m.body_battery_most_recent as number | null,
-    hrv_last_night_average: m.hrv_last_night_average as number | null,
-    hrv_last_night_5_min_high: m.hrv_last_night_5_min_high as number | null,
-  }));
-  const flags = offset === 0 ? calculateFlags(typedMetrics) : [];
+  const weekEnding = new Date().toISOString().slice(0, 10);
+  let weekly_flag: WeeklyFlag | null = null;
+  if (offset === 0 && pseudonymId) {
+    const since = ymdAddDays(weekEnding, -40);
+    const { data: weeklyMetrics } = await supabase
+      .from("garmin_metrics")
+      .select(
+        "id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high"
+      )
+      .eq("pseudonym_id", pseudonymId)
+      .gte("metric_date", since)
+      .lte("metric_date", weekEnding)
+      .order("metric_date", { ascending: false });
+
+    const weeklyTyped: Metric[] = (weeklyMetrics ?? []).map((m) => ({
+      id: m.id as string,
+      metric_date: m.metric_date as string,
+      resting_heart_rate: m.resting_heart_rate as number | null,
+      average_stress_level: m.average_stress_level as number | null,
+      sleep_duration_seconds: m.sleep_duration_seconds as number | null,
+      sleep_score: m.sleep_score as number | null,
+      awake_seconds: (m as unknown as { awake_seconds?: number | null }).awake_seconds ?? null,
+      body_battery_charged: m.body_battery_charged as number | null,
+      body_battery_drained: m.body_battery_drained as number | null,
+      body_battery_start: m.body_battery_start as number | null,
+      body_battery_lowest: m.body_battery_lowest as number | null,
+      body_battery_most_recent: m.body_battery_most_recent as number | null,
+      hrv_last_night_average: m.hrv_last_night_average as number | null,
+      hrv_last_night_5_min_high: m.hrv_last_night_5_min_high as number | null,
+    }));
+
+    weekly_flag = computeWeeklyFlagFromMetrics(weeklyTyped, weekEnding);
+
+    // Best-effort persistence (non-blocking for UI)
+    try {
+      await supabase.from("weekly_flags").upsert(
+        {
+          pseudonym_id: pseudonymId,
+          week_ending: weekEnding,
+          weekly_score: weekly_flag.weeklyScore,
+          base_color: weekly_flag.baseColor,
+          final_color: weekly_flag.finalColor,
+          override_applied: weekly_flag.overrideApplied,
+          metrics: weekly_flag.metrics,
+        },
+        { onConflict: "pseudonym_id,week_ending" }
+      );
+    } catch (e) {
+      console.error("[WEEKLY_FLAGS] Failed to upsert weekly flag", e);
+    }
+  }
 
   return NextResponse.json({
     participant,
     is_connected: isConnected,
     metrics: metricsData,
-    flags,
+    weekly_flag,
     pagination: { offset, limit: clampedLimit, total: totalCount, hasMore: offset + clampedLimit < totalCount },
   });
 }

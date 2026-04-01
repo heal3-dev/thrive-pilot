@@ -8,7 +8,7 @@ import { useDashboard } from "@/app/dashboard/layout";
 import { BackButton } from "@/components/ui/back-button";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 import { getDemoParticipant } from "@/lib/demo-data";
-import { type Metric, type Flag } from "@/lib/flags/rules";
+import { type Metric, type WeeklyFlag } from "@/lib/flags/rules";
 
 const PAGE_SIZE = 30;
 
@@ -29,7 +29,7 @@ export default function ParticipantDetailsPage() {
 
   const [participant, setParticipant] = useState<Participant | null>(null);
   const [metrics, setMetrics] = useState<Metric[]>([]);
-  const [flags, setFlags] = useState<Flag[]>([]);
+  const [weeklyFlag, setWeeklyFlag] = useState<WeeklyFlag | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -61,7 +61,7 @@ export default function ParticipantDetailsPage() {
           is_connected: true,
         });
         setMetrics(demo.metrics);
-        setFlags(demo.flags);
+        setWeeklyFlag(demo.weekly_flag);
       } else {
         setError("Demo participant not found");
       }
@@ -107,7 +107,7 @@ export default function ParticipantDetailsPage() {
           is_connected: json.is_connected
         });
         setMetrics(json.metrics);
-        setFlags(json.flags || []);
+        setWeeklyFlag(json.weekly_flag || null);
         setHasMore(json.pagination?.hasMore ?? false);
       } catch (err) {
         console.error("Error loading details:", err);
@@ -174,28 +174,29 @@ export default function ParticipantDetailsPage() {
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-6xl mx-auto">
+    <div className="h-full min-h-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <BackButton onClick={() => router.back()} />
         <div className="text-right">
           <h1 className="text-2xl font-bold text-slate-900 flex items-center justify-end gap-3">
             {participant.name || participant.email}
-            {flags.map((flag, idx) => (
-              <span 
-                key={idx}
-                className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-medium border ${
-                  flag.severity === 'alert' 
-                    ? 'bg-red-50 text-red-700 border-red-200' 
-                    : flag.severity === 'warning'
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-blue-50 text-blue-700 border-blue-200'
+            {weeklyFlag && (
+              <span
+                className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-semibold border ${
+                  weeklyFlag.finalColor === "red"
+                    ? "bg-red-50 text-red-700 border-red-200"
+                    : weeklyFlag.finalColor === "orange"
+                    ? "bg-orange-50 text-orange-700 border-orange-200"
+                    : weeklyFlag.finalColor === "yellow"
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
                 }`}
-                title={flag.message}
+                title={`Weekly score: ${weeklyFlag.weeklyScore}/24`}
               >
-                {flag.message}
+                Weekly {weeklyFlag.finalColor === "green" ? "🟢" : weeklyFlag.finalColor === "yellow" ? "🟡" : weeklyFlag.finalColor === "orange" ? "🟠" : "🔴"}
               </span>
-            ))}
+            )}
           </h1>
           <p className="text-slate-500 text-sm">
             Garmin Status:{" "}
@@ -216,6 +217,8 @@ export default function ParticipantDetailsPage() {
 
         <ParticipantMetricsTable
           metrics={metrics}
+          weeklyFlag={weeklyFlag}
+          edgePadding="lg"
           isLoadingMore={isLoadingMore}
           hasMore={hasMore}
           onLoadMore={handleLoadMore}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 import type { Participant, SMSMessage } from "@/types";
+import type { WeeklyFlag } from "@/lib/flags/rules";
 
 type ParticipantWithAssignment = Participant & {
   assignment_id: string;
@@ -24,8 +25,11 @@ type HealthMetric = {
   average_stress_level: number | null;
   sleep_duration_seconds: number | null;
   sleep_score: number | null;
+  awake_seconds?: number | null;
   body_battery_charged: number | null;
   body_battery_drained: number | null;
+  body_battery_start: number | null;
+  body_battery_lowest: number | null;
   body_battery_most_recent: number | null;
   hrv_last_night_average: number | null;
   hrv_last_night_5_min_high: number | null;
@@ -56,6 +60,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const [healthPanelWidth, setHealthPanelWidth] = useState(380);
   const [isResizingHealthPanel, setIsResizingHealthPanel] = useState(false);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetric[]>([]);
+  const [healthWeeklyFlag, setHealthWeeklyFlag] = useState<WeeklyFlag | null>(null);
   const [isLoadingHealthMetrics, setIsLoadingHealthMetrics] = useState(false);
   const [healthMetricsError, setHealthMetricsError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -182,6 +187,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
     setIsLoadingHealthMetrics(true);
     setHealthMetricsError(null);
     setHealthMetrics([]);
+    setHealthWeeklyFlag(null);
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -203,8 +209,10 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
 
       const json = await response.json();
       setHealthMetrics((json.metrics as HealthMetric[]) ?? []);
+      setHealthWeeklyFlag((json.weekly_flag as WeeklyFlag) ?? null);
     } catch (err) {
       setHealthMetrics([]);
+      setHealthWeeklyFlag(null);
       setHealthMetricsError(err instanceof Error ? err.message : "Failed to load health trends");
     } finally {
       setIsLoadingHealthMetrics(false);
@@ -903,6 +911,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
             ) : (
               <ParticipantMetricsTable
                 metrics={healthMetrics}
+                weeklyFlag={healthWeeklyFlag}
                 isLoading={isLoadingHealthMetrics}
                 emptyMessage="No metrics found for this participant yet."
                 className="h-full"
@@ -938,6 +947,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
             ) : (
               <ParticipantMetricsTable
                 metrics={healthMetrics}
+                weeklyFlag={healthWeeklyFlag}
                 isLoading={isLoadingHealthMetrics}
                 emptyMessage="No metrics found for this participant yet."
               />

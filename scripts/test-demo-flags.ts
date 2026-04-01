@@ -1,9 +1,12 @@
-import { getDemoFlags, DEMO_PARTICIPANTS } from '@/lib/demo-data';
+import { getDemoWeeklyFlag, DEMO_PARTICIPANTS } from '@/lib/demo-data';
 
-console.log("Demo Flags:");
+console.log("Demo Weekly Flags:");
 for (const p of DEMO_PARTICIPANTS) {
   console.log(`\nParticipant: ${p.name}`);
-  for (const flag of p.flags) {
-    console.log(`- [${flag.severity}] ${flag.type}: ${flag.message}`);
+  const wf = getDemoWeeklyFlag(p.id) ?? p.weekly_flag;
+  if (!wf) {
+    console.log("- (no weekly flag)");
+    continue;
   }
+  console.log(`- Final: ${wf.finalColor.toUpperCase()} (score ${wf.weeklyScore}/24, base ${wf.baseColor.toUpperCase()}, override ${wf.overrideApplied})`);
 }

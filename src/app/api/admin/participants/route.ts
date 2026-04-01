@@ -12,7 +12,7 @@ const createParticipantSchema = z.object({
   sendInvite: z.boolean().optional(),
 });
 
-import { calculateFlags, Metric } from "@/lib/flags/rules";
+import { computeWeeklyFlagFromMetrics, Metric, WeeklyFlag } from "@/lib/flags/rules";
 
 // ... (rest of imports)
 
@@ -81,15 +81,14 @@ export async function GET(request: Request) {
     (garminTokensData ?? []).map((token) => token.pseudonym_id)
   );
 
-  // Fetch recent metrics for flagging (last 33 days via pseudonym_id)
-  // Need 3 evaluation days + up to 30 baseline days for baseline-relative flags.
-  const thirtyThreeDaysAgo = new Date();
-  thirtyThreeDaysAgo.setDate(thirtyThreeDaysAgo.getDate() - 33);
-  const dateStr = thirtyThreeDaysAgo.toISOString().split('T')[0];
+  // Fetch recent metrics for weekly flagging (needs current 7-day window + 28-day baseline)
+  const fortyTwoDaysAgo = new Date();
+  fortyTwoDaysAgo.setDate(fortyTwoDaysAgo.getDate() - 42);
+  const dateStr = fortyTwoDaysAgo.toISOString().split('T')[0];
 
   const { data: metricsData } = await admin
     .from("garmin_metrics")
-    .select("pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, body_battery_charged, body_battery_drained, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
+    .select("pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
     .gte("metric_date", dateStr)
     .order("metric_date", { ascending: false });
 
@@ -109,8 +108,11 @@ export async function GET(request: Request) {
         average_stress_level: m.average_stress_level,
         sleep_duration_seconds: m.sleep_duration_seconds,
         sleep_score: m.sleep_score,
+        awake_seconds: (m as unknown as { awake_seconds?: number | null }).awake_seconds ?? null,
         body_battery_charged: m.body_battery_charged,
         body_battery_drained: m.body_battery_drained,
+        body_battery_start: (m as unknown as { body_battery_start: number | null }).body_battery_start,
+        body_battery_lowest: (m as unknown as { body_battery_lowest: number | null }).body_battery_lowest,
         body_battery_most_recent: m.body_battery_most_recent,
         hrv_last_night_average: m.hrv_last_night_average,
         hrv_last_night_5_min_high: m.hrv_last_night_5_min_high,
@@ -138,16 +140,17 @@ export async function GET(request: Request) {
   }
 
   // Enrich participants with mentor info AND flags
+  const weekEnding = new Date().toISOString().slice(0, 10);
   const participants = (participantsData ?? []).map((p) => {
     const pMetrics = metricsByParticipant.get(p.id) || [];
-    const flags = calculateFlags(pMetrics);
+    const weekly_flag: WeeklyFlag | null = pMetrics.length ? computeWeeklyFlagFromMetrics(pMetrics, weekEnding) : null;
 
     return {
       ...p,
       garmin_connected:
         Boolean(p.garmin_user_id) || connectedPseudonymIds.has(participantToPseudonym.get(p.id) ?? ''),
       assigned_mentor: assignmentMap.get(p.id) ?? null,
-      flags, // Attach flags
+      weekly_flag,
     };
   });
 
@@ -184,7 +187,7 @@ export async function GET(request: Request) {
             garmin_connected: false,
             is_unverified: true,
             assigned_mentor: null,
-            flags: [], // No flags for unverified
+            weekly_flag: null,
           };
         });
     }
