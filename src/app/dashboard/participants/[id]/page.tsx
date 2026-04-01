@@ -9,6 +9,7 @@ import { BackButton } from "@/components/ui/back-button";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 import { getDemoParticipant } from "@/lib/demo-data";
 import { type Metric, type WeeklyFlag } from "@/lib/flags/rules";
+import { weeklyCompositeTooltip } from "@/lib/flags/weekly-tooltips";
 
 const PAGE_SIZE = 30;
 
@@ -183,7 +184,7 @@ export default function ParticipantDetailsPage() {
             {participant.name || participant.email}
             {weeklyFlag && (
               <span
-                className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-semibold border ${
+                className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-semibold border cursor-help ${
                   weeklyFlag.finalColor === "red"
                     ? "bg-red-50 text-red-700 border-red-200"
                     : weeklyFlag.finalColor === "orange"
@@ -192,7 +193,7 @@ export default function ParticipantDetailsPage() {
                     ? "bg-amber-50 text-amber-700 border-amber-200"
                     : "bg-emerald-50 text-emerald-700 border-emerald-200"
                 }`}
-                title={`Weekly score: ${weeklyFlag.weeklyScore}/24`}
+                title={weeklyCompositeTooltip(weeklyFlag)}
               >
                 Weekly {weeklyFlag.finalColor === "green" ? "🟢" : weeklyFlag.finalColor === "yellow" ? "🟡" : weeklyFlag.finalColor === "orange" ? "🟠" : "🔴"}
               </span>

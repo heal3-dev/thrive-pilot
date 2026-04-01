@@ -167,37 +167,54 @@ function getBaselineMedian(
 }
 
 function classifyBodyBattery(
-  startVals: (number | null)[],
-  lowVals: (number | null)[],
+  startValsNewestFirst: number[],
   additionalPrimaryFlag: boolean,
 ): WeeklyMetricResult {
-  const inStart = (lo: number, hi: number) => (v: number | null) => v != null && v >= lo && v <= hi;
-  const le = (x: number) => (v: number | null) => v != null && v <= x;
-  const ge = (x: number) => (v: number | null) => v != null && v >= x;
-
-  if (startVals.length !== 7 || lowVals.length !== 7) {
-    return { metric: 'body_battery', color: 'no_data', points: 3 };
+  // Per docs screenshot: Body Battery uses morning Start values only.
+  // Valid day: body_battery_start IS NOT NULL.
+  // If we have too few days, treat as not enough data (do not penalize score).
+  if (startValsNewestFirst.length < 4) {
+    return { metric: "body_battery", color: "no_data", points: 0 };
   }
 
-  const red =
+  const startVals = [...startValsNewestFirst].reverse(); // oldest -> newest for streak checks
+  const inRange = (lo: number, hi: number) => (v: number) => v >= lo && v <= hi;
+  const le = (x: number) => (v: number) => v <= x;
+  const ge = (x: number) => (v: number) => v >= x;
+
+  // RED
+  if (
     maxConsecutive(startVals, le(25)) >= 3 ||
-    (startVals.filter(le(35)).length >= 4 && additionalPrimaryFlag) ||
-    maxConsecutive(startVals.map((v, i) => (v != null && v <= 15 && (lowVals[i] ?? null) != null && (lowVals[i] as number) < 15 ? 1 : 0)), (v) => v === 1) >= 2;
-  if (red) return { metric: 'body_battery', color: 'red', points: POINTS.red };
+    maxConsecutive(startVals, le(15)) >= 2 ||
+    (additionalPrimaryFlag && maxConsecutive(startVals, le(35)) >= 4)
+  ) {
+    return { metric: "body_battery", color: "red", points: POINTS.red };
+  }
 
-  const orange =
-    maxConsecutive(startVals, inStart(26, 50)) >= 5 ||
-    maxConsecutive(startVals, le(35)) >= 4 ||
-    maxConsecutive(lowVals, le(25)) >= 3;
-  if (orange) return { metric: 'body_battery', color: 'orange', points: POINTS.orange };
+  // ORANGE
+  if (
+    maxConsecutive(startVals, inRange(26, 50)) >= 5 ||
+    maxConsecutive(startVals, le(35)) >= 4
+  ) {
+    return { metric: "body_battery", color: "orange", points: POINTS.orange };
+  }
 
-  const yellow =
-    maxWindowCount(startVals, 5, inStart(26, 60)) >= 3 ||
-    maxWindowCount(lowVals, 5, inStart(15, 25)) >= 3;
-  if (yellow) return { metric: 'body_battery', color: 'yellow', points: POINTS.yellow };
+  // YELLOW (docs excerpt: 26–50 for ≥3 days within 5 days)
+  const window = Math.min(5, startVals.length);
+  const lastWindow = startVals.slice(-window);
+  if (lastWindow.filter(inRange(26, 50)).length >= 3) {
+    return { metric: "body_battery", color: "yellow", points: POINTS.yellow };
+  }
 
-  const green = startVals.filter(ge(51)).length >= 4 && lowVals.filter(ge(25)).length >= 4;
-  return { metric: 'body_battery', color: green ? 'green' : 'yellow', points: green ? POINTS.green : POINTS.yellow };
+  // GREEN (docs excerpt: >51 most days)
+  const greenDays = startVals.filter(ge(51)).length;
+  const mostDaysThreshold = Math.ceil(startVals.length * 0.6);
+  if (greenDays >= mostDaysThreshold) {
+    return { metric: "body_battery", color: "green", points: POINTS.green };
+  }
+
+  // Default: Yellow if neither Green nor higher severity triggered.
+  return { metric: "body_battery", color: "yellow", points: POINTS.yellow };
 }
 
 function classifyStress(
@@ -407,11 +424,10 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
   const sorted = [...metrics].sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1));
 
   // Calendar-day metrics: use most recent 7 VALID days with data (not necessarily consecutive dates).
-  const bbRows = sorted
-    .filter((m) => m.metric_date <= weekEnding && m.body_battery_start != null && m.body_battery_lowest != null)
-    .slice(0, 7);
-  const start7 = bbRows.length === 7 ? bbRows.map((m) => m.body_battery_start as number) : [];
-  const low7 = bbRows.length === 7 ? bbRows.map((m) => m.body_battery_lowest as number) : [];
+  const bbStarts = sorted
+    .filter((m) => m.metric_date <= weekEnding && m.body_battery_start != null)
+    .slice(0, 7)
+    .map((m) => Number(m.body_battery_start));
 
   const stressDays = takeLastValidDays<number>(sorted, weekEnding, (m) => m.average_stress_level, 7);
   const stress7 = stressDays.values.length === 7 ? (stressDays.values as unknown as (number | null)[]) : [];
@@ -456,11 +472,7 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
     (stressRes.color === 'orange' || stressRes.color === 'red') ||
     (hrvStabRes.color === 'orange' || hrvStabRes.color === 'red');
 
-  const bodyBatteryRes = classifyBodyBattery(
-    start7.length === 7 ? (start7 as unknown as (number | null)[]) : [],
-    low7.length === 7 ? (low7 as unknown as (number | null)[]) : [],
-    additionalPrimary
-  );
+  const bodyBatteryRes = classifyBodyBattery(bbStarts, additionalPrimary);
   const sleepDurationHours = (sleepDuration7.length === 7 ? (sleepDuration7 as unknown as number[]) : []).map((s) => s / 3600);
   const sleepDurRes = classifySleepDuration(sleepDurationHours);
   const sleepScoreRes = classifySleepScore(sleepScore7.length === 7 ? (sleepScore7 as unknown as number[]) : [], additionalPrimary);

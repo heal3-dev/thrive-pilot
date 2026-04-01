@@ -50,6 +50,88 @@ function hrvCvPercent(values: number[]): number | null {
   return (stdev / mean) * 100;
 }
 
+const METRIC_LABEL: Record<WeeklyMetricKey, string> = {
+  body_battery: "Body Battery",
+  stress: "Stress",
+  rhr: "RHR",
+  sleep_duration: "Sleep Duration",
+  sleep_score: "Sleep Score",
+  waso: "WASO",
+  hrv: "HRV",
+  hrv_stability: "HRV Stability",
+};
+
+const METRIC_WINDOW: Record<WeeklyMetricKey, string> = {
+  body_battery: "Most recent 7 valid calendar days with Body Battery Start (morning) data.",
+  stress: "Most recent 7 valid calendar days with Stress data.",
+  rhr: "Most recent 7 valid calendar days with RHR data.",
+  sleep_duration: "Most recent 7 valid sleep nights with duration data (not necessarily last 7 dates).",
+  sleep_score: "Most recent 7 valid sleep nights with score data (not necessarily last 7 dates).",
+  waso: "Most recent 7 valid sleep nights with WASO (awake minutes) data (not necessarily last 7 dates).",
+  hrv: "Most recent 7 valid sleep nights with HRV data (not necessarily last 7 dates).",
+  hrv_stability: "Most recent 7 valid sleep nights with HRV data (not necessarily last 7 dates).",
+};
+
+function statusLabel(color: WeeklyMetricResult["color"]): string {
+  if (color === "green") return "Green";
+  if (color === "yellow") return "Yellow";
+  if (color === "orange") return "Orange";
+  if (color === "red") return "Red";
+  if (color === "insufficient_baseline_data") return "Insufficient baseline history";
+  return "Not enough valid data";
+}
+
+function metricMeaning(metric: WeeklyMetricKey): string {
+  switch (metric) {
+    case "body_battery":
+      return "Uses Body Battery Start (morning) only.";
+    case "stress":
+      return "Uses average stress level.";
+    case "rhr":
+      return "Uses resting heart rate compared to personal baseline (median of most recent 21 valid days in prior 28, excluding the evaluation window).";
+    case "sleep_duration":
+      return "Uses sleep duration (hours).";
+    case "sleep_score":
+      return "Uses Garmin sleep score.";
+    case "waso":
+      return "Uses WASO = awake_seconds / 60 (minutes).";
+    case "hrv":
+      return "Uses nightly average HRV compared to personal baseline (median of most recent 21 valid days in prior 28, excluding the evaluation window).";
+    case "hrv_stability":
+      return "Uses HRV stability = coefficient of variation (CV%) across 7 nights.";
+  }
+}
+
+function metricThresholdHint(metric: WeeklyMetricKey): string {
+  switch (metric) {
+    case "stress":
+      return "Quick ranges: 🟢 ≤50, 🟡/🟠 51–75, 🔴 ≥76 (7-day rules apply).";
+    case "sleep_score":
+      return "Quick ranges: 🟢 ≥80, 🟡/🟠 60–79, 🔴 <60 (7-night rules apply).";
+    case "waso":
+      return "Quick ranges: 🟢 <30m, 🟡 30–60m, 🟠/🔴 >60m (7-night rules apply).";
+    case "hrv_stability":
+      return "Quick ranges: 🟢 <10%, 🟡 10–12%, 🟠 12–15%, 🔴 >15% (7-night rules apply).";
+    default:
+      return "Uses 7-day/7-night rules per spec.";
+  }
+}
+
+function tooltipForMetric(metric: WeeklyMetricKey, color: WeeklyMetricResult["color"]): string {
+  const base = `${METRIC_LABEL[metric]} — weekly status: ${statusLabel(color)} ${emojiForColor(color)}.`;
+  const window = METRIC_WINDOW[metric];
+  const meaning = metricMeaning(metric);
+  const hint = metricThresholdHint(metric);
+
+  if (color === "insufficient_baseline_data") {
+    return `${base} ${meaning} ${window} Baseline required: ≥14 valid baseline days in the prior 28 days.`;
+  }
+  if (color === "no_data") {
+    return `${base} ${meaning} ${window} We need enough recent valid days/nights with data to compute this status.`;
+  }
+  return `${base} ${meaning} ${window} ${hint}`;
+}
+
 const COL_WIDTHS_PCT = [
   11, // Date
   15, // Body Battery
@@ -104,9 +186,15 @@ export function ParticipantMetricsTable({
     return hrvCvPercent(vals);
   });
 
-  const headerEmoji = (metric: WeeklyMetricKey) => {
+  const headerIndicator = (metric: WeeklyMetricKey) => {
     const c = weeklyFlag?.metrics?.[metric]?.color;
-    return c ? emojiForColor(c) : "";
+    if (!c) return null;
+    const tip = tooltipForMetric(metric, c);
+    return (
+      <span className="ml-1 cursor-help" title={tip} aria-label={tip}>
+        {emojiForColor(c)}
+      </span>
+    );
   };
 
   const handleScroll = useCallback(() => {
@@ -165,28 +253,28 @@ export function ParticipantMetricsTable({
             <tr>
               <th className={`py-2.5 pr-2 font-medium whitespace-nowrap ${edgeStartPad}`}>Date</th>
               <th className="px-2 py-2.5 pr-1 font-medium whitespace-nowrap">
-                Body Battery {headerEmoji("body_battery")}
+                Body Battery {headerIndicator("body_battery")}
               </th>
               <th className="px-2 py-2.5 pl-1 font-medium whitespace-nowrap">
-                Stress {headerEmoji("stress")}
+                Stress {headerIndicator("stress")}
               </th>
               <th className="px-2 py-2.5 font-medium whitespace-nowrap">
-                RHR {headerEmoji("rhr")}
+                RHR {headerIndicator("rhr")}
               </th>
               <th className="px-2 py-2.5 font-medium whitespace-nowrap">
-                Sleep Duration {headerEmoji("sleep_duration")}
+                Sleep Duration {headerIndicator("sleep_duration")}
               </th>
               <th className="px-2 py-2.5 font-medium whitespace-nowrap">
-                Sleep Score {headerEmoji("sleep_score")}
+                Sleep Score {headerIndicator("sleep_score")}
               </th>
               <th className="px-2 py-2.5 font-medium whitespace-nowrap">
-                WASO {headerEmoji("waso")}
+                WASO {headerIndicator("waso")}
               </th>
               <th className="px-2 py-2.5 font-medium whitespace-nowrap">
-                HRV {headerEmoji("hrv")}
+                HRV {headerIndicator("hrv")}
               </th>
               <th className={`py-2.5 pl-2 font-medium whitespace-nowrap ${edgeEndPad}`}>
-                HRV Stability {headerEmoji("hrv_stability")}
+                HRV Stability {headerIndicator("hrv_stability")}
               </th>
             </tr>
           </thead>

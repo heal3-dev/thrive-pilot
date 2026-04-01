@@ -28,6 +28,7 @@ type AssignedMentor = {
 
 import type { WeeklyFlag } from "@/lib/flags/rules";
 import { DEMO_PARTICIPANTS } from "@/lib/demo-data";
+import { weeklyCompositeTooltip } from "@/lib/flags/weekly-tooltips";
 
 type ParticipantRow = Participant & {
   assigned_mentor: AssignedMentor | null;
@@ -580,7 +581,7 @@ export function ParticipantManagement({
                         
                         {p.weekly_flag && (
                           <span
-                            className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-bold border whitespace-nowrap ${
+                            className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-bold border whitespace-nowrap cursor-help ${
                               p.weekly_flag.finalColor === "red"
                                 ? "bg-red-50 text-red-700 border-red-200"
                                 : p.weekly_flag.finalColor === "orange"
@@ -589,7 +590,7 @@ export function ParticipantManagement({
                                 ? "bg-amber-50 text-amber-700 border-amber-200"
                                 : "bg-emerald-50 text-emerald-700 border-emerald-200"
                             }`}
-                            title={`Weekly score: ${p.weekly_flag.weeklyScore}/24`}
+                            title={weeklyCompositeTooltip(p.weekly_flag)}
                           >
                             Weekly{" "}
                             {p.weekly_flag.finalColor === "green"
