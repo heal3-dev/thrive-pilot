@@ -21,6 +21,8 @@ export type Metric = {
   body_battery_charged: number | null;
   body_battery_drained: number | null;
   body_battery_most_recent: number | null;
+  body_battery_start: number | null;
+  body_battery_lowest: number | null;
   hrv_last_night_average: number | null;
   hrv_last_night_5_min_high: number | null;
 };
@@ -184,10 +186,14 @@ export function calculateFlags(metrics: Metric[]): Flag[] {
     }
 
     // 7. BODY_BATTERY_LOW: below 25 for 2-3 consecutive days
-    if (hasConsecutiveCondition(evalWindow, 2, m => m.body_battery_most_recent !== null && m.body_battery_most_recent < 25)) {
+    // Per Thrive flagging spec: use morning Body Battery ("start") rather than lowest/end-of-day values.
+    if (hasConsecutiveCondition(evalWindow, 2, (m) => {
+      const bb = m.body_battery_start ?? m.body_battery_most_recent;
+      return bb !== null && bb < 25;
+    })) {
       flags.push({
         type: 'BODY_BATTERY_LOW',
-        message: 'Body Battery < 25 for 2+ days',
+        message: 'Body Battery (morning) < 25 for 2+ days',
         severity: 'warning',
       });
     }
