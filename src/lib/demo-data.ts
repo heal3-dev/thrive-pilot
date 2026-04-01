@@ -50,6 +50,8 @@ function makeMetric(
     body_battery_charged: null,
     body_battery_drained: null,
     body_battery_most_recent: null,
+    body_battery_start: null,
+    body_battery_lowest: null,
     hrv_last_night_average: null,
     hrv_last_night_5_min_high: null,
     ...overrides,
@@ -75,6 +77,8 @@ function alexMetrics(): Metric[] {
     sleep_duration_seconds: 27000, // 7.5h
     sleep_score: 80,
     body_battery_most_recent: 55,
+    body_battery_start: 60,
+    body_battery_lowest: 35,
     body_battery_charged: 45,
     body_battery_drained: -30,
   });
@@ -88,6 +92,8 @@ function alexMetrics(): Metric[] {
       sleep_duration_seconds: 25200,
       sleep_score: 72,
       body_battery_most_recent: 40,
+      body_battery_start: 45,
+      body_battery_lowest: 25,
       body_battery_charged: 35,
       body_battery_drained: -28,
     });
@@ -105,6 +111,8 @@ function jordanMetrics(): Metric[] {
     sleep_duration_seconds: 26400, // 7.3h
     sleep_score: 78,
     body_battery_most_recent: 50,
+    body_battery_start: 55,
+    body_battery_lowest: 32,
     body_battery_charged: 40,
     body_battery_drained: -32,
   });
@@ -117,6 +125,8 @@ function jordanMetrics(): Metric[] {
       sleep_duration_seconds: 23400, // 6.5h
       sleep_score: 65,
       body_battery_most_recent: 35,
+      body_battery_start: 40,
+      body_battery_lowest: 20,
       body_battery_charged: 30,
       body_battery_drained: -38,
     });
@@ -134,6 +144,8 @@ function samMetrics(): Metric[] {
     hrv_last_night_5_min_high: 72,
     average_stress_level: 30,
     body_battery_most_recent: 60,
+    body_battery_start: 70,
+    body_battery_lowest: 35,
     body_battery_charged: 50,
     body_battery_drained: -25,
   });
@@ -146,6 +158,8 @@ function samMetrics(): Metric[] {
       hrv_last_night_5_min_high: 58,
       average_stress_level: 48,
       body_battery_most_recent: 30,
+      body_battery_start: 35,
+      body_battery_lowest: 15,
       body_battery_charged: 25,
       body_battery_drained: -35,
     });
@@ -163,6 +177,8 @@ function chrisMetrics(): Metric[] {
     hrv_last_night_average: 40,
     hrv_last_night_5_min_high: 62,
     body_battery_most_recent: 45,
+    body_battery_start: 55,
+    body_battery_lowest: 25,
     body_battery_charged: 38,
     body_battery_drained: -30,
   });
@@ -175,6 +191,8 @@ function chrisMetrics(): Metric[] {
       hrv_last_night_average: 35,
       hrv_last_night_5_min_high: 52,
       body_battery_most_recent: 28,
+      body_battery_start: 32,
+      body_battery_lowest: 12,
       body_battery_charged: 22,
       body_battery_drained: -42,
     });
@@ -186,6 +204,8 @@ function chrisMetrics(): Metric[] {
 function morganMetrics(): Metric[] {
   const metrics = generateBaseline({
     body_battery_most_recent: 55,
+    body_battery_start: 60,
+    body_battery_lowest: 40,
     body_battery_charged: 45,
     body_battery_drained: -28,
     resting_heart_rate: 66,
@@ -198,6 +218,8 @@ function morganMetrics(): Metric[] {
   for (let i = 0; i < 3; i++) {
     metrics[i] = makeMetric(i, {
       body_battery_most_recent: 18 + i * 2, // 18, 20, 22 — all < 25
+      body_battery_start: 18 + i * 2,
+      body_battery_lowest: Math.max(0, 10 + i * 2),
       body_battery_charged: 15,
       body_battery_drained: -48,
       resting_heart_rate: 70,
@@ -221,6 +243,8 @@ function rileyMetrics(): Metric[] {
     sleep_duration_seconds: 28800, // 8h
     sleep_score: 85,
     body_battery_most_recent: 65,
+    body_battery_start: 75,
+    body_battery_lowest: 40,
     body_battery_charged: 55,
     body_battery_drained: -22,
   });
@@ -233,6 +257,8 @@ function rileyMetrics(): Metric[] {
       sleep_duration_seconds: 27000,
       sleep_score: 80,
       body_battery_most_recent: 50,
+      body_battery_start: 60,
+      body_battery_lowest: 30,
       body_battery_charged: 42,
       body_battery_drained: -35,
     });
@@ -250,6 +276,8 @@ function taylorMetrics(): Metric[] {
     sleep_duration_seconds: 28800, // 8h
     sleep_score: 88,
     body_battery_most_recent: 70,
+    body_battery_start: 80,
+    body_battery_lowest: 50,
     body_battery_charged: 60,
     body_battery_drained: -20,
   });

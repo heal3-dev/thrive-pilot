@@ -12,6 +12,8 @@ type ParticipantMetric = {
   body_battery_charged: number | null;
   body_battery_drained: number | null;
   body_battery_most_recent: number | null;
+  body_battery_start: number | null;
+  body_battery_lowest: number | null;
   hrv_last_night_average: number | null;
   hrv_last_night_5_min_high: number | null;
 };
@@ -110,9 +112,21 @@ export function ParticipantMetricsTable({
                 </td>
                 <td className="px-5 py-3 text-slate-600">{m.resting_heart_rate ?? "-"}</td>
                 <td className="px-5 py-3 text-slate-600">
-                  {m.body_battery_most_recent != null ? (
+                  {m.body_battery_most_recent != null ||
+                  m.body_battery_start != null ||
+                  m.body_battery_lowest != null ? (
                     <>
-                      {m.body_battery_most_recent}
+                      <span className="font-medium text-slate-800">
+                        {m.body_battery_start ?? "—"}
+                      </span>
+                      <span className="text-xs text-slate-400"> / </span>
+                      <span className="font-medium text-slate-800">
+                        {m.body_battery_lowest ?? "—"}
+                      </span>
+                      <span className="text-xs text-slate-400"> / </span>
+                      <span className="font-medium text-slate-800">
+                        {m.body_battery_most_recent ?? "—"}
+                      </span>
                       {(m.body_battery_charged != null || m.body_battery_drained != null) && (
                         <span className="ml-1 text-xs text-slate-400">
                           (+{m.body_battery_charged ?? 0} / -{m.body_battery_drained ?? 0})
