@@ -103,6 +103,9 @@ export function ParticipantManagement({
   demoMode?: boolean;
 }) {
   const router = useRouter();
+  // ParticipantManagement is always embedded inside a fixed-height panel (Admin/Mentor tabs).
+  // Keep page chrome fixed; only scroll table rows.
+  const rowsScrollOnly = true;
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -401,9 +404,9 @@ export function ParticipantManagement({
   // Removed blocking error return. Error is displayed in the banner below.
 
   return (
-    <div className="space-y-4">
+    <div className={rowsScrollOnly ? "h-full min-h-0 flex flex-col gap-4" : "space-y-4"}>
       {successMessage && (
-        <div className="p-4 rounded-xl bg-green-50 border border-green-200">
+        <div className="p-4 rounded-xl bg-green-50 border border-green-200 shrink-0">
           <p className="text-sm font-medium text-green-700 flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -414,7 +417,7 @@ export function ParticipantManagement({
       )}
 
       {error && (
-        <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 shrink-0">
           <p className="text-sm font-medium text-red-700 flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -424,7 +427,7 @@ export function ParticipantManagement({
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border-2 border-slate-100 p-4">
+      <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
         <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
             <Input
@@ -505,8 +508,8 @@ export function ParticipantManagement({
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className={`bg-white rounded-2xl border-2 border-slate-100 overflow-hidden ${rowsScrollOnly ? "flex-1 min-h-0" : ""}`}>
+        <div className={rowsScrollOnly ? "h-full overflow-auto" : "overflow-x-auto"}>
           <table className="w-full table-fixed">
             <colgroup>
               <col className="w-[12%]" />
@@ -517,7 +520,7 @@ export function ParticipantManagement({
               <col className="w-[9%]" />
               <col className="w-[14%]" />
             </colgroup>
-            <thead className="bg-slate-100 border-b border-slate-100">
+            <thead className={`bg-slate-100 border-b border-slate-100 ${rowsScrollOnly ? "sticky top-0 z-10" : ""}`}>
               <tr>
                 <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Name</th>
                 <th className="text-left px-3 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Phone</th>

@@ -51,8 +51,8 @@ function GarminTrendsTab({ onBack }: { onBack: () => void }) {
   }, [demoMode]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between mb-4">
+    <div className="h-full min-h-0 flex flex-col gap-4">
+      <div className="flex items-center justify-between shrink-0">
         <BackButton onClick={onBack} />
         <div className="flex items-center gap-3">
           <button
@@ -75,7 +75,9 @@ function GarminTrendsTab({ onBack }: { onBack: () => void }) {
           </h2>
         </div>
       </div>
-      <ParticipantManagement mode="trends" initialGarminFilter="connected" demoMode={demoMode} />
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ParticipantManagement mode="trends" initialGarminFilter="connected" demoMode={demoMode} />
+      </div>
     </div>
   );
 }
@@ -319,7 +321,13 @@ export function AdminPanel() {
       {/* Tab Content */}
       <div
         className={`flex-1 min-h-0 ${
-          activeTab === "messages" ? "overflow-hidden" : "overflow-y-auto"
+          activeTab === "messages" ||
+          activeTab === "garmin-trends" ||
+          activeTab === "participants" ||
+          activeTab === "mentors" ||
+          activeTab === "assignments"
+            ? "overflow-hidden"
+            : "overflow-y-auto"
         }`}
       >
         {activeTab === "dashboard" && (

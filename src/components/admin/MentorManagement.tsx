@@ -176,10 +176,10 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="h-full min-h-0 flex flex-col gap-4">
       {/* Success Message */}
       {successMessage && (
-        <div className="p-4 rounded-xl bg-green-50 border border-green-200">
+        <div className="p-4 rounded-xl bg-green-50 border border-green-200 shrink-0">
           <p className="text-sm font-medium text-green-700 flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -190,7 +190,7 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
       )}
 
       {/* Header with search and actions */}
-      <div className="bg-white rounded-2xl border-2 border-slate-100 p-4">
+      <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
             <Input
@@ -221,8 +221,8 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
       </div>
 
       {/* Mentors Table */}
-      <div className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden flex-1 min-h-0">
+        <div className="h-full overflow-auto">
           <table className="w-full table-fixed">
             <colgroup>
               <col className="w-[22%]" />
@@ -231,7 +231,7 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
               <col className="w-[15%]" />
               <col className="w-[20%]" />
             </colgroup>
-            <thead className="bg-slate-100 border-b border-slate-100">
+            <thead className="bg-slate-100 border-b border-slate-100 sticky top-0 z-10">
               <tr>
                 <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Name</th>
                 <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Email</th>

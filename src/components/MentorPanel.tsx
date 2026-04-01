@@ -68,7 +68,7 @@ export function MentorPanel() {
         {activeTab === "inbox" ? (
           <MentorInbox enableHealthPanel />
         ) : (
-          <div className="h-full min-h-0 overflow-y-auto">
+          <div className="h-full min-h-0 overflow-hidden">
             <ParticipantManagement mode="mentor-trends" />
           </div>
         )}
