@@ -109,17 +109,42 @@ function asCalendarWindow(
   return { dates, byDate };
 }
 
+function takeLastValidNightRows(
+  metrics: Metric[],
+  weekEnding: string,
+  n = 7,
+  isValid: (m: Metric) => boolean,
+): Metric[] {
+  const rows = metrics
+    .filter((m) => m.metric_date <= weekEnding && isValid(m))
+    .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1));
+  return rows.slice(0, n);
+}
+
 function takeLastValidNights<T>(
   metrics: Metric[],
   weekEnding: string,
   getValue: (m: Metric) => T | null | undefined,
   n = 7,
 ): (T | null)[] {
+  const rows = takeLastValidNightRows(metrics, weekEnding, n, (m) => getValue(m) != null);
+  const vals = rows.map((m) => (getValue(m) as T));
+  return vals.length === n ? vals : [];
+}
+
+function takeLastValidDays<T>(
+  metrics: Metric[],
+  weekEnding: string,
+  getValue: (m: Metric) => T | null | undefined,
+  n = 7,
+): { dates: string[]; values: T[] } {
   const rows = metrics
     .filter((m) => m.metric_date <= weekEnding && getValue(m) != null)
-    .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1));
-  const vals = rows.slice(0, n).map((m) => (getValue(m) as T));
-  return vals.length === n ? vals : [];
+    .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1))
+    .slice(0, n);
+
+  if (rows.length !== n) return { dates: [], values: [] };
+  return { dates: rows.map((r) => r.metric_date), values: rows.map((r) => getValue(r) as T) };
 }
 
 function getBaselineMedian(
@@ -381,30 +406,48 @@ function applyOverrides(
 export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: string): WeeklyFlag {
   const sorted = [...metrics].sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1));
 
-  const { dates, byDate } = asCalendarWindow(sorted, weekEnding);
-  const start7 = dates.map((d) => byDate.get(d)?.body_battery_start ?? null);
-  const low7 = dates.map((d) => byDate.get(d)?.body_battery_lowest ?? null);
-  const stress7 = dates.map((d) => byDate.get(d)?.average_stress_level ?? null);
-  const rhr7 = dates.map((d) => byDate.get(d)?.resting_heart_rate ?? null);
+  // Calendar-day metrics: use most recent 7 VALID days with data (not necessarily consecutive dates).
+  const bbRows = sorted
+    .filter((m) => m.metric_date <= weekEnding && m.body_battery_start != null && m.body_battery_lowest != null)
+    .slice(0, 7);
+  const start7 = bbRows.length === 7 ? bbRows.map((m) => m.body_battery_start as number) : [];
+  const low7 = bbRows.length === 7 ? bbRows.map((m) => m.body_battery_lowest as number) : [];
+
+  const stressDays = takeLastValidDays<number>(sorted, weekEnding, (m) => m.average_stress_level, 7);
+  const stress7 = stressDays.values.length === 7 ? (stressDays.values as unknown as (number | null)[]) : [];
+
+  const rhrDays = takeLastValidDays<number>(sorted, weekEnding, (m) => m.resting_heart_rate, 7);
+  const rhr7 = rhrDays.values.length === 7 ? (rhrDays.values as unknown as (number | null)[]) : [];
 
   const sleepDuration7 = takeLastValidNights(sorted, weekEnding, (m) => m.sleep_duration_seconds).map((s) => (s == null ? null : Number(s))) as number[];
   const sleepScore7 = takeLastValidNights(sorted, weekEnding, (m) => m.sleep_score).map((s) => (s == null ? null : Number(s))) as number[];
   const wasoMinutes7 = takeLastValidNights(sorted, weekEnding, (m) => (m.awake_seconds ?? null)).map((s) => (s == null ? null : Number(s) / 60)) as number[];
-  const hrv7 = takeLastValidNights(sorted, weekEnding, (m) => m.hrv_last_night_average).map((s) => (s == null ? null : Number(s))) as number[];
+  const hrvRows = takeLastValidNightRows(sorted, weekEnding, 7, (m) => m.hrv_last_night_average != null);
+  const hrv7 = hrvRows.length === 7 ? hrvRows.map((m) => Number(m.hrv_last_night_average)) : [];
 
-  const evalStart = addDaysYmd(weekEnding, -6);
-  const baselineStart = addDaysYmd(evalStart, -28);
-  const baselineEnd = addDaysYmd(evalStart, -1);
+  // Baselines should exclude the evaluation window. Use the oldest evaluation day/night as the anchor.
+  const rhrEvalStart = rhrDays.dates.length === 7 ? rhrDays.dates[rhrDays.dates.length - 1] : addDaysYmd(weekEnding, -6);
+  const hrvEvalStart = hrvRows.length === 7 ? hrvRows[hrvRows.length - 1].metric_date : addDaysYmd(weekEnding, -6);
 
-  const hrvBaseline = getBaselineMedian(sorted, baselineStart, baselineEnd, (m) => m.hrv_last_night_average);
-  const rhrBaseline = getBaselineMedian(sorted, baselineStart, baselineEnd, (m) => m.resting_heart_rate);
+  const rhrBaseline = getBaselineMedian(
+    sorted,
+    addDaysYmd(rhrEvalStart, -28),
+    addDaysYmd(rhrEvalStart, -1),
+    (m) => m.resting_heart_rate,
+  );
+  const hrvBaseline = getBaselineMedian(
+    sorted,
+    addDaysYmd(hrvEvalStart, -28),
+    addDaysYmd(hrvEvalStart, -1),
+    (m) => m.hrv_last_night_average,
+  );
 
   // Primary metrics first (iterative so "additional recovery flag" clauses can look at other primaries)
   const wasoRes = classifyWASO(wasoMinutes7.length === 7 ? (wasoMinutes7 as unknown as number[]) : []);
   const prelimHrvStab = classifyHRVStability(hrv7.length === 7 ? (hrv7 as unknown as number[]) : [], false);
 
   const addForStress = wasoRes.color === 'orange' || wasoRes.color === 'red' || prelimHrvStab.color === 'orange' || prelimHrvStab.color === 'red';
-  const stressRes = classifyStress(stress7, addForStress);
+  const stressRes = classifyStress(stress7 as unknown as (number | null)[], addForStress);
 
   const addForHrvStab = wasoRes.color === 'orange' || wasoRes.color === 'red' || stressRes.color === 'orange' || stressRes.color === 'red';
   const hrvStabRes = classifyHRVStability(hrv7.length === 7 ? (hrv7 as unknown as number[]) : [], addForHrvStab);
@@ -413,12 +456,16 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
     (stressRes.color === 'orange' || stressRes.color === 'red') ||
     (hrvStabRes.color === 'orange' || hrvStabRes.color === 'red');
 
-  const bodyBatteryRes = classifyBodyBattery(start7, low7, additionalPrimary);
+  const bodyBatteryRes = classifyBodyBattery(
+    start7.length === 7 ? (start7 as unknown as (number | null)[]) : [],
+    low7.length === 7 ? (low7 as unknown as (number | null)[]) : [],
+    additionalPrimary
+  );
   const sleepDurationHours = (sleepDuration7.length === 7 ? (sleepDuration7 as unknown as number[]) : []).map((s) => s / 3600);
   const sleepDurRes = classifySleepDuration(sleepDurationHours);
   const sleepScoreRes = classifySleepScore(sleepScore7.length === 7 ? (sleepScore7 as unknown as number[]) : [], additionalPrimary);
   const hrvRes = classifyHRV(hrv7.length === 7 ? (hrv7 as unknown as number[]) : [], hrvBaseline);
-  const rhrRes = classifyRHR(rhr7, rhrBaseline, additionalPrimary);
+  const rhrRes = classifyRHR(rhr7 as unknown as (number | null)[], rhrBaseline, additionalPrimary);
 
   const metricsRes: Record<WeeklyMetricKey, WeeklyMetricResult> = {
     body_battery: bodyBatteryRes,

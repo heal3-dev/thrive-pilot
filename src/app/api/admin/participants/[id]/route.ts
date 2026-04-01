@@ -117,24 +117,6 @@ export async function GET(
     }));
 
     weekly_flag = computeWeeklyFlagFromMetrics(weeklyTyped, weekEnding);
-
-    // Best-effort persistence (non-blocking for UI)
-    try {
-      await supabase.from("weekly_flags").upsert(
-        {
-          pseudonym_id: pseudonymId,
-          week_ending: weekEnding,
-          weekly_score: weekly_flag.weeklyScore,
-          base_color: weekly_flag.baseColor,
-          final_color: weekly_flag.finalColor,
-          override_applied: weekly_flag.overrideApplied,
-          metrics: weekly_flag.metrics,
-        },
-        { onConflict: "pseudonym_id,week_ending" }
-      );
-    } catch (e) {
-      console.error("[WEEKLY_FLAGS] Failed to upsert weekly flag", e);
-    }
   }
 
   return NextResponse.json({
