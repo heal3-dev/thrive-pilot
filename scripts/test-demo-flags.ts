@@ -1,4 +1,4 @@
-import { getDemoWeeklyFlag, DEMO_PARTICIPANTS } from '@/lib/demo-data';
+import { getDemoWeeklyFlag, DEMO_PARTICIPANTS } from '../src/lib/demo-data';
 
 console.log("Demo Weekly Flags:");
 for (const p of DEMO_PARTICIPANTS) {

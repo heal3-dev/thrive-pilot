@@ -58,11 +58,11 @@ export function weeklyCompositeTooltip(wf: WeeklyFlag): string {
     `Weekly composite: final ${wf.finalColor.toUpperCase()} ${emojiForColor(wf.finalColor)} (base ${wf.baseColor.toUpperCase()}, override ${wf.overrideApplied}).`
   );
   lines.push(
-    `Score: ${wf.weeklyScore}/24 where 🟢=0, 🟡=1, 🟠=2, 🔴=3 (sum of 8 metric points).`
+    `Score: ${wf.weeklyScore}/24 where 🟢=0, 🟡=1, 🟠=2, 🔴=3 (⚪=0; missing/insufficient-baseline metrics do not add points).`
   );
   lines.push(`Base thresholds: 0–4 🟢, 5–8 🟡, 9–13 🟠, 14+ 🔴.`);
   lines.push(
-    `Windows: calendar-day metrics use most recent 7 valid days; sleep-based metrics use most recent 7 valid nights (not necessarily last 7 dates).`
+    `Windows: calendar-day metrics use the last 7 calendar dates; sleep-based metrics use the most recent 7 valid nights (not necessarily last 7 dates).`
   );
   lines.push(
     `Baselines: HRV/RHR use personal median of most recent 21 valid days in prior 28 (excluding evaluation window); if <14 valid baseline days → ⚪.`

@@ -167,17 +167,17 @@ function getBaselineMedian(
 }
 
 function classifyBodyBattery(
-  startValsNewestFirst: number[],
+  startValsOldestToNewest: (number | null)[],
   additionalPrimaryFlag: boolean,
 ): WeeklyMetricResult {
   // Per docs screenshot: Body Battery uses morning Start values only.
   // Valid day: body_battery_start IS NOT NULL.
   // If we have too few days, treat as not enough data (do not penalize score).
-  if (startValsNewestFirst.length < 4) {
+  if (startValsOldestToNewest.length !== 7 || startValsOldestToNewest.some((v) => v == null)) {
     return { metric: "body_battery", color: "no_data", points: 0 };
   }
 
-  const startVals = [...startValsNewestFirst].reverse(); // oldest -> newest for streak checks
+  const startVals = startValsOldestToNewest as number[]; // oldest -> newest for streak checks
   const inRange = (lo: number, hi: number) => (v: number) => v >= lo && v <= hi;
   const le = (x: number) => (v: number) => v <= x;
   const ge = (x: number) => (v: number) => v >= x;
@@ -185,8 +185,7 @@ function classifyBodyBattery(
   // RED
   if (
     maxConsecutive(startVals, le(25)) >= 3 ||
-    maxConsecutive(startVals, le(15)) >= 2 ||
-    (additionalPrimaryFlag && maxConsecutive(startVals, le(35)) >= 4)
+    (additionalPrimaryFlag && startVals.filter(le(35)).length >= 4)
   ) {
     return { metric: "body_battery", color: "red", points: POINTS.red };
   }
@@ -200,8 +199,7 @@ function classifyBodyBattery(
   }
 
   // YELLOW (docs excerpt: 26–50 for ≥3 days within 5 days)
-  const window = Math.min(5, startVals.length);
-  const lastWindow = startVals.slice(-window);
+  const lastWindow = startVals.slice(-5);
   if (lastWindow.filter(inRange(26, 50)).length >= 3) {
     return { metric: "body_battery", color: "yellow", points: POINTS.yellow };
   }
@@ -221,7 +219,8 @@ function classifyStress(
   stressVals: (number | null)[],
   additionalRecoveryFlag: boolean,
 ): WeeklyMetricResult {
-  if (stressVals.length !== 7) return { metric: 'stress', color: 'no_data', points: 3 };
+  if (stressVals.length !== 7) return { metric: 'stress', color: 'no_data', points: 0 };
+  if (stressVals.some((v) => v == null)) return { metric: 'stress', color: 'no_data', points: 0 };
 
   const isOrangeBand = (v: number | null) => v != null && v >= 51 && v <= 75;
   const isRed = (v: number | null) => v != null && v >= 76;
@@ -239,16 +238,15 @@ function classifyStress(
 }
 
 function classifySleepDuration(hours: number[],): WeeklyMetricResult {
-  if (hours.length !== 7) return { metric: 'sleep_duration', color: 'no_data', points: 3 };
+  if (hours.length !== 7) return { metric: 'sleep_duration', color: 'no_data', points: 0 };
   const lt = (x: number) => (v: number) => v < x;
-  const lte = (x: number) => (v: number) => v <= x;
   const between = (lo: number, hi: number) => (v: number) => v >= lo && v <= hi;
   const gte = (x: number) => (v: number) => v >= x;
 
-  const red = hours.filter(lt(5.0)).length >= 3 || hours.filter(lt(6.0)).length >= 4;
+  const red = hours.filter(lt(5.0)).length >= 3 || hours.filter(lt(6.0)).length >= 6;
   if (red) return { metric: 'sleep_duration', color: 'red', points: POINTS.red };
 
-  const orange = hours.filter(lt(6.0)).length >= 3 || hours.filter(lte(5.5)).length >= 2;
+  const orange = hours.filter(lt(6.0)).length >= 3 || hours.filter(lt(5.5)).length >= 2;
   if (orange) return { metric: 'sleep_duration', color: 'orange', points: POINTS.orange };
 
   const yellow = hours.filter(between(6.0, 6.9)).length >= 4 || hours.filter(lt(6.0)).length >= 2;
@@ -262,7 +260,7 @@ function classifySleepScore(
   scores: number[],
   additionalRecoveryFlag: boolean,
 ): WeeklyMetricResult {
-  if (scores.length !== 7) return { metric: 'sleep_score', color: 'no_data', points: 3 };
+  if (scores.length !== 7) return { metric: 'sleep_score', color: 'no_data', points: 0 };
   const green = scores.filter((s) => s >= 80 && s <= 100).length >= 5;
   if (green) return { metric: 'sleep_score', color: 'green', points: POINTS.green };
 
@@ -279,7 +277,7 @@ function classifySleepScore(
 }
 
 function classifyWASO(minutes: number[]): WeeklyMetricResult {
-  if (minutes.length !== 7) return { metric: 'waso', color: 'no_data', points: 3 };
+  if (minutes.length !== 7) return { metric: 'waso', color: 'no_data', points: 0 };
   const red = minutes.filter((m) => m > 60).length >= 3 || minutes.filter((m) => m > 90).length >= 2;
   if (red) return { metric: 'waso', color: 'red', points: POINTS.red };
 
@@ -289,34 +287,37 @@ function classifyWASO(minutes: number[]): WeeklyMetricResult {
   const yellow = minutes.filter((m) => m >= 30 && m <= 60).length >= 3;
   if (yellow) return { metric: 'waso', color: 'yellow', points: POINTS.yellow };
 
-  const green = minutes.filter((m) => m < 30).length >= 6;
+  const green = minutes.filter((m) => m < 30).length >= 5;
   return { metric: 'waso', color: green ? 'green' : 'yellow', points: green ? POINTS.green : POINTS.yellow };
 }
 
 function classifyHRV(
   hrvVals: number[],
+  additionalRecoveryFlag: boolean,
   baselineStatus: { status: 'ok'; baseline: number } | { status: 'insufficient_baseline_data'; baseline: null },
 ): WeeklyMetricResult {
-  if (hrvVals.length !== 7) return { metric: 'hrv', color: 'no_data', points: 3 };
+  if (hrvVals.length !== 7) return { metric: 'hrv', color: 'no_data', points: 0 };
   if (baselineStatus.status !== 'ok') {
-    return { metric: 'hrv', color: 'insufficient_baseline_data', points: POINTS.yellow };
+    return { metric: 'hrv', color: 'insufficient_baseline_data', points: 0 };
   }
   const baseline = baselineStatus.baseline;
   const pctBelow = hrvVals.map((v) => ((baseline - v) / baseline) * 100);
-  const below10 = pctBelow.filter((p) => p >= 10).length;
-  const below15 = pctBelow.filter((p) => p >= 15).length;
-  const below20 = pctBelow.filter((p) => p >= 20).length;
+  const below10to15 = pctBelow.filter((p) => p >= 10 && p < 15).length;
+  const below15to20 = pctBelow.filter((p) => p >= 15 && p <= 20).length; // 15–20% maps to Orange
+  const below20plus = pctBelow.filter((p) => p > 20).length; // strictly >20% maps to Red
+  const below15plus = pctBelow.filter((p) => p > 15).length; // strictly >15% for "with additional recovery flag"
 
-  const red = below20 >= 3 || below15 >= 5;
+  const red = below20plus >= 4 || (additionalRecoveryFlag && below15plus >= 5);
   if (red) return { metric: 'hrv', color: 'red', points: POINTS.red };
 
-  const orange = pctBelow.filter((p) => p >= 15 && p < 20).length >= 3;
+  const orange = below15to20 >= 4;
   if (orange) return { metric: 'hrv', color: 'orange', points: POINTS.orange };
 
-  const yellow = pctBelow.filter((p) => p >= 10 && p < 15).length >= 3;
+  const yellow = below10to15 >= 3;
   if (yellow) return { metric: 'hrv', color: 'yellow', points: POINTS.yellow };
 
-  const green = (7 - below10) >= 5; // within 10% on most nights
+  const within10 = pctBelow.filter((p) => p < 10).length;
+  const green = within10 >= 5; // within 10% on most nights
   return { metric: 'hrv', color: green ? 'green' : 'yellow', points: green ? POINTS.green : POINTS.yellow };
 }
 
@@ -325,9 +326,10 @@ function classifyRHR(
   baselineStatus: { status: 'ok'; baseline: number } | { status: 'insufficient_baseline_data'; baseline: null },
   additionalRecoveryFlag: boolean,
 ): WeeklyMetricResult {
-  if (rhrVals.length !== 7) return { metric: 'rhr', color: 'no_data', points: 3 };
+  if (rhrVals.length !== 7) return { metric: 'rhr', color: 'no_data', points: 0 };
+  if (rhrVals.some((v) => v == null)) return { metric: 'rhr', color: 'no_data', points: 0 };
   if (baselineStatus.status !== 'ok') {
-    return { metric: 'rhr', color: 'insufficient_baseline_data', points: POINTS.yellow };
+    return { metric: 'rhr', color: 'insufficient_baseline_data', points: 0 };
   }
   const baseline = baselineStatus.baseline;
   const deltas = rhrVals.map((v) => (v == null ? null : v - baseline));
@@ -340,7 +342,7 @@ function classifyRHR(
   const orange = deltas.filter(inBand(7, 9)).length >= 4;
   if (orange) return { metric: 'rhr', color: 'orange', points: POINTS.orange };
 
-  const yellow = maxWindowCount(deltas, 6, inBand(4, 6)) >= 3;
+  const yellow = maxWindowCount(deltas, 5, inBand(4, 6)) >= 3;
   if (yellow) return { metric: 'rhr', color: 'yellow', points: POINTS.yellow };
 
   const green = deltas.filter(inBand(0, 3)).length >= 4;
@@ -351,14 +353,14 @@ function classifyHRVStability(
   hrvVals: number[],
   additionalRecoveryFlag: boolean,
 ): WeeklyMetricResult {
-  if (hrvVals.length !== 7) return { metric: 'hrv_stability', color: 'no_data', points: 3 };
+  if (hrvVals.length !== 7) return { metric: 'hrv_stability', color: 'no_data', points: 0 };
   const mean = hrvVals.reduce((a, b) => a + b, 0) / hrvVals.length;
-  if (mean <= 0) return { metric: 'hrv_stability', color: 'no_data', points: 3 };
+  if (mean <= 0) return { metric: 'hrv_stability', color: 'no_data', points: 0 };
   const variance = hrvVals.reduce((acc, v) => acc + (v - mean) ** 2, 0) / hrvVals.length;
   const stdev = Math.sqrt(variance);
   const cv = (stdev / mean) * 100;
 
-  const red = cv > 16 || (cv > 12 && additionalRecoveryFlag);
+  const red = cv > 15 || (cv > 12 && additionalRecoveryFlag);
   if (red) return { metric: 'hrv_stability', color: 'red', points: POINTS.red, details: { cv } };
 
   const orange = cv > 12 && cv <= 15;
@@ -423,17 +425,12 @@ function applyOverrides(
 export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: string): WeeklyFlag {
   const sorted = [...metrics].sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1));
 
-  // Calendar-day metrics: use most recent 7 VALID days with data (not necessarily consecutive dates).
-  const bbStarts = sorted
-    .filter((m) => m.metric_date <= weekEnding && m.body_battery_start != null)
-    .slice(0, 7)
-    .map((m) => Number(m.body_battery_start));
-
-  const stressDays = takeLastValidDays<number>(sorted, weekEnding, (m) => m.average_stress_level, 7);
-  const stress7 = stressDays.values.length === 7 ? (stressDays.values as unknown as (number | null)[]) : [];
-
-  const rhrDays = takeLastValidDays<number>(sorted, weekEnding, (m) => m.resting_heart_rate, 7);
-  const rhr7 = rhrDays.values.length === 7 ? (rhrDays.values as unknown as (number | null)[]) : [];
+  // Calendar-day metrics: use the LAST 7 calendar dates ending `weekEnding`.
+  // If any day is missing or null for a calendar metric, we mark that metric as no_data.
+  const { dates: calDates, byDate } = asCalendarWindow(sorted, weekEnding);
+  const bbStarts = calDates.map((d) => (byDate.get(d)?.body_battery_start ?? null));
+  const stress7 = calDates.map((d) => (byDate.get(d)?.average_stress_level ?? null));
+  const rhr7 = calDates.map((d) => (byDate.get(d)?.resting_heart_rate ?? null));
 
   const sleepDuration7 = takeLastValidNights(sorted, weekEnding, (m) => m.sleep_duration_seconds).map((s) => (s == null ? null : Number(s))) as number[];
   const sleepScore7 = takeLastValidNights(sorted, weekEnding, (m) => m.sleep_score).map((s) => (s == null ? null : Number(s))) as number[];
@@ -442,7 +439,7 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
   const hrv7 = hrvRows.length === 7 ? hrvRows.map((m) => Number(m.hrv_last_night_average)) : [];
 
   // Baselines should exclude the evaluation window. Use the oldest evaluation day/night as the anchor.
-  const rhrEvalStart = rhrDays.dates.length === 7 ? rhrDays.dates[rhrDays.dates.length - 1] : addDaysYmd(weekEnding, -6);
+  const rhrEvalStart = addDaysYmd(weekEnding, -6);
   const hrvEvalStart = hrvRows.length === 7 ? hrvRows[hrvRows.length - 1].metric_date : addDaysYmd(weekEnding, -6);
 
   const rhrBaseline = getBaselineMedian(
@@ -476,7 +473,7 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
   const sleepDurationHours = (sleepDuration7.length === 7 ? (sleepDuration7 as unknown as number[]) : []).map((s) => s / 3600);
   const sleepDurRes = classifySleepDuration(sleepDurationHours);
   const sleepScoreRes = classifySleepScore(sleepScore7.length === 7 ? (sleepScore7 as unknown as number[]) : [], additionalPrimary);
-  const hrvRes = classifyHRV(hrv7.length === 7 ? (hrv7 as unknown as number[]) : [], hrvBaseline);
+  const hrvRes = classifyHRV(hrv7.length === 7 ? (hrv7 as unknown as number[]) : [], additionalPrimary, hrvBaseline);
   const rhrRes = classifyRHR(rhr7 as unknown as (number | null)[], rhrBaseline, additionalPrimary);
 
   const metricsRes: Record<WeeklyMetricKey, WeeklyMetricResult> = {
