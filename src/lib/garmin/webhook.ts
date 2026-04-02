@@ -292,52 +292,61 @@ export function mapSummaryToMetrics(
   summary: GarminDailySummary,
   pseudonymId: string
 ) {
-  return {
+  // Webhooks can send multiple partial "daily" updates throughout the day.
+  // To keep garmin_metrics fresh without regressing, only write fields that are
+  // present in this payload (avoid overwriting previously-known values with null).
+  const row: Record<string, unknown> = {
     pseudonym_id: pseudonymId,
     metric_date: summary.calendarDate,
-
-    // Activity
-    steps: summary.steps ?? null,
-    steps_goal: summary.stepsGoal ?? null,
-    distance_meters: summary.distanceInMeters ?? null,
-    active_time_seconds: summary.activeTimeInSeconds ?? null,
-    duration_seconds: summary.durationInSeconds ?? null,
-    floors_climbed: summary.floorsClimbed ?? null,
-    intensity_minutes_moderate: summary.moderateIntensityDurationInSeconds ?? null,
-    intensity_minutes_vigorous: summary.vigorousIntensityDurationInSeconds ?? null,
-
-    // Calories
-    active_calories: summary.activeKilocalories ?? null,
-    bmr_calories: summary.bmrKilocalories ?? null,
-    total_calories:
-      summary.totalKilocalories ?? (
-        ((summary.activeKilocalories ?? 0) + (summary.bmrKilocalories ?? 0)) || null
-      ),
-
-    // Heart rate
-    resting_heart_rate: summary.restingHeartRateInBeatsPerMinute ?? null,
-    max_heart_rate: summary.maxHeartRateInBeatsPerMinute ?? null,
-    min_heart_rate: summary.minHeartRateInBeatsPerMinute ?? null,
-    average_heart_rate: summary.averageHeartRateInBeatsPerMinute ?? null,
-
-    // Stress
-    average_stress_level: summary.averageStressLevel ?? null,
-    max_stress_level: summary.maxStressLevel ?? null,
-    stress_qualifier: summary.stressQualifier ?? null,
-    stress_duration_seconds: summary.stressDurationInSeconds ?? null,
-    rest_stress_duration_seconds: summary.restStressDurationInSeconds ?? null,
-    activity_stress_duration_seconds: summary.activityStressDurationInSeconds ?? null,
-    low_stress_duration_seconds: summary.lowStressDurationInSeconds ?? null,
-    medium_stress_duration_seconds: summary.mediumStressDurationInSeconds ?? null,
-    high_stress_duration_seconds: summary.highStressDurationInSeconds ?? null,
-
-    // Body Battery (charged/drained from dailies)
-    body_battery_charged: summary.bodyBatteryChargedValue ?? null,
-    body_battery_drained: summary.bodyBatteryDrainedValue ?? null,
-
-    // Timestamps
     updated_at: new Date().toISOString(),
   };
+
+  const setIfDefined = (key: string, value: unknown) => {
+    if (value !== undefined) row[key] = value;
+  };
+
+  // Activity
+  setIfDefined("steps", summary.steps);
+  setIfDefined("steps_goal", summary.stepsGoal);
+  setIfDefined("distance_meters", summary.distanceInMeters);
+  setIfDefined("active_time_seconds", summary.activeTimeInSeconds);
+  setIfDefined("duration_seconds", summary.durationInSeconds);
+  setIfDefined("floors_climbed", summary.floorsClimbed);
+  setIfDefined("intensity_minutes_moderate", summary.moderateIntensityDurationInSeconds);
+  setIfDefined("intensity_minutes_vigorous", summary.vigorousIntensityDurationInSeconds);
+
+  // Calories
+  setIfDefined("active_calories", summary.activeKilocalories);
+  setIfDefined("bmr_calories", summary.bmrKilocalories);
+  if (summary.totalKilocalories !== undefined) {
+    setIfDefined("total_calories", summary.totalKilocalories);
+  } else if (summary.activeKilocalories !== undefined || summary.bmrKilocalories !== undefined) {
+    const total = (summary.activeKilocalories ?? 0) + (summary.bmrKilocalories ?? 0);
+    setIfDefined("total_calories", total);
+  }
+
+  // Heart rate
+  setIfDefined("resting_heart_rate", summary.restingHeartRateInBeatsPerMinute);
+  setIfDefined("max_heart_rate", summary.maxHeartRateInBeatsPerMinute);
+  setIfDefined("min_heart_rate", summary.minHeartRateInBeatsPerMinute);
+  setIfDefined("average_heart_rate", summary.averageHeartRateInBeatsPerMinute);
+
+  // Stress
+  setIfDefined("average_stress_level", summary.averageStressLevel);
+  setIfDefined("max_stress_level", summary.maxStressLevel);
+  setIfDefined("stress_qualifier", summary.stressQualifier);
+  setIfDefined("stress_duration_seconds", summary.stressDurationInSeconds);
+  setIfDefined("rest_stress_duration_seconds", summary.restStressDurationInSeconds);
+  setIfDefined("activity_stress_duration_seconds", summary.activityStressDurationInSeconds);
+  setIfDefined("low_stress_duration_seconds", summary.lowStressDurationInSeconds);
+  setIfDefined("medium_stress_duration_seconds", summary.mediumStressDurationInSeconds);
+  setIfDefined("high_stress_duration_seconds", summary.highStressDurationInSeconds);
+
+  // Body Battery (charged/drained from dailies)
+  setIfDefined("body_battery_charged", summary.bodyBatteryChargedValue);
+  setIfDefined("body_battery_drained", summary.bodyBatteryDrainedValue);
+
+  return row;
 }
 
 /**
@@ -468,29 +477,34 @@ export function mapSleepToMetrics(
   summary: GarminSleepSummary,
   pseudonymId: string,
 ) {
-  return {
+  const row: Record<string, unknown> = {
     pseudonym_id: pseudonymId,
     metric_date: summary.calendarDate,
-
-    // Sleep totals
-    sleep_duration_seconds: summary.durationInSeconds ?? null,
-    sleep_score: summary.overallSleepScore?.value ?? null,
-    sleep_score_qualifier: summary.overallSleepScore?.qualifierKey ?? null,
-
-    // Sleep breakdown
-    deep_sleep_seconds: summary.deepSleepDurationInSeconds ?? null,
-    light_sleep_seconds: summary.lightSleepDurationInSeconds ?? null,
-    rem_sleep_seconds: summary.remSleepInSeconds ?? null,
-    awake_seconds: summary.awakeDurationInSeconds ?? null,
-
-    // Metadata
-    sleep_validation: summary.validation ?? null,
-    sleep_start_time: summary.startTimeInSeconds
-      ? new Date(summary.startTimeInSeconds * 1000).toISOString()
-      : null,
-
     updated_at: new Date().toISOString(),
   };
+
+  const setIfDefined = (key: string, value: unknown) => {
+    if (value !== undefined) row[key] = value;
+  };
+
+  // Sleep totals
+  setIfDefined("sleep_duration_seconds", summary.durationInSeconds);
+  setIfDefined("sleep_score", summary.overallSleepScore?.value);
+  setIfDefined("sleep_score_qualifier", summary.overallSleepScore?.qualifierKey);
+
+  // Sleep breakdown
+  setIfDefined("deep_sleep_seconds", summary.deepSleepDurationInSeconds);
+  setIfDefined("light_sleep_seconds", summary.lightSleepDurationInSeconds);
+  setIfDefined("rem_sleep_seconds", summary.remSleepInSeconds);
+  setIfDefined("awake_seconds", summary.awakeDurationInSeconds);
+
+  // Metadata
+  setIfDefined("sleep_validation", summary.validation);
+  if (summary.startTimeInSeconds !== undefined) {
+    setIfDefined("sleep_start_time", new Date(summary.startTimeInSeconds * 1000).toISOString());
+  }
+
+  return row;
 }
 
 /**
@@ -615,15 +629,16 @@ export function mapHrvToMetrics(
   summary: GarminHrvSummary,
   pseudonymId: string,
 ) {
-  return {
+  const row: Record<string, unknown> = {
     pseudonym_id: pseudonymId,
     metric_date: summary.calendarDate,
-
-    hrv_last_night_average: summary.lastNightAvg ?? null,
-    hrv_last_night_5_min_high: summary.lastNight5MinHigh ?? null,
-
     updated_at: new Date().toISOString(),
   };
+
+  if (summary.lastNightAvg !== undefined) row.hrv_last_night_average = summary.lastNightAvg;
+  if (summary.lastNight5MinHigh !== undefined) row.hrv_last_night_5_min_high = summary.lastNight5MinHigh;
+
+  return row;
 }
 
 /**
@@ -747,10 +762,15 @@ function extractBodyBatteryScore(
     .sort((a, b) => a[0] - b[0]);
 
   const allValues = entries.map(([, v]) => v);
-  const start = entries[0][1];
   const mostRecent = entries[entries.length - 1][1];
   const highest = Math.max(...allValues);
   const lowest = Math.min(...allValues);
+
+  // "Start" in our weekly model is the morning value. For Body Battery, the
+  // daily peak is the best proxy for that morning start (it typically occurs
+  // after overnight recovery). Using the first sample of the day can be
+  // misleading if the series begins before recovery has peaked.
+  const start = highest;
 
   return { mostRecent, highest, lowest, start };
 }

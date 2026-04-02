@@ -63,9 +63,9 @@ const METRIC_LABEL: Record<WeeklyMetricKey, string> = {
 };
 
 const METRIC_WINDOW: Record<WeeklyMetricKey, string> = {
-  body_battery: "Most recent 7 valid calendar days with Body Battery Start (morning) data.",
-  stress: "Most recent 7 valid calendar days with Stress data.",
-  rhr: "Most recent 7 valid calendar days with RHR data.",
+  body_battery: "Last 7 calendar dates ending on week end (Body Battery Start/morning proxy).",
+  stress: "Last 7 calendar dates ending on week end.",
+  rhr: "Last 7 calendar dates ending on week end.",
   sleep_duration: "Most recent 7 valid sleep nights with duration data (not necessarily last 7 dates).",
   sleep_score: "Most recent 7 valid sleep nights with score data (not necessarily last 7 dates).",
   waso: "Most recent 7 valid sleep nights with WASO (awake minutes) data (not necessarily last 7 dates).",

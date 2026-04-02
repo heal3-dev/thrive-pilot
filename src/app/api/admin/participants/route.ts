@@ -88,7 +88,7 @@ export async function GET(request: Request) {
 
   const { data: metricsData } = await admin
     .from("garmin_metrics")
-    .select("pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
+    .select("pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_highest, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
     .gte("metric_date", dateStr)
     .order("metric_date", { ascending: false });
 
@@ -111,7 +111,9 @@ export async function GET(request: Request) {
         awake_seconds: (m as unknown as { awake_seconds?: number | null }).awake_seconds ?? null,
         body_battery_charged: m.body_battery_charged,
         body_battery_drained: m.body_battery_drained,
-        body_battery_start: (m as unknown as { body_battery_start: number | null }).body_battery_start,
+        body_battery_start: (m as unknown as { body_battery_highest?: number | null; body_battery_start?: number | null }).body_battery_highest
+          ?? (m as unknown as { body_battery_start?: number | null }).body_battery_start
+          ?? null,
         body_battery_lowest: (m as unknown as { body_battery_lowest: number | null }).body_battery_lowest,
         body_battery_most_recent: m.body_battery_most_recent,
         hrv_last_night_average: m.hrv_last_night_average,

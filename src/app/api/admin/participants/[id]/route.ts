@@ -74,7 +74,7 @@ export async function GET(
 
     const { data: metrics, error: mError } = await supabase
       .from("garmin_metrics")
-      .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
+      .select("id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_highest, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
       .eq("pseudonym_id", pseudonymId)
       .order("metric_date", { ascending: false })
       .range(offset, offset + clampedLimit - 1);
@@ -82,7 +82,14 @@ export async function GET(
     if (mError) {
       console.error(`[PARTICIPANT_DETAILS] Error fetching metrics:`, mError);
     }
-    metricsData = metrics || [];
+    metricsData = (metrics || []).map((m) => {
+      const mm = m as unknown as { body_battery_start?: number | null; body_battery_highest?: number | null };
+      return {
+        ...m,
+        // Use daily peak as the "morning start" proxy (fixes historic data too).
+        body_battery_start: mm.body_battery_highest ?? mm.body_battery_start ?? null,
+      };
+    });
   }
 
   const weekEnding = new Date().toISOString().slice(0, 10);
@@ -92,7 +99,7 @@ export async function GET(
     const { data: weeklyMetrics } = await supabase
       .from("garmin_metrics")
       .select(
-        "id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high"
+        "id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_highest, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high"
       )
       .eq("pseudonym_id", pseudonymId)
       .gte("metric_date", since)
@@ -100,6 +107,9 @@ export async function GET(
       .order("metric_date", { ascending: false });
 
     const weeklyTyped: Metric[] = (weeklyMetrics ?? []).map((m) => ({
+      // Prefer daily peak as "start" for scoring and display semantics.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      body_battery_start: ((m as any).body_battery_highest ?? (m as any).body_battery_start) as number | null,
       id: m.id as string,
       metric_date: m.metric_date as string,
       resting_heart_rate: m.resting_heart_rate as number | null,
@@ -109,7 +119,6 @@ export async function GET(
       awake_seconds: (m as unknown as { awake_seconds?: number | null }).awake_seconds ?? null,
       body_battery_charged: m.body_battery_charged as number | null,
       body_battery_drained: m.body_battery_drained as number | null,
-      body_battery_start: m.body_battery_start as number | null,
       body_battery_lowest: m.body_battery_lowest as number | null,
       body_battery_most_recent: m.body_battery_most_recent as number | null,
       hrv_last_night_average: m.hrv_last_night_average as number | null,
