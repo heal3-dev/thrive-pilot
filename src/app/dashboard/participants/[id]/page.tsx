@@ -10,6 +10,7 @@ import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTa
 import { getDemoParticipant } from "@/lib/demo-data";
 import { type Metric, type WeeklyFlag } from "@/lib/flags/rules";
 import { weeklyCompositeTooltip } from "@/lib/flags/weekly-tooltips";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 const PAGE_SIZE = 30;
 
@@ -183,20 +184,35 @@ export default function ParticipantDetailsPage() {
           <h1 className="text-2xl font-bold text-slate-900 flex items-center justify-end gap-3">
             {participant.name || participant.email}
             {weeklyFlag && (
-              <span
-                className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-semibold border cursor-help ${
-                  weeklyFlag.finalColor === "red"
-                    ? "bg-red-50 text-red-700 border-red-200"
-                    : weeklyFlag.finalColor === "orange"
-                    ? "bg-orange-50 text-orange-700 border-orange-200"
-                    : weeklyFlag.finalColor === "yellow"
-                    ? "bg-amber-50 text-amber-700 border-amber-200"
-                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                }`}
-                title={weeklyCompositeTooltip(weeklyFlag)}
-              >
-                Weekly {weeklyFlag.finalColor === "green" ? "🟢" : weeklyFlag.finalColor === "yellow" ? "🟡" : weeklyFlag.finalColor === "orange" ? "🟠" : "🔴"}
-              </span>
+              <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className={`inline-flex px-2.5 py-0.5 rounded-full text-sm font-semibold border cursor-help ${
+                        weeklyFlag.finalColor === "red"
+                          ? "bg-red-50 text-red-700 border-red-200"
+                          : weeklyFlag.finalColor === "orange"
+                          ? "bg-orange-50 text-orange-700 border-orange-200"
+                          : weeklyFlag.finalColor === "yellow"
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      }`}
+                    >
+                      Weekly{" "}
+                      {weeklyFlag.finalColor === "green"
+                        ? "🟢"
+                        : weeklyFlag.finalColor === "yellow"
+                        ? "🟡"
+                        : weeklyFlag.finalColor === "orange"
+                        ? "🟠"
+                        : "🔴"}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="end">
+                    {weeklyCompositeTooltip(weeklyFlag)}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </h1>
           <p className="text-slate-500 text-sm">

@@ -2,6 +2,7 @@
 
 import { useRef, useCallback, useEffect } from "react";
 import type { WeeklyFlag, WeeklyMetricKey, WeeklyMetricResult } from "@/lib/flags/rules";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 type ParticipantMetric = {
   id: string;
@@ -191,9 +192,18 @@ export function ParticipantMetricsTable({
     if (!c) return null;
     const tip = tooltipForMetric(metric, c);
     return (
-      <span className="ml-1 cursor-help" title={tip} aria-label={tip}>
-        {emojiForColor(c)}
-      </span>
+      <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="ml-1 cursor-help" aria-label={tip}>
+              {emojiForColor(c)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start">
+            {tip}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   };
 
