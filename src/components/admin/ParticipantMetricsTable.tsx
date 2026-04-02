@@ -97,7 +97,7 @@ function metricMeaning(metric: WeeklyMetricKey): string {
     case "waso":
       return "Uses WASO = awake_seconds / 60 (minutes).";
     case "hrv":
-      return "Uses nightly average HRV compared to personal baseline (median of most recent 21 valid days in prior 28, excluding the evaluation window).";
+      return "Uses nightly average HRV compared to personal baseline (median of most recent 7 valid nights, minimum 5, excluding the evaluation window).";
     case "hrv_stability":
       return "Uses HRV stability = coefficient of variation (CV%) across 7 nights.";
   }
@@ -125,7 +125,13 @@ function tooltipForMetric(metric: WeeklyMetricKey, color: WeeklyMetricResult["co
   const hint = metricThresholdHint(metric);
 
   if (color === "insufficient_baseline_data") {
-    return `${base} ${meaning} ${window} Baseline required: ≥14 valid baseline days in the prior 28 days.`;
+    const req =
+      metric === "hrv"
+        ? "Baseline required: ≥5 valid baseline nights before this week."
+        : metric === "rhr"
+        ? "Baseline required: ≥14 valid baseline days in the prior 28 days."
+        : "Baseline required: enough recent history.";
+    return `${base} ${meaning} ${window} ${req}`;
   }
   if (color === "no_data") {
     return `${base} ${meaning} ${window} We need enough recent valid days/nights with data to compute this status.`;

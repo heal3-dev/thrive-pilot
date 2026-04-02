@@ -269,7 +269,7 @@ function caseyMetrics(): Metric[] {
   return metrics;
 }
 
-/** Blair B. — INSUFFICIENT_HRV_BASELINE: HRV has 7 valid nights but baseline <14 days → insufficient_baseline_data (⚪, 0 pts) */
+/** Blair B. — INSUFFICIENT_HRV_BASELINE: HRV has 7 valid nights but baseline <5 nights → insufficient_baseline_data (⚪, 0 pts) */
 function blairMetrics(): Metric[] {
   const metrics = generateBaseline({
     average_stress_level: 28,
@@ -288,11 +288,10 @@ function blairMetrics(): Metric[] {
     metrics[i] = { ...metrics[i], hrv_last_night_average: 45, hrv_last_night_5_min_high: 68 };
   }
 
-  // Baseline window for HRV is (evalStart-28 ... evalStart-1), where evalStart is oldest of the 7 eval nights.
-  // With weekEnding=today, evalStart ~ 6 days ago, so baseline is daysBack 7..34.
-  // Keep <14 baseline HRV days by nulling most of that window.
+  // HRV baseline uses most recent 7 valid nights BEFORE the evaluation window, minimum 5 nights.
+  // Keep <5 baseline nights by nulling most of the pre-window history.
   for (let i = 7; i <= 34; i++) {
-    const keep = i === 7 || i === 9 || i === 11 || i === 13 || i === 15 || i === 17 || i === 19 || i === 21 || i === 23 || i === 25; // 10 days
+    const keep = i === 7 || i === 9 || i === 11 || i === 13; // 4 nights only
     metrics[i] = {
       ...metrics[i],
       hrv_last_night_average: keep ? 46 : null,

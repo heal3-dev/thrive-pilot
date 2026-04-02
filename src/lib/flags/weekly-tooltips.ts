@@ -65,7 +65,7 @@ export function weeklyCompositeTooltip(wf: WeeklyFlag): string {
     `Windows: calendar-day metrics use the last 7 calendar dates; sleep-based metrics use the most recent 7 valid nights (not necessarily last 7 dates).`
   );
   lines.push(
-    `Baselines: HRV/RHR use personal median of most recent 21 valid days in prior 28 (excluding evaluation window); if <14 valid baseline days → ⚪.`
+    `Baselines: HRV uses median of most recent 7 valid nights (min 5), excluding evaluation window; RHR uses median of most recent 21 valid days in prior 28 (min 14), excluding evaluation window. Missing baseline → ⚪.`
   );
   lines.push(
     `Overrides (primary metrics = WASO, Stress, HRV Stability):`

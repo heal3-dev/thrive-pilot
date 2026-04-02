@@ -166,6 +166,27 @@ function getBaselineMedian(
   return { status: 'ok', baseline: median(mostRecent21) ?? mostRecent21[Math.floor(mostRecent21.length / 2)] };
 }
 
+function getRecentBaselineMedian(
+  metrics: Metric[],
+  baselineEnd: string,
+  getValue: (m: Metric) => number | null | undefined,
+  maxN: number,
+  minN: number,
+): { status: 'ok'; baseline: number } | { status: 'insufficient_baseline_data'; baseline: null } {
+  const vals = metrics
+    .filter((m) => m.metric_date <= baselineEnd)
+    .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1))
+    .map(getValue)
+    .filter((v): v is number => v != null)
+    .slice(0, maxN);
+
+  if (vals.length < minN) {
+    return { status: 'insufficient_baseline_data', baseline: null };
+  }
+
+  return { status: 'ok', baseline: median(vals) ?? vals[Math.floor(vals.length / 2)] };
+}
+
 function classifyBodyBattery(
   startValsOldestToNewest: (number | null)[],
   additionalPrimaryFlag: boolean,
@@ -451,11 +472,14 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
     addDaysYmd(rhrEvalStart, -1),
     (m) => m.resting_heart_rate,
   );
-  const hrvBaseline = getBaselineMedian(
+  // HRV baseline (pilot): use most recent 7 valid nights (median), minimum 5 nights.
+  // Still exclude the current scoring window by ending the baseline at (evalStart - 1 day).
+  const hrvBaseline = getRecentBaselineMedian(
     sorted,
-    addDaysYmd(hrvEvalStart, -28),
     addDaysYmd(hrvEvalStart, -1),
     (m) => m.hrv_last_night_average,
+    7,
+    5,
   );
 
   // Primary metrics first (iterative so "additional recovery flag" clauses can look at other primaries)
