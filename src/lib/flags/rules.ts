@@ -261,19 +261,22 @@ function classifySleepScore(
   additionalRecoveryFlag: boolean,
 ): WeeklyMetricResult {
   if (scores.length !== 7) return { metric: 'sleep_score', color: 'no_data', points: 0 };
-  const green = scores.filter((s) => s >= 80 && s <= 100).length >= 5;
-  if (green) return { metric: 'sleep_score', color: 'green', points: POINTS.green };
+  // Evaluate worst-first to avoid "green masking" when severe nights exist.
+  const poor = scores.filter((s) => s < 60).length;
+  const fair = scores.filter((s) => s >= 60 && s <= 79).length;
+  const good = scores.filter((s) => s >= 80 && s <= 100).length;
 
-  const red = scores.filter((s) => s < 60).length >= 3 || (scores.filter((s) => s < 60).length >= 2 && additionalRecoveryFlag);
+  const red = poor >= 3 || (poor >= 2 && additionalRecoveryFlag);
   if (red) return { metric: 'sleep_score', color: 'red', points: POINTS.red };
 
-  const orange = scores.filter((s) => s >= 60 && s <= 79).length >= 6 || scores.filter((s) => s < 60).length >= 2;
+  const orange = fair >= 6 || poor >= 2;
   if (orange) return { metric: 'sleep_score', color: 'orange', points: POINTS.orange };
 
-  const yellow = scores.filter((s) => s >= 60 && s <= 79).length >= 4;
+  const yellow = fair >= 4;
   if (yellow) return { metric: 'sleep_score', color: 'yellow', points: POINTS.yellow };
 
-  return { metric: 'sleep_score', color: 'yellow', points: POINTS.yellow };
+  const green = good >= 5;
+  return { metric: 'sleep_score', color: green ? 'green' : 'yellow', points: green ? POINTS.green : POINTS.yellow };
 }
 
 function classifyWASO(minutes: number[]): WeeklyMetricResult {

@@ -649,7 +649,14 @@ export function ParticipantManagement({
                       )}
                     </td>
                     <td className="px-2 py-4">
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className={
+                          mode === "trends" || mode === "mentor-trends"
+                            ? "flex items-center justify-end gap-1"
+                            : "flex flex-col items-end gap-0.5"
+                        }
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {mode === "trends" || mode === "mentor-trends" ? (
                           <Button
                              variant="outline"
