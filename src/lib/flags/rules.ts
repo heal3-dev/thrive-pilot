@@ -35,7 +35,7 @@ export type WeeklyMetricResult = {
 
 export type WeeklyFlag = {
   weekEnding: string; // YYYY-MM-DD
-  weeklyScore: number; // sum(points), max=24
+  weeklyScore: number; // normalized-to-24 composite (uses only available metrics)
   baseColor: WeeklyColor;
   finalColor: WeeklyColor;
   overrideApplied: 'none' | 'force_orange' | 'force_red';
@@ -514,7 +514,17 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
     hrv_stability: hrvStabRes,
   };
 
-  const weeklyScore = (Object.values(metricsRes)).reduce((sum, r) => sum + r.points, 0);
+  const available = Object.values(metricsRes).filter(
+    (r) => r.color === "green" || r.color === "yellow" || r.color === "orange" || r.color === "red",
+  );
+  const earnedPoints = available.reduce((sum, r) => sum + r.points, 0);
+  const maxPossiblePoints = available.length * 3;
+
+  // Normalize using only available metrics so missing data doesn't bias results greener.
+  // Scale back onto the familiar 0–24 range so the same base thresholds apply.
+  const weeklyScoreRaw = maxPossiblePoints > 0 ? (earnedPoints / maxPossiblePoints) * 24 : 0;
+  const weeklyScore = Math.round(weeklyScoreRaw * 10) / 10; // 0.1 resolution for stable display
+
   const baseColor = baseColorFromScore(weeklyScore);
   const metricColors = Object.fromEntries(Object.entries(metricsRes).map(([k, v]) => [k, v.color])) as Record<WeeklyMetricKey, WeeklyMetricResult['color']>;
   const { finalColor, overrideApplied } = applyOverrides(baseColor, metricColors);

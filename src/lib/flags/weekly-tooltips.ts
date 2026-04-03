@@ -54,12 +54,20 @@ function metricOrder(): WeeklyMetricKey[] {
 export function weeklyCompositeTooltip(wf: WeeklyFlag): string {
   const lines: string[] = [];
 
+  const metricValues = Object.values(wf.metrics);
+  const available = metricValues.filter(
+    (r) => r.color === "green" || r.color === "yellow" || r.color === "orange" || r.color === "red"
+  );
+  const earnedPoints = available.reduce((sum, r) => sum + r.points, 0);
+  const maxPossiblePoints = available.length * 3;
+
   lines.push(
     `Weekly composite: final ${wf.finalColor.toUpperCase()} ${emojiForColor(wf.finalColor)} (base ${wf.baseColor.toUpperCase()}, override ${wf.overrideApplied}).`
   );
   lines.push(
-    `Score: ${wf.weeklyScore}/24 where 🟢=0, 🟡=1, 🟠=2, 🔴=3 (⚪=0; missing/insufficient-baseline metrics do not add points).`
+    `Score: ${wf.weeklyScore}/24 (normalized by available metrics: earned ${earnedPoints}/${maxPossiblePoints || 0} from ${available.length}/8 metrics).`
   );
+  lines.push(`Points: 🟢=0, 🟡=1, 🟠=2, 🔴=3; ⚪ metrics are excluded from normalization.`);
   lines.push(`Base thresholds: 0–4 🟢, 5–8 🟡, 9–13 🟠, 14+ 🔴.`);
   lines.push(
     `Windows: calendar-day metrics use the last 7 calendar dates; sleep-based metrics use the most recent 7 valid nights (not necessarily last 7 dates).`
