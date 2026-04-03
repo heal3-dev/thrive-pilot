@@ -487,16 +487,24 @@ export function mapSleepToMetrics(
     if (value !== undefined) row[key] = value;
   };
 
-  // Sleep totals
-  setIfDefined("sleep_duration_seconds", summary.durationInSeconds);
-  setIfDefined("sleep_score", summary.overallSleepScore?.value);
-  setIfDefined("sleep_score_qualifier", summary.overallSleepScore?.qualifierKey);
+  // Only write sleep-derived metrics when the core sleep record is present.
+  // This prevents partial/incomplete payloads from populating WASO (awake_seconds)
+  // while leaving duration/score missing (which biases continuity "too good").
+  const hasCoreSleep =
+    summary.durationInSeconds !== undefined && summary.durationInSeconds != null && summary.durationInSeconds > 0;
 
-  // Sleep breakdown
-  setIfDefined("deep_sleep_seconds", summary.deepSleepDurationInSeconds);
-  setIfDefined("light_sleep_seconds", summary.lightSleepDurationInSeconds);
-  setIfDefined("rem_sleep_seconds", summary.remSleepInSeconds);
-  setIfDefined("awake_seconds", summary.awakeDurationInSeconds);
+  if (hasCoreSleep) {
+    // Sleep totals
+    setIfDefined("sleep_duration_seconds", summary.durationInSeconds);
+    setIfDefined("sleep_score", summary.overallSleepScore?.value);
+    setIfDefined("sleep_score_qualifier", summary.overallSleepScore?.qualifierKey);
+
+    // Sleep breakdown
+    setIfDefined("deep_sleep_seconds", summary.deepSleepDurationInSeconds);
+    setIfDefined("light_sleep_seconds", summary.lightSleepDurationInSeconds);
+    setIfDefined("rem_sleep_seconds", summary.remSleepInSeconds);
+    setIfDefined("awake_seconds", summary.awakeDurationInSeconds);
+  }
 
   // Metadata
   setIfDefined("sleep_validation", summary.validation);

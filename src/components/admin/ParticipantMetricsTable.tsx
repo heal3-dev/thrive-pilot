@@ -331,7 +331,9 @@ export function ParticipantMetricsTable({
                 </td>
                 <td className="px-2 py-2.5 text-slate-600 tabular-nums">{m.sleep_score ?? "-"}</td>
                 <td className="px-2 py-2.5 text-slate-600 tabular-nums">
-                  {m.awake_seconds != null ? `${Math.round(m.awake_seconds / 60)}m` : "-"}
+                  {m.sleep_duration_seconds != null && m.awake_seconds != null
+                    ? `${Math.round(m.awake_seconds / 60)}m`
+                    : "-"}
                 </td>
                 <td className="px-2 py-2.5 text-slate-600 tabular-nums">
                   <div className="flex flex-col">

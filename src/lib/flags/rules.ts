@@ -457,8 +457,12 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
   const rhr7 = calDates.map((d) => (byDate.get(d)?.resting_heart_rate ?? null));
 
   const sleepDuration7 = takeLastValidNights(sorted, weekEnding, (m) => m.sleep_duration_seconds).map((s) => (s == null ? null : Number(s))) as number[];
-  const sleepScore7 = takeLastValidNights(sorted, weekEnding, (m) => m.sleep_score).map((s) => (s == null ? null : Number(s))) as number[];
-  const wasoMinutes7 = takeLastValidNights(sorted, weekEnding, (m) => (m.awake_seconds ?? null)).map((s) => (s == null ? null : Number(s) / 60)) as number[];
+  const sleepScore7 = takeLastValidNights(sorted, weekEnding, (m) =>
+    m.sleep_duration_seconds != null && m.sleep_score != null ? m.sleep_score : null
+  ).map((s) => (s == null ? null : Number(s))) as number[];
+  const wasoMinutes7 = takeLastValidNights(sorted, weekEnding, (m) =>
+    m.sleep_duration_seconds != null && m.awake_seconds != null ? m.awake_seconds : null
+  ).map((s) => (s == null ? null : Number(s) / 60)) as number[];
   const hrvRows = takeLastValidNightRows(sorted, weekEnding, 7, (m) => m.hrv_last_night_average != null);
   const hrv7 = hrvRows.length === 7 ? hrvRows.map((m) => Number(m.hrv_last_night_average)) : [];
 
