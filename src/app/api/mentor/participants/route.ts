@@ -146,7 +146,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const weekEnding = new Date().toISOString().slice(0, 10);
+  const todayYmd = new Date().toISOString().slice(0, 10);
   const participants = (participantsData ?? []).map((p) => ({
     ...p,
     garmin_connected:
@@ -163,7 +163,8 @@ export async function GET(request: Request) {
       : null,
     weekly_flag: (() => {
       const m = metricsByParticipant.get(p.id) ?? [];
-      return m.length ? (computeWeeklyFlagFromMetrics(m, weekEnding) as WeeklyFlag) : null;
+      const inferredWeekEnding = m.length ? m[0].metric_date : todayYmd;
+      return m.length ? (computeWeeklyFlagFromMetrics(m, inferredWeekEnding) as WeeklyFlag) : null;
     })(),
   }));
 

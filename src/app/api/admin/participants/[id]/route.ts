@@ -92,7 +92,12 @@ export async function GET(
     });
   }
 
-  const weekEnding = new Date().toISOString().slice(0, 10);
+  const todayYmd = new Date().toISOString().slice(0, 10);
+  const inferredWeekEndingFromPage =
+    offset === 0 && metricsData.length > 0
+      ? ((metricsData[0] as unknown as { metric_date?: string }).metric_date ?? null)
+      : null;
+  const weekEnding = inferredWeekEndingFromPage ?? todayYmd;
   let weekly_flag: WeeklyFlag | null = null;
   if (offset === 0 && pseudonymId) {
     const since = ymdAddDays(weekEnding, -40);
@@ -103,9 +108,11 @@ export async function GET(
       )
       .eq("pseudonym_id", pseudonymId)
       .gte("metric_date", since)
-      .lte("metric_date", weekEnding)
+      .lte("metric_date", todayYmd)
       .order("metric_date", { ascending: false });
 
+    const inferredWeekEnding =
+      (weeklyMetrics?.[0]?.metric_date as string | undefined) ?? weekEnding;
     const weeklyTyped: Metric[] = (weeklyMetrics ?? []).map((m) => ({
       // Prefer daily peak as "start" for scoring and display semantics.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -125,7 +132,7 @@ export async function GET(
       hrv_last_night_5_min_high: m.hrv_last_night_5_min_high as number | null,
     }));
 
-    weekly_flag = computeWeeklyFlagFromMetrics(weeklyTyped, weekEnding);
+    weekly_flag = computeWeeklyFlagFromMetrics(weeklyTyped, inferredWeekEnding);
   }
 
   return NextResponse.json({

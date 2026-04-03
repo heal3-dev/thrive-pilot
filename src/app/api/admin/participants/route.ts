@@ -142,10 +142,13 @@ export async function GET(request: Request) {
   }
 
   // Enrich participants with mentor info AND flags
-  const weekEnding = new Date().toISOString().slice(0, 10);
+  const todayYmd = new Date().toISOString().slice(0, 10);
   const participants = (participantsData ?? []).map((p) => {
     const pMetrics = metricsByParticipant.get(p.id) || [];
-    const weekly_flag: WeeklyFlag | null = pMetrics.length ? computeWeeklyFlagFromMetrics(pMetrics, weekEnding) : null;
+    const inferredWeekEnding = pMetrics.length ? pMetrics[0].metric_date : todayYmd;
+    const weekly_flag: WeeklyFlag | null = pMetrics.length
+      ? computeWeeklyFlagFromMetrics(pMetrics, inferredWeekEnding)
+      : null;
 
     return {
       ...p,
