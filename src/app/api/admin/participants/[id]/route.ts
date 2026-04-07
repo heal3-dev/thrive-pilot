@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/app/api/admin/_utils";
 import { computeWeeklyFlagFromMetrics, type Metric, type WeeklyFlag } from "@/lib/flags/rules";
 import { hashParticipantId } from "@/lib/pseudonym-crypto";
+import * as Sentry from "@sentry/nextjs";
 
 function ymdAddDays(ymd: string, deltaDays: number): string {
   const d = new Date(`${ymd}T00:00:00.000Z`);
@@ -142,4 +143,69 @@ export async function GET(
     weekly_flag,
     pagination: { offset, limit: clampedLimit, total: totalCount, hasMore: offset + clampedLimit < totalCount },
   });
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const guard = await requireAdmin(request);
+  if (!guard.ok) return guard.response;
+
+  const admin = guard.admin;
+  const { id } = await params;
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const allowedKeys = new Set(["name", "email", "phone_number", "is_active"]);
+  const update: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (!allowedKeys.has(k)) continue;
+    update[k] = v;
+  }
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 });
+  }
+
+  try {
+    const { data: updated, error } = await admin
+      .from("participants")
+      .update({ ...update, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("id, name, email, phone_number, is_active, garmin_user_id, created_at, updated_at")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // If deactivating, end any active mentor assignment(s).
+    if (update.is_active === false) {
+      const { error: unassignError } = await admin
+        .from("mentor_assignments")
+        .update({ unassigned_at: new Date().toISOString() })
+        .eq("participant_id", id)
+        .is("unassigned_at", null);
+
+      if (unassignError) {
+        // Participant update succeeded, but assignment update failed. Capture for follow-up.
+        Sentry.captureMessage("Participant deactivated but assignment unassign failed", {
+          level: "warning",
+          extra: { participant_id: id, error: unassignError.message },
+        });
+      }
+    }
+
+    return NextResponse.json({ participant: updated });
+  } catch (e) {
+    Sentry.captureException(e, { extra: { participant_id: id, payload: update } });
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

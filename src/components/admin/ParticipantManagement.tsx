@@ -279,6 +279,7 @@ export function ParticipantManagement({
     if (!confirm(confirmText)) return;
 
     try {
+      setError(null);
       await adminFetch(`/api/admin/participants/${p.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -286,6 +287,7 @@ export function ParticipantManagement({
       });
       setSuccessMessage(nextIsActive ? "Participant activated" : "Participant deactivated");
       setTimeout(() => setSuccessMessage(null), 3000);
+      fetchParticipants();
     } catch (err) {
       console.error("Error toggling participant:", err);
       setError(err instanceof Error ? err.message : "Failed to update participant");
