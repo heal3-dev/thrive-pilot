@@ -89,7 +89,7 @@ function metricMeaning(metric: WeeklyMetricKey): string {
     case "stress":
       return "Uses average stress level.";
     case "rhr":
-      return "Uses resting heart rate compared to personal baseline (median of most recent 21 valid days in prior 28, excluding the evaluation window).";
+      return "Uses resting heart rate compared to personal baseline (median of most recent 10 valid days, excluding the evaluation window).";
     case "sleep_duration":
       return "Uses sleep duration (hours).";
     case "sleep_score":
@@ -129,7 +129,7 @@ function tooltipForMetric(metric: WeeklyMetricKey, color: WeeklyMetricResult["co
       metric === "hrv"
         ? "Baseline required: ≥5 valid baseline nights before this week."
         : metric === "rhr"
-        ? "Baseline required: ≥14 valid baseline days in the prior 28 days."
+        ? "Baseline required: ≥5 valid baseline days before this week."
         : "Baseline required: enough recent history.";
     return `${base} ${meaning} ${window} ${req}`;
   }

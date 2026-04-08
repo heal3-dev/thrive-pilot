@@ -147,25 +147,6 @@ function takeLastValidDays<T>(
   return { dates: rows.map((r) => r.metric_date), values: rows.map((r) => getValue(r) as T) };
 }
 
-function getBaselineMedian(
-  metrics: Metric[],
-  baselineStart: string,
-  baselineEnd: string,
-  getValue: (m: Metric) => number | null | undefined,
-): { status: 'ok'; baseline: number } | { status: 'insufficient_baseline_data'; baseline: null } {
-  const vals = metrics
-    .filter((m) => m.metric_date >= baselineStart && m.metric_date <= baselineEnd)
-    .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1))
-    .map(getValue)
-    .filter((v): v is number => v != null);
-
-  const mostRecent21 = vals.slice(0, 21);
-  if (mostRecent21.length < 14) {
-    return { status: 'insufficient_baseline_data', baseline: null };
-  }
-  return { status: 'ok', baseline: median(mostRecent21) ?? mostRecent21[Math.floor(mostRecent21.length / 2)] };
-}
-
 function getRecentBaselineMedian(
   metrics: Metric[],
   baselineEnd: string,
@@ -444,7 +425,8 @@ function applyOverrides(
  *
  * - Calendar days window (last 7 days ending `weekEnding`): Body Battery, Stress, RHR
  * - Sleep nights window (most recent 7 valid nights <= `weekEnding`): Sleep Duration, Sleep Score, WASO, HRV, HRV Stability
- * - HRV/RHR baseline: median of most recent 21 valid days in prior 28 days, excluding current week; "insufficient_baseline_data" if <14 valid days.
+ * - HRV baseline: median of most recent 7 valid nights (min 5), excluding current week.
+ * - RHR baseline: median of most recent 10 valid days (min 5), excluding current week.
  */
 export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: string): WeeklyFlag {
   const sorted = [...metrics].sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1));
@@ -470,11 +452,14 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
   const rhrEvalStart = addDaysYmd(weekEnding, -6);
   const hrvEvalStart = hrvRows.length === 7 ? hrvRows[hrvRows.length - 1].metric_date : addDaysYmd(weekEnding, -6);
 
-  const rhrBaseline = getBaselineMedian(
+  // RHR baseline (pilot): use most recent 10 valid days (median), minimum 5 days.
+  // Exclude the current scoring window by ending the baseline at (evalStart - 1 day).
+  const rhrBaseline = getRecentBaselineMedian(
     sorted,
-    addDaysYmd(rhrEvalStart, -28),
     addDaysYmd(rhrEvalStart, -1),
     (m) => m.resting_heart_rate,
+    10,
+    5,
   );
   // HRV baseline (pilot): use most recent 7 valid nights (median), minimum 5 nights.
   // Still exclude the current scoring window by ending the baseline at (evalStart - 1 day).
