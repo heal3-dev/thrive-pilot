@@ -5,12 +5,16 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import PrivacyContent from "@/components/privacy-content";
+import ConsentContent from "@/components/consent-content";
 
 export default function ConsentPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [ackPrivacy, setAckPrivacy] = useState(false);
+  const [ackConsent, setAckConsent] = useState(false);
+  const [ackSms, setAckSms] = useState(false);
 
   // Handle auth from invite link hash fragments (#access_token=...)
   // The @supabase/ssr browser client does NOT auto-detect hash fragments,
@@ -132,20 +136,48 @@ export default function ConsentPage() {
           <p className="text-slate-600">Please review and accept the information below to continue.</p>
         </div>
 
-        <div className="bg-slate-50 rounded-xl p-6 mb-6 border border-slate-100 max-h-[50vh] overflow-y-auto">
-          <PrivacyContent />
-
-          {/* Consent */}
-          <section className="bg-teal-50 -mx-6 -mb-6 mt-6 p-6 rounded-b-xl border-t border-teal-100">
-            <h2 className="font-semibold text-slate-900 mb-3">Consent</h2>
-            <p className="text-sm text-slate-700 mb-2">By clicking <strong>&quot;I Agree &amp; Continue,&quot;</strong> you confirm that:</p>
-            <ul className="text-sm text-slate-700 list-disc list-inside ml-2 space-y-1">
-              <li>You understand how your data will be used, stored, and protected</li>
-              <li>You understand that Thrive does not diagnose or provide clinical advice</li>
-              <li>You consent to participate in the Thrive pilot</li>
-              <li>You consent to receive SMS messages from your assigned mentor</li>
-            </ul>
+        <div className="bg-slate-50 rounded-xl p-6 mb-6 border border-slate-100 max-h-[50vh] overflow-y-auto space-y-8">
+          <section>
+            <h2 className="font-semibold text-slate-900 mb-3">Privacy Policy</h2>
+            <PrivacyContent />
           </section>
+
+          <div className="border-t border-slate-200" />
+
+          <section>
+            <h2 className="font-semibold text-slate-900 mb-3">Participant Consent Form</h2>
+            <ConsentContent />
+          </section>
+        </div>
+
+        <div className="space-y-3 mb-6">
+          <label className="flex items-start gap-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+              checked={ackPrivacy}
+              onChange={(e) => setAckPrivacy(e.target.checked)}
+            />
+            <span>I have read and understood the Privacy Policy.</span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+              checked={ackConsent}
+              onChange={(e) => setAckConsent(e.target.checked)}
+            />
+            <span>I have read and understood the Participant Consent Form.</span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+              checked={ackSms}
+              onChange={(e) => setAckSms(e.target.checked)}
+            />
+            <span>I consent to receiving outreach communications (including SMS) from assigned peer mentors.</span>
+          </label>
         </div>
 
         {error && (
@@ -156,14 +188,14 @@ export default function ConsentPage() {
 
         <Button
           onClick={handleConsent}
-          disabled={isSubmitting}
+          disabled={isSubmitting || !ackPrivacy || !ackConsent || !ackSms}
           className="w-full bg-teal-500 hover:bg-teal-600 text-white font-semibold py-3 rounded-xl"
         >
           {isSubmitting ? "Processing..." : "I Agree & Continue"}
         </Button>
 
         <p className="text-xs text-center text-slate-500 mt-4">
-          By clicking &quot;I Agree,&quot; you consent to participate in the Thrive pilot program.
+          By clicking &quot;I Agree &amp; Continue,&quot; you confirm your informed consent to participate in the Thrive Pilot.
         </p>
       </div>
     </div>

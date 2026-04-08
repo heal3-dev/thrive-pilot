@@ -21,8 +21,12 @@ export default function PrivacyPage() {
           <PrivacyContent />
         </div>
 
-        <p className="text-xs text-center text-slate-400 mt-6">
-          If you have questions about this policy, please contact the Thrive Pilot administrator.
+        <p className="text-xs text-center text-slate-500 mt-6">
+          Questions about this policy can be directed to the Privacy Officer at{" "}
+          <a className="text-teal-700 hover:underline" href="mailto:olga@heal-3.com">
+            olga@heal-3.com
+          </a>
+          .
         </p>
       </div>
     </div>

@@ -11,6 +11,12 @@ import { createSupabaseClientWithAuth, getSupabaseAdmin } from "@/lib/supabase";
  * which was set when the admin sent the invite via /api/admin/participants/invite.
  */
 export async function POST(request: Request) {
+  const CONSENT_DOC_SET = {
+    privacy_policy_last_updated: "2026-03-27",
+    consent_form_last_updated: "2026-03-27",
+    name: "Thrive by Heal-3 Inc. (Pilot Version)",
+  } as const;
+
   // Get auth token from request
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ")
@@ -107,6 +113,18 @@ export async function POST(request: Request) {
       phone: participantPhone,
     });
 
+    // Best-effort audit log for consent acceptance
+    await admin.from("audit_logs").insert({
+      user_id: user.id,
+      action: "consent_given",
+      table_name: "participants",
+      record_id: created.id,
+      metadata: {
+        ...CONSENT_DOC_SET,
+        created_participant: true,
+      },
+    });
+
     return NextResponse.json({ ok: true, createdParticipant: true });
   }
 
@@ -131,6 +149,18 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+
+  // Best-effort audit log for consent acceptance
+  await admin.from("audit_logs").insert({
+    user_id: user.id,
+    action: "consent_given",
+    table_name: "participants",
+    record_id: participant.id,
+    metadata: {
+      ...CONSENT_DOC_SET,
+      created_participant: false,
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }
