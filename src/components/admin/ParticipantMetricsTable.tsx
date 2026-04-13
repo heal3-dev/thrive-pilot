@@ -85,7 +85,7 @@ function statusLabel(color: WeeklyMetricResult["color"]): string {
 function metricMeaning(metric: WeeklyMetricKey): string {
   switch (metric) {
     case "body_battery":
-      return "Uses Body Battery Start (morning) only.";
+      return 'Uses Body Battery Start (morning) only. Display format: Start→Low→End (e.g., "81→40→75"). Second line shows net charged/drained (e.g., "+41 / -6").';
     case "stress":
       return "Uses average stress level.";
     case "rhr":
