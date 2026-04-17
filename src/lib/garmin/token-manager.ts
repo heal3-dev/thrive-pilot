@@ -337,7 +337,27 @@ async function sendRevocationAlert(
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.example.com';
-    const reconnectUrl = `${siteUrl}/garmin/connect`;
+    const nextPath = `/garmin/connect?participant_id=${encodeURIComponent(participantId)}&reauthorize=1`;
+
+    // Generate a magic link token so reconnect works without an existing session.
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: participant.email,
+      options: {
+        redirectTo: `${siteUrl}/auth/callback?next=/garmin/connect`,
+        data: {
+          participant_id: participantId,
+          action: 'garmin_reconnect',
+        },
+      },
+    });
+
+    if (linkError || !linkData?.properties?.hashed_token) {
+      console.error('[TOKEN_MANAGER] Failed to generate reconnect magic link:', linkError);
+      return;
+    }
+
+    const reconnectUrl = `${siteUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=magiclink&next=${encodeURIComponent(nextPath)}`;
 
     await sendEmail({
       to: participant.email,

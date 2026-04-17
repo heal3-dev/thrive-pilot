@@ -13,7 +13,7 @@ import { hashParticipantId } from '@/lib/pseudonym-crypto';
 export default async function GarminConnectPage({
   searchParams,
 }: {
-  searchParams: Promise<{ participant_id?: string }>;
+  searchParams: Promise<{ participant_id?: string; reauthorize?: string }>;
 }) {
   const params = await searchParams;
 
@@ -42,6 +42,7 @@ export default async function GarminConnectPage({
 
   // Step 2: Get participant_id from URL searchParams (passed through auth callback)
   const participantId = params.participant_id;
+  const reauthorize = params.reauthorize === '1';
   
   if (!participantId) {
     console.error('[GARMIN_CONNECT] Missing participant_id in searchParams');
@@ -71,8 +72,12 @@ export default async function GarminConnectPage({
   }
     
   if (existingToken) {
-    console.log('[GARMIN_CONNECT] Already connected:', participantId);
-    redirect('/garmin/error?reason=already_connected');
+    if (!reauthorize) {
+      console.log('[GARMIN_CONNECT] Already connected:', participantId);
+      redirect('/garmin/error?reason=already_connected');
+    }
+
+    console.log('[GARMIN_CONNECT] Reauthorization requested; proceeding:', participantId);
   }
   
   // Step 4: Generate CSRF state token

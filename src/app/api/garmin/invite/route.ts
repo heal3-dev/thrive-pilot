@@ -8,6 +8,7 @@ import { hashParticipantId } from '@/lib/pseudonym-crypto';
 const inviteSchema = z.object({
   participant_id: z.string().uuid(),
   email: z.string().email(),
+  force: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
       .is('revoked_at', null)
       .maybeSingle();
 
-    if (existingToken) {
+    if (existingToken && !payload.force) {
       return NextResponse.json(
         { error: 'Garmin already connected for this participant' },
         { status: 400 }
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
   // We do NOT use Supabase's action_link because it uses the implicit flow
   // (tokens in URL hash fragment), which server components cannot read.
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  const nextPath = `/garmin/connect?participant_id=${payload.participant_id}`;
+  const nextPath = `/garmin/connect?participant_id=${payload.participant_id}${payload.force ? '&reauthorize=1' : ''}`;
   const actionLink = `${siteUrl}/auth/callback?token_hash=${hashedToken}&type=magiclink&next=${encodeURIComponent(nextPath)}`;
   
   // 5. Send email
