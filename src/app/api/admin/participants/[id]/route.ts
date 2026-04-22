@@ -174,6 +174,124 @@ export async function PATCH(
   }
 
   try {
+    const { data: existingParticipant, error: existingParticipantError } = await admin
+      .from("participants")
+      .select("id, email")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (existingParticipantError) {
+      return NextResponse.json({ error: existingParticipantError.message }, { status: 500 });
+    }
+
+    if (!existingParticipant?.id) {
+      return NextResponse.json({ error: "Participant not found" }, { status: 404 });
+    }
+
+    // Normalize email for comparisons and uniqueness checks.
+    const requestedEmailRaw = Object.prototype.hasOwnProperty.call(update, "email")
+      ? update.email
+      : undefined;
+    const requestedEmail =
+      typeof requestedEmailRaw === "string" ? requestedEmailRaw.trim() : requestedEmailRaw;
+
+    const existingEmailLower = (existingParticipant.email ?? "").toLowerCase();
+    const requestedEmailLower =
+      typeof requestedEmail === "string" ? requestedEmail.toLowerCase() : null;
+
+    const isEmailChange =
+      typeof requestedEmail === "string" &&
+      requestedEmail.length > 0 &&
+      requestedEmailLower !== existingEmailLower;
+
+    if (isEmailChange && requestedEmailLower) {
+      // Check for duplicate email in participants (excluding this participant).
+      const { data: dupParticipant, error: dupParticipantError } = await admin
+        .from("participants")
+        .select("id")
+        .eq("email", requestedEmail)
+        .neq("id", id)
+        .limit(1)
+        .maybeSingle();
+
+      if (dupParticipantError) {
+        return NextResponse.json({ error: dupParticipantError.message }, { status: 500 });
+      }
+
+      if (dupParticipant?.id) {
+        return NextResponse.json({ error: "This email is already registered as a participant" }, { status: 409 });
+      }
+
+      // Check if email exists in mentors table.
+      const { data: dupMentor, error: dupMentorError } = await admin
+        .from("mentors")
+        .select("id")
+        .eq("email", requestedEmail)
+        .limit(1)
+        .maybeSingle();
+
+      if (dupMentorError) {
+        return NextResponse.json({ error: dupMentorError.message }, { status: 500 });
+      }
+
+      if (dupMentor?.id) {
+        return NextResponse.json({ error: "This email is already registered as a mentor" }, { status: 409 });
+      }
+
+      // Check Supabase Auth users (covers invited-but-not-consented users and any other auth accounts).
+      const perPage = 1000;
+      let page = 1;
+      let authEmailTaken = false;
+      while (!authEmailTaken) {
+        const { data: listData, error: listError } = await admin.auth.admin.listUsers({
+          page,
+          perPage,
+        });
+        if (listError) {
+          return NextResponse.json({ error: listError.message }, { status: 500 });
+        }
+
+        const users = listData?.users ?? [];
+        authEmailTaken = users.some(
+          (u) => (u.email ?? "").toLowerCase() === requestedEmailLower && u.id !== id
+        );
+
+        if (authEmailTaken) break;
+        if (users.length < perPage) break;
+        page += 1;
+        if (page > 20) break; // Safety: avoid unbounded loops
+      }
+
+      if (authEmailTaken) {
+        return NextResponse.json({ error: "This email is already registered in the system" }, { status: 409 });
+      }
+    }
+
+    // If we are changing email, also update the linked Supabase Auth user (if it exists),
+    // so the old email is released for reuse (e.g., creating a mentor).
+    let authUpdated = false;
+    let oldAuthEmail: string | null = null;
+    if (isEmailChange && typeof requestedEmail === "string") {
+      const { data: authData, error: authGetError } = await admin.auth.admin.getUserById(id);
+      if (!authGetError && authData?.user) {
+        oldAuthEmail = authData.user.email ?? null;
+        const { error: authUpdateError } = await admin.auth.admin.updateUserById(id, {
+          email: requestedEmail,
+          email_confirm: true,
+        });
+
+        if (authUpdateError) {
+          const msg = authUpdateError.message ?? "Failed to update auth user";
+          const lower = msg.toLowerCase();
+          if (lower.includes("already") || lower.includes("registered") || lower.includes("exists")) {
+            return NextResponse.json({ error: "This email is already registered in the system" }, { status: 409 });
+          }
+          return NextResponse.json({ error: msg }, { status: 500 });
+        }
+        authUpdated = true;
+      }
+    }
+
     const { data: updated, error } = await admin
       .from("participants")
       .update({ ...update, updated_at: new Date().toISOString() })
@@ -182,6 +300,20 @@ export async function PATCH(
       .single();
 
     if (error) {
+      // Compensate: if we updated the auth email but failed to update the participant row,
+      // attempt to revert the auth email to its previous value.
+      if (authUpdated && oldAuthEmail) {
+        const { error: revertError } = await admin.auth.admin.updateUserById(id, {
+          email: oldAuthEmail,
+          email_confirm: true,
+        });
+        if (revertError) {
+          Sentry.captureMessage("Auth email updated but participant update failed; revert failed", {
+            level: "warning",
+            extra: { participant_id: id, revertError: revertError.message, oldAuthEmail },
+          });
+        }
+      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
