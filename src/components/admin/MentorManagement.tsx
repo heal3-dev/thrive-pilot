@@ -401,11 +401,8 @@ function MentorModal({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="john@example.com"
             required
-            disabled={mode === "edit"}
+            disabled={false}
           />
-          {mode === "edit" && (
-            <p className="text-xs text-slate-400">Email cannot be changed</p>
-          )}
         </div>
 
         {mode === "create" && (
