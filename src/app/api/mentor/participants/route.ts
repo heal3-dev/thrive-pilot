@@ -86,18 +86,23 @@ export async function GET(request: Request) {
     connectedPseudonymIds = new Set((garminTokensData ?? []).map((token) => token.pseudonym_id));
   }
 
-  // Load sync health for connected participants (best-effort)
+  // Load last ingestion time from existing records:
+  // `garmin_metrics.updated_at` is set on every webhook upsert, so max(updated_at)
+  // is an accurate proxy for "last successful ingestion".
   const staleBefore = daysAgo(3);
-  const { data: healthRows } = pseudonymIds.length
+  const { data: latestUpdatedRows } = pseudonymIds.length
     ? await admin
-        .from("garmin_connection_health")
-        .select("pseudonym_id, last_success_at")
+        .from("garmin_metrics")
+        .select("pseudonym_id, updated_at")
         .in("pseudonym_id", pseudonymIds)
-    : { data: [] as { pseudonym_id: string; last_success_at: string | null }[] };
+        .order("updated_at", { ascending: false })
+    : { data: [] as { pseudonym_id: string; updated_at: string | null }[] };
 
-  const healthByPseudonym = new Map<string, string | null>();
-  for (const row of (healthRows ?? []) as unknown as { pseudonym_id: string; last_success_at: string | null }[]) {
-    healthByPseudonym.set(row.pseudonym_id, row.last_success_at);
+  const latestUpdatedByPseudonym = new Map<string, string | null>();
+  for (const row of (latestUpdatedRows ?? []) as unknown as { pseudonym_id: string; updated_at: string | null }[]) {
+    if (!latestUpdatedByPseudonym.has(row.pseudonym_id)) {
+      latestUpdatedByPseudonym.set(row.pseudonym_id, row.updated_at);
+    }
   }
 
   const fourDaysAgo = new Date();
@@ -176,9 +181,10 @@ export async function GET(request: Request) {
       const isConnected =
         Boolean(p.garmin_user_id) || connectedPseudonymIds.has(pseudonymId);
       if (!isConnected) return false;
-      const lastSuccessAt = healthByPseudonym.get(pseudonymId);
-      if (!lastSuccessAt) return true;
-      return new Date(lastSuccessAt) < staleBefore;
+      const last = latestUpdatedByPseudonym.get(pseudonymId);
+      if (!last) return true;
+      const dt = new Date(last);
+      return Number.isNaN(dt.getTime()) ? true : dt < staleBefore;
     })(),
     assigned_mentor: assignmentMap.get(p.id)
       ? {

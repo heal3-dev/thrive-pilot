@@ -13,7 +13,6 @@ import crypto from 'crypto';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { hashParticipantId } from '@/lib/pseudonym-crypto';
 import * as Sentry from "@sentry/nextjs";
-import { markGarminIngestionSuccess } from '@/lib/garmin/connection-health';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -431,12 +430,6 @@ export async function processDailySummary(
       date_processed: summary.calendarDate,
       source: 'webhook',
     });
-
-    await markGarminIngestionSuccess({
-      pseudonymId,
-      calendarDate: summary.calendarDate,
-      source: 'webhook-dailies',
-    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     result.error = message;
@@ -595,12 +588,6 @@ export async function processSleepSummary(
       date_processed: summary.calendarDate,
       source: 'webhook-sleeps',
     });
-
-    await markGarminIngestionSuccess({
-      pseudonymId,
-      calendarDate: summary.calendarDate,
-      source: 'webhook-sleeps',
-    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     result.error = message;
@@ -725,12 +712,6 @@ export async function processHrvSummary(
       metrics_imported: 1,
       duration_ms: Date.now() - startMs,
       date_processed: summary.calendarDate,
-      source: 'webhook-hrv',
-    });
-
-    await markGarminIngestionSuccess({
-      pseudonymId,
-      calendarDate: summary.calendarDate,
       source: 'webhook-hrv',
     });
   } catch (error) {
@@ -897,12 +878,6 @@ export async function processStressDetailSummary(
       metrics_imported: 1,
       duration_ms: Date.now() - startMs,
       date_processed: summary.calendarDate,
-      source: 'webhook-stress',
-    });
-
-    await markGarminIngestionSuccess({
-      pseudonymId,
-      calendarDate: summary.calendarDate,
       source: 'webhook-stress',
     });
   } catch (error) {

@@ -81,26 +81,6 @@ export async function GET(request: Request) {
     (garminTokensData ?? []).map((token) => token.pseudonym_id)
   );
 
-  // Fetch last successful Garmin ingestion markers (if any)
-  const { data: garminHealthRows, error: garminHealthError } = await admin
-    .from("garmin_connection_health")
-    .select("pseudonym_id, last_success_at");
-
-  if (garminHealthError) {
-    return NextResponse.json(
-      { error: "Failed to fetch Garmin sync health" },
-      { status: 500 },
-    );
-  }
-
-  const lastSuccessByPseudonym = new Map<string, string | null>();
-  for (const row of garminHealthRows ?? []) {
-    lastSuccessByPseudonym.set(
-      row.pseudonym_id,
-      (row as unknown as { last_success_at?: string | null }).last_success_at ?? null,
-    );
-  }
-
   const staleBefore = new Date(Date.now() - 3 * 86_400_000);
 
   // Fetch recent metrics for weekly flagging (needs current 7-day window + 28-day baseline)
@@ -110,14 +90,25 @@ export async function GET(request: Request) {
 
   const { data: metricsData } = await admin
     .from("garmin_metrics")
-    .select("pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_highest, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
+    .select("pseudonym_id, metric_date, updated_at, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_highest, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
     .gte("metric_date", dateStr)
     .order("metric_date", { ascending: false });
 
   // Map metrics back to participant_id for flag calculation
   const metricsByParticipant = new Map<string, Metric[]>();
+  const lastUpdatedAtByPseudonym = new Map<string, string>();
   if (metricsData) {
     for (const m of metricsData) {
+      const pseudonymId = m.pseudonym_id;
+      if (pseudonymId) {
+        const updatedAt = (m as unknown as { updated_at?: string | null }).updated_at ?? null;
+        if (updatedAt) {
+          const prev = lastUpdatedAtByPseudonym.get(pseudonymId);
+          if (!prev || new Date(updatedAt) > new Date(prev)) {
+            lastUpdatedAtByPseudonym.set(pseudonymId, updatedAt);
+          }
+        }
+      }
       const participantId = pseudonymToParticipant.get(m.pseudonym_id);
       if (!participantId) continue;
       if (!metricsByParticipant.has(participantId)) {
@@ -180,7 +171,7 @@ export async function GET(request: Request) {
         const pid = participantToPseudonym.get(p.id);
         if (!pid) return false;
         if (!connectedPseudonymIds.has(pid) && !p.garmin_user_id) return false;
-        const last = lastSuccessByPseudonym.get(pid);
+        const last = lastUpdatedAtByPseudonym.get(pid);
         if (!last) return true;
         const lastDt = new Date(last);
         return Number.isNaN(lastDt.getTime()) ? true : lastDt < staleBefore;

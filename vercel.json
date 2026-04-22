@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/refresh-garmin-tokens",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/garmin-sync-health",
-      "schedule": "15 6 * * *"
     }
   ]
 }
