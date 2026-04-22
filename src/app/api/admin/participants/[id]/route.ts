@@ -188,6 +188,12 @@ export async function PATCH(
       return NextResponse.json({ error: "Participant not found" }, { status: 404 });
     }
 
+    // Some participant rows are linked to Supabase Auth by matching UUIDs (invite/consent flow),
+    // but direct-created participants may not have an auth user at all. We'll try to resolve
+    // a corresponding auth user id to (a) exclude "self" in uniqueness checks and (b) update
+    // auth email when changing participant email so the old email is released.
+    let participantAuthUserId: string | null = null;
+
     // Normalize email for comparisons and uniqueness checks.
     const requestedEmailRaw = Object.prototype.hasOwnProperty.call(update, "email")
       ? update.email
@@ -205,6 +211,12 @@ export async function PATCH(
       requestedEmailLower !== existingEmailLower;
 
     if (isEmailChange && requestedEmailLower) {
+      // Prefer resolving auth user by participant UUID (invite/consent flow).
+      const { data: authById, error: authByIdError } = await admin.auth.admin.getUserById(id);
+      if (!authByIdError && authById?.user) {
+        participantAuthUserId = id;
+      }
+
       // Check for duplicate email in participants (excluding this participant).
       const { data: dupParticipant, error: dupParticipantError } = await admin
         .from("participants")
@@ -241,8 +253,8 @@ export async function PATCH(
       // Check Supabase Auth users (covers invited-but-not-consented users and any other auth accounts).
       const perPage = 1000;
       let page = 1;
-      let authEmailTaken = false;
-      while (!authEmailTaken) {
+      const requestedMatches: string[] = [];
+      while (true) {
         const { data: listData, error: listError } = await admin.auth.admin.listUsers({
           page,
           perPage,
@@ -252,16 +264,29 @@ export async function PATCH(
         }
 
         const users = listData?.users ?? [];
-        authEmailTaken = users.some(
-          (u) => (u.email ?? "").toLowerCase() === requestedEmailLower && u.id !== id
-        );
+        for (const u of users) {
+          const emailLower = (u.email ?? "").toLowerCase();
+          if (!participantAuthUserId && existingEmailLower && emailLower === existingEmailLower) {
+            const meta = u.user_metadata as Record<string, unknown> | undefined;
+            if (u.id === id || meta?.role === "participant") {
+              participantAuthUserId = u.id;
+            }
+          }
 
-        if (authEmailTaken) break;
-        if (users.length < perPage) break;
+          if (emailLower === requestedEmailLower) {
+            requestedMatches.push(u.id);
+          }
+        }
+
+        if (users.length < perPage) {
+          break;
+        }
         page += 1;
         if (page > 20) break; // Safety: avoid unbounded loops
       }
 
+      const selfAuthId = participantAuthUserId;
+      const authEmailTaken = requestedMatches.some((matchId) => matchId !== selfAuthId);
       if (authEmailTaken) {
         return NextResponse.json({ error: "This email is already registered in the system" }, { status: 409 });
       }
@@ -272,10 +297,15 @@ export async function PATCH(
     let authUpdated = false;
     let oldAuthEmail: string | null = null;
     if (isEmailChange && typeof requestedEmail === "string") {
-      const { data: authData, error: authGetError } = await admin.auth.admin.getUserById(id);
-      if (!authGetError && authData?.user) {
+      const targetAuthUserId = participantAuthUserId;
+      if (targetAuthUserId) {
+        const { data: authData, error: authGetError } = await admin.auth.admin.getUserById(targetAuthUserId);
+        if (authGetError || !authData?.user) {
+          return NextResponse.json({ error: "Failed to load auth user for participant" }, { status: 500 });
+        }
+
         oldAuthEmail = authData.user.email ?? null;
-        const { error: authUpdateError } = await admin.auth.admin.updateUserById(id, {
+        const { error: authUpdateError } = await admin.auth.admin.updateUserById(targetAuthUserId, {
           email: requestedEmail,
           email_confirm: true,
         });
@@ -303,10 +333,13 @@ export async function PATCH(
       // Compensate: if we updated the auth email but failed to update the participant row,
       // attempt to revert the auth email to its previous value.
       if (authUpdated && oldAuthEmail) {
-        const { error: revertError } = await admin.auth.admin.updateUserById(id, {
+        const targetAuthUserId = participantAuthUserId;
+        const { error: revertError } = targetAuthUserId
+          ? await admin.auth.admin.updateUserById(targetAuthUserId, {
           email: oldAuthEmail,
           email_confirm: true,
-        });
+        })
+          : { error: null };
         if (revertError) {
           Sentry.captureMessage("Auth email updated but participant update failed; revert failed", {
             level: "warning",
