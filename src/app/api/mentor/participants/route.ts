@@ -4,6 +4,10 @@ import { requireMentor } from "@/app/api/_utils";
 import { computeWeeklyFlagFromMetrics, type Metric, type WeeklyFlag } from "@/lib/flags/rules";
 import { hashParticipantId } from "@/lib/pseudonym-crypto";
 
+function daysAgo(n: number): Date {
+  return new Date(Date.now() - n * 86_400_000);
+}
+
 export async function GET(request: Request) {
   const guard = await requireMentor(request);
   if (!guard.ok) return guard.response;
@@ -82,6 +86,20 @@ export async function GET(request: Request) {
     connectedPseudonymIds = new Set((garminTokensData ?? []).map((token) => token.pseudonym_id));
   }
 
+  // Load sync health for connected participants (best-effort)
+  const staleBefore = daysAgo(3);
+  const { data: healthRows } = pseudonymIds.length
+    ? await admin
+        .from("garmin_connection_health")
+        .select("pseudonym_id, last_success_at")
+        .in("pseudonym_id", pseudonymIds)
+    : { data: [] as { pseudonym_id: string; last_success_at: string | null }[] };
+
+  const healthByPseudonym = new Map<string, string | null>();
+  for (const row of (healthRows ?? []) as unknown as { pseudonym_id: string; last_success_at: string | null }[]) {
+    healthByPseudonym.set(row.pseudonym_id, row.last_success_at);
+  }
+
   const fourDaysAgo = new Date();
   fourDaysAgo.setDate(fourDaysAgo.getDate() - 42);
   const dateStr = fourDaysAgo.toISOString().split("T")[0];
@@ -152,6 +170,16 @@ export async function GET(request: Request) {
     garmin_connected:
       Boolean(p.garmin_user_id) ||
       connectedPseudonymIds.has(participantToPseudonym.get(p.id) ?? ""),
+    garmin_sync_stale: (() => {
+      const pseudonymId = participantToPseudonym.get(p.id);
+      if (!pseudonymId) return false;
+      const isConnected =
+        Boolean(p.garmin_user_id) || connectedPseudonymIds.has(pseudonymId);
+      if (!isConnected) return false;
+      const lastSuccessAt = healthByPseudonym.get(pseudonymId);
+      if (!lastSuccessAt) return true;
+      return new Date(lastSuccessAt) < staleBefore;
+    })(),
     assigned_mentor: assignmentMap.get(p.id)
       ? {
           mentor_id: mentorId,

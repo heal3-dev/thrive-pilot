@@ -81,6 +81,28 @@ export async function GET(request: Request) {
     (garminTokensData ?? []).map((token) => token.pseudonym_id)
   );
 
+  // Fetch last successful Garmin ingestion markers (if any)
+  const { data: garminHealthRows, error: garminHealthError } = await admin
+    .from("garmin_connection_health")
+    .select("pseudonym_id, last_success_at");
+
+  if (garminHealthError) {
+    return NextResponse.json(
+      { error: "Failed to fetch Garmin sync health" },
+      { status: 500 },
+    );
+  }
+
+  const lastSuccessByPseudonym = new Map<string, string | null>();
+  for (const row of garminHealthRows ?? []) {
+    lastSuccessByPseudonym.set(
+      row.pseudonym_id,
+      (row as unknown as { last_success_at?: string | null }).last_success_at ?? null,
+    );
+  }
+
+  const staleBefore = new Date(Date.now() - 3 * 86_400_000);
+
   // Fetch recent metrics for weekly flagging (needs current 7-day window + 28-day baseline)
   const fortyTwoDaysAgo = new Date();
   fortyTwoDaysAgo.setDate(fortyTwoDaysAgo.getDate() - 42);
@@ -154,6 +176,15 @@ export async function GET(request: Request) {
       ...p,
       garmin_connected:
         Boolean(p.garmin_user_id) || connectedPseudonymIds.has(participantToPseudonym.get(p.id) ?? ''),
+      garmin_sync_stale: (() => {
+        const pid = participantToPseudonym.get(p.id);
+        if (!pid) return false;
+        if (!connectedPseudonymIds.has(pid) && !p.garmin_user_id) return false;
+        const last = lastSuccessByPseudonym.get(pid);
+        if (!last) return true;
+        const lastDt = new Date(last);
+        return Number.isNaN(lastDt.getTime()) ? true : lastDt < staleBefore;
+      })(),
       assigned_mentor: assignmentMap.get(p.id) ?? null,
       weekly_flag,
     };
@@ -190,6 +221,7 @@ export async function GET(request: Request) {
             created_at: u.created_at,
             updated_at: u.updated_at,
             garmin_connected: false,
+            garmin_sync_stale: false,
             is_unverified: true,
             assigned_mentor: null,
             weekly_flag: null,

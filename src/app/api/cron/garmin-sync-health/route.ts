@@ -3,7 +3,7 @@
  *
  * Daily health check for Garmin sync freshness:
  * - Finds participants with an active Garmin token but no successful ingestion recently
- * - Sends a magic-link reconnect email (throttled) when stale
+ * - Reports counts to support admin-driven follow-up (no auto outreach)
  *
  * Scheduled via `vercel.json`.
  */
@@ -11,9 +11,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { decryptParticipantId } from '@/lib/pseudonym-crypto';
-import { sendEmail } from '@/lib/email/send';
-import { markGarminAlertSent } from '@/lib/garmin/connection-health';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,7 +20,6 @@ const MONITOR_SLUG = 'garmin-sync-health';
 const SCHEDULE = '15 6 * * *'; // daily at 06:15 UTC (after token refresh cron)
 
 const STALE_AFTER_DAYS = 3;
-const ALERT_COOLDOWN_DAYS = 7;
 
 function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 86_400_000);
@@ -87,110 +83,18 @@ export async function GET(request: NextRequest) {
   }
 
   const staleBefore = daysAgo(STALE_AFTER_DAYS);
-  const alertCooldownBefore = daysAgo(ALERT_COOLDOWN_DAYS);
 
   let stale = 0;
-  let alerted = 0;
-  let skippedCooldown = 0;
-  let errors = 0;
+  const errors = 0;
 
   // 3) For each active connection, decide if we should alert
   for (const pseudonymId of pseudonymIds) {
     const health = byPseudonym.get(pseudonymId);
     const lastSuccessAt = health?.last_success_at ? new Date(health.last_success_at) : null;
-    const lastAlertAt = health?.last_alert_sent_at ? new Date(health.last_alert_sent_at) : null;
 
     const isStale = !lastSuccessAt || lastSuccessAt < staleBefore;
     if (!isStale) continue;
     stale++;
-
-    if (lastAlertAt && lastAlertAt > alertCooldownBefore) {
-      skippedCooldown++;
-      continue;
-    }
-
-    try {
-      // Resolve participant email by decrypting mapping (service-role only)
-      const { data: mapping, error: mappingErr } = await supabase
-        .from('participant_pseudonyms')
-        .select('participant_id_encrypted')
-        .eq('pseudonym_id', pseudonymId)
-        .maybeSingle();
-
-      if (mappingErr || !mapping?.participant_id_encrypted) {
-        errors++;
-        continue;
-      }
-
-      let participantId: string;
-      try {
-        participantId = decryptParticipantId(mapping.participant_id_encrypted);
-      } catch {
-        errors++;
-        continue;
-      }
-
-      const { data: participant, error: participantErr } = await supabase
-        .from('participants')
-        .select('name, email')
-        .eq('id', participantId)
-        .maybeSingle();
-
-      if (participantErr || !participant?.email) {
-        errors++;
-        continue;
-      }
-
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.example.com';
-      const nextPath = `/garmin/connect?participant_id=${encodeURIComponent(participantId)}&reauthorize=1`;
-
-      const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-        type: 'magiclink',
-        email: participant.email,
-        options: {
-          redirectTo: `${siteUrl}/auth/callback?next=/garmin/connect`,
-          data: { participant_id: participantId, action: 'garmin_reconnect' },
-        },
-      });
-
-      if (linkErr || !linkData?.properties?.hashed_token) {
-        errors++;
-        continue;
-      }
-
-      const reconnectUrl = `${siteUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=magiclink&next=${encodeURIComponent(nextPath)}`;
-
-      await sendEmail({
-        to: participant.email,
-        subject: 'Action Required: Reconnect Your Garmin Account',
-        html: `
-          <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto;">
-            <h2>Garmin Sync Paused</h2>
-            <p>Hi ${participant.name ?? 'there'},</p>
-            <p>
-              We haven’t received new Garmin wellness data recently. This can happen if your watch
-              hasn’t been syncing, or if your Garmin authorization needs to be renewed.
-            </p>
-            <p style="text-align: center; margin: 24px 0;">
-              <a href="${reconnectUrl}"
-                 style="background: #4f46e5; color: white; padding: 12px 24px;
-                        border-radius: 6px; text-decoration: none; font-weight: 600;">
-                Reconnect Garmin
-              </a>
-            </p>
-            <p style="color: #666; font-size: 14px;">
-              If you believe this is a mistake, try opening Garmin Connect and syncing your watch.
-            </p>
-          </div>
-        `.trim(),
-      });
-
-      await markGarminAlertSent({ pseudonymId, alertType: 'reconnect' });
-      alerted++;
-    } catch (e) {
-      errors++;
-      Sentry.captureException(e, { extra: { context: 'Failed during sync-health alert flow', pseudonymId } });
-    }
   }
 
   Sentry.captureCheckIn({
@@ -202,11 +106,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     checked: pseudonymIds.length,
     stale,
-    alerted,
-    skippedCooldown,
     errors,
     stale_after_days: STALE_AFTER_DAYS,
-    cooldown_days: ALERT_COOLDOWN_DAYS,
   });
 }
 
