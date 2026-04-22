@@ -582,7 +582,7 @@ export function ParticipantManagement({
                             Inactive
                           </span>
                         ) : p.garmin_sync_stale ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                          <span className="inline-flex w-fit px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
                             Active (Sync Stale)
                           </span>
                         ) : (
