@@ -35,6 +35,7 @@ type ParticipantRow = Participant & {
   assigned_mentor: AssignedMentor | null;
   is_unverified?: boolean;
   garmin_connected?: boolean;
+  garmin_sync_stale?: boolean;
   weekly_flag?: WeeklyFlag | null;
 };
 
@@ -579,6 +580,10 @@ export function ParticipantManagement({
                         ) : p.is_active === false ? (
                           <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
                             Inactive
+                          </span>
+                        ) : p.garmin_sync_stale ? (
+                          <span className="inline-flex w-fit whitespace-nowrap px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                            Active (Sync Stale)
                           </span>
                         ) : (
                           <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700">

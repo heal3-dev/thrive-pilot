@@ -81,6 +81,8 @@ export async function GET(request: Request) {
     (garminTokensData ?? []).map((token) => token.pseudonym_id)
   );
 
+  const staleBefore = new Date(Date.now() - 3 * 86_400_000);
+
   // Fetch recent metrics for weekly flagging (needs current 7-day window + 28-day baseline)
   const fortyTwoDaysAgo = new Date();
   fortyTwoDaysAgo.setDate(fortyTwoDaysAgo.getDate() - 42);
@@ -88,14 +90,25 @@ export async function GET(request: Request) {
 
   const { data: metricsData } = await admin
     .from("garmin_metrics")
-    .select("pseudonym_id, metric_date, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_highest, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
+    .select("pseudonym_id, metric_date, updated_at, resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, body_battery_charged, body_battery_drained, body_battery_start, body_battery_highest, body_battery_lowest, body_battery_most_recent, hrv_last_night_average, hrv_last_night_5_min_high")
     .gte("metric_date", dateStr)
     .order("metric_date", { ascending: false });
 
   // Map metrics back to participant_id for flag calculation
   const metricsByParticipant = new Map<string, Metric[]>();
+  const lastUpdatedAtByPseudonym = new Map<string, string>();
   if (metricsData) {
     for (const m of metricsData) {
+      const pseudonymId = m.pseudonym_id;
+      if (pseudonymId) {
+        const updatedAt = (m as unknown as { updated_at?: string | null }).updated_at ?? null;
+        if (updatedAt) {
+          const prev = lastUpdatedAtByPseudonym.get(pseudonymId);
+          if (!prev || new Date(updatedAt) > new Date(prev)) {
+            lastUpdatedAtByPseudonym.set(pseudonymId, updatedAt);
+          }
+        }
+      }
       const participantId = pseudonymToParticipant.get(m.pseudonym_id);
       if (!participantId) continue;
       if (!metricsByParticipant.has(participantId)) {
@@ -154,6 +167,15 @@ export async function GET(request: Request) {
       ...p,
       garmin_connected:
         Boolean(p.garmin_user_id) || connectedPseudonymIds.has(participantToPseudonym.get(p.id) ?? ''),
+      garmin_sync_stale: (() => {
+        const pid = participantToPseudonym.get(p.id);
+        if (!pid) return false;
+        if (!connectedPseudonymIds.has(pid) && !p.garmin_user_id) return false;
+        const last = lastUpdatedAtByPseudonym.get(pid);
+        if (!last) return true;
+        const lastDt = new Date(last);
+        return Number.isNaN(lastDt.getTime()) ? true : lastDt < staleBefore;
+      })(),
       assigned_mentor: assignmentMap.get(p.id) ?? null,
       weekly_flag,
     };
@@ -190,6 +212,7 @@ export async function GET(request: Request) {
             created_at: u.created_at,
             updated_at: u.updated_at,
             garmin_connected: false,
+            garmin_sync_stale: false,
             is_unverified: true,
             assigned_mentor: null,
             weekly_flag: null,

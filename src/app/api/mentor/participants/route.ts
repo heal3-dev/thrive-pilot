@@ -4,6 +4,10 @@ import { requireMentor } from "@/app/api/_utils";
 import { computeWeeklyFlagFromMetrics, type Metric, type WeeklyFlag } from "@/lib/flags/rules";
 import { hashParticipantId } from "@/lib/pseudonym-crypto";
 
+function daysAgo(n: number): Date {
+  return new Date(Date.now() - n * 86_400_000);
+}
+
 export async function GET(request: Request) {
   const guard = await requireMentor(request);
   if (!guard.ok) return guard.response;
@@ -82,6 +86,25 @@ export async function GET(request: Request) {
     connectedPseudonymIds = new Set((garminTokensData ?? []).map((token) => token.pseudonym_id));
   }
 
+  // Load last ingestion time from existing records:
+  // `garmin_metrics.updated_at` is set on every webhook upsert, so max(updated_at)
+  // is an accurate proxy for "last successful ingestion".
+  const staleBefore = daysAgo(3);
+  const { data: latestUpdatedRows } = pseudonymIds.length
+    ? await admin
+        .from("garmin_metrics")
+        .select("pseudonym_id, updated_at")
+        .in("pseudonym_id", pseudonymIds)
+        .order("updated_at", { ascending: false })
+    : { data: [] as { pseudonym_id: string; updated_at: string | null }[] };
+
+  const latestUpdatedByPseudonym = new Map<string, string | null>();
+  for (const row of (latestUpdatedRows ?? []) as unknown as { pseudonym_id: string; updated_at: string | null }[]) {
+    if (!latestUpdatedByPseudonym.has(row.pseudonym_id)) {
+      latestUpdatedByPseudonym.set(row.pseudonym_id, row.updated_at);
+    }
+  }
+
   const fourDaysAgo = new Date();
   fourDaysAgo.setDate(fourDaysAgo.getDate() - 42);
   const dateStr = fourDaysAgo.toISOString().split("T")[0];
@@ -152,6 +175,17 @@ export async function GET(request: Request) {
     garmin_connected:
       Boolean(p.garmin_user_id) ||
       connectedPseudonymIds.has(participantToPseudonym.get(p.id) ?? ""),
+    garmin_sync_stale: (() => {
+      const pseudonymId = participantToPseudonym.get(p.id);
+      if (!pseudonymId) return false;
+      const isConnected =
+        Boolean(p.garmin_user_id) || connectedPseudonymIds.has(pseudonymId);
+      if (!isConnected) return false;
+      const last = latestUpdatedByPseudonym.get(pseudonymId);
+      if (!last) return true;
+      const dt = new Date(last);
+      return Number.isNaN(dt.getTime()) ? true : dt < staleBefore;
+    })(),
     assigned_mentor: assignmentMap.get(p.id)
       ? {
           mentor_id: mentorId,
