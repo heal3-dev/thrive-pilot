@@ -324,6 +324,7 @@ export function ParticipantManagement({
         body: JSON.stringify({
           participant_id: p.id,
           email: p.email,
+          force: Boolean(p.garmin_connected),
         }),
       });
       setSuccessMessage(result?.message ?? `Garmin invite sent to ${p.email}`);

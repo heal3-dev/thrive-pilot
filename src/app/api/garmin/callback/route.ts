@@ -179,6 +179,27 @@ export async function GET(request: NextRequest) {
 
   Sentry.setContext('garmin', { participant_id_hash: pidHash, pseudonym_id: pseudonymId });
 
+  // Reauthorization: revoke any existing active token(s) for this pseudonym first.
+  // This prevents multiple active tokens and makes "reconnect" idempotent.
+  const { error: revokeExistingError } = await adminClient
+    .from('garmin_tokens')
+    .update({
+      revoked_at: new Date().toISOString(),
+      revocation_reason: 'Reauthorized via Garmin OAuth callback',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('pseudonym_id', pseudonymId)
+    .is('revoked_at', null);
+
+  if (revokeExistingError) {
+    console.error('[GARMIN_CALLBACK] Failed to revoke existing token(s):', revokeExistingError);
+    Sentry.captureException(revokeExistingError, {
+      extra: { context: 'Failed to revoke existing garmin_tokens before reauth' },
+    });
+    await Sentry.flush(1500);
+    return signOutAndRedirectToError(supabase, request, 'db_error');
+  }
+
   const { error: tokenInsertError } = await adminClient
     .from('garmin_tokens')
     .insert({
