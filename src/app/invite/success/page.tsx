@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 
-export default function SuccessPage() {
+function SuccessPageInner() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
 
@@ -121,5 +121,22 @@ export default function SuccessPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function SuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-teal-50 to-slate-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl shadow-xl border-2 border-slate-100 max-w-lg w-full p-8 text-center">
+            <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-teal-500 mb-4" />
+            <p className="text-slate-600">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <SuccessPageInner />
+    </Suspense>
   );
 }
