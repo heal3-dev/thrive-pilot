@@ -12,9 +12,11 @@ export default function ConsentPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [ackPrivacy, setAckPrivacy] = useState(false);
   const [ackConsent, setAckConsent] = useState(false);
   const [ackSms, setAckSms] = useState(false);
+  const SURVEY_URL = "https://s.surveyplanet.com/2tiaita5";
 
   // Handle auth from invite link hash fragments (#access_token=...)
   // The @supabase/ssr browser client does NOT auto-detect hash fragments,
@@ -96,8 +98,8 @@ export default function ConsentPage() {
         throw new Error(data?.error || "Failed to record consent");
       }
 
-      // Redirect to success page
-      router.push("/invite/success");
+      setIsRedirecting(true);
+      window.location.assign(SURVEY_URL);
     } catch (err) {
       console.error("Consent error:", err);
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -191,12 +193,27 @@ export default function ConsentPage() {
           disabled={isSubmitting || !ackPrivacy || !ackConsent || !ackSms}
           className="w-full bg-teal-500 hover:bg-teal-600 text-white font-semibold py-3 rounded-xl"
         >
-          {isSubmitting ? "Processing..." : "I Agree & Continue"}
+          {isSubmitting ? "Processing..." : isRedirecting ? "Redirecting..." : "I Agree & Continue"}
         </Button>
 
         <p className="text-xs text-center text-slate-500 mt-4">
           By clicking &quot;I Agree &amp; Continue,&quot; you confirm your informed consent to participate in the Thrive Pilot.
         </p>
+
+        {isRedirecting && (
+          <p className="text-xs text-center text-slate-500 mt-2">
+            If you are not redirected automatically,{" "}
+            <a
+              href={SURVEY_URL}
+              className="text-teal-700 hover:underline focus:underline focus:outline-none"
+              target="_blank"
+              rel="noreferrer"
+            >
+              click here to open the onboarding survey
+            </a>
+            .
+          </p>
+        )}
       </div>
     </div>
   );
