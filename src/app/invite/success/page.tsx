@@ -1,9 +1,18 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
 
-export default function SuccessPage() {
+function SuccessPageInner() {
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
+
+  const surveyUrl = useMemo(() => "https://s.surveyplanet.com/2tiaita5", []);
+  const shouldShowSurveyStep = next === "survey";
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
   // Sign out user after showing success (they don't need to stay logged in)
   useEffect(() => {
     const signOutAfterDelay = async () => {
@@ -14,6 +23,11 @@ export default function SuccessPage() {
     };
     signOutAfterDelay();
   }, []);
+
+  const handleStartSurvey = () => {
+    setIsRedirecting(true);
+    window.location.assign(surveyUrl);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-slate-50 flex items-center justify-center p-6">
@@ -70,10 +84,59 @@ export default function SuccessPage() {
           </div>
         </div>
 
-        <p className="text-xs text-slate-500 mt-8">
-          You can close this page now. Your phone is all you need!
-        </p>
+        {shouldShowSurveyStep ? (
+          <div className="mt-6 text-left">
+            <div className="bg-indigo-50 rounded-xl p-6 border border-indigo-100">
+              <h2 className="font-semibold text-indigo-900 mb-2">Onboarding survey</h2>
+              <p className="text-indigo-900/80 text-sm mb-4">
+                Please complete a short onboarding survey to help us tailor the pilot. It may include a few questions that require manual input.
+              </p>
+
+              <Button
+                onClick={handleStartSurvey}
+                disabled={isRedirecting}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl"
+              >
+                {isRedirecting ? "Redirecting..." : "Start Survey"}
+              </Button>
+
+              <p className="text-xs text-slate-500 mt-3">
+                If you are not redirected automatically,{" "}
+                <a
+                  href={surveyUrl}
+                  className="text-indigo-700 hover:underline focus:underline focus:outline-none"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  click here to open the survey
+                </a>
+                .
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 mt-8">
+            You can close this page now. Your phone is all you need!
+          </p>
+        )}
       </div>
     </div>
+  );
+}
+
+export default function SuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-teal-50 to-slate-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl shadow-xl border-2 border-slate-100 max-w-lg w-full p-8 text-center">
+            <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-teal-500 mb-4" />
+            <p className="text-slate-600">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <SuccessPageInner />
+    </Suspense>
   );
 }

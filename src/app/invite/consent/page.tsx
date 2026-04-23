@@ -96,8 +96,7 @@ export default function ConsentPage() {
         throw new Error(data?.error || "Failed to record consent");
       }
 
-      // Redirect to success page
-      router.push("/invite/success");
+      router.push("/invite/success?next=survey");
     } catch (err) {
       console.error("Consent error:", err);
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -197,6 +196,7 @@ export default function ConsentPage() {
         <p className="text-xs text-center text-slate-500 mt-4">
           By clicking &quot;I Agree &amp; Continue,&quot; you confirm your informed consent to participate in the Thrive Pilot.
         </p>
+
       </div>
     </div>
   );
