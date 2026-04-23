@@ -38,92 +38,86 @@ export default function SuccessPage() {
           </svg>
         </div>
 
-        <h1 className="text-3xl font-bold text-slate-900 mb-3">
-          {shouldShowSurveyStep ? "One more step" : "Welcome to Thrive!"}
-        </h1>
+        <h1 className="text-3xl font-bold text-slate-900 mb-3">Welcome to Thrive!</h1>
         
         <p className="text-lg text-slate-600 mb-6">
-          {shouldShowSurveyStep
-            ? "Please complete a short onboarding survey to help us tailor the pilot."
-            : "You have successfully joined the pilot program."}
+          You have successfully joined the pilot program.
         </p>
 
+        <div className="bg-teal-50 rounded-xl p-6 mb-6 border border-teal-100">
+          <h2 className="font-semibold text-teal-800 mb-2">What happens next?</h2>
+          <p className="text-teal-700 text-sm">
+            Your assigned mentor will reach out to you via <strong>SMS</strong>. 
+            Keep an eye on your phone for messages!
+          </p>
+        </div>
+
+        <div className="space-y-3 text-left">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
+            <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-teal-600 font-bold text-sm">1</span>
+            </div>
+            <div>
+              <p className="font-medium text-slate-900 text-sm">Mentor Introduction</p>
+              <p className="text-xs text-slate-500">Your mentor will send you a welcome message</p>
+            </div>
+          </div>
+          
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
+            <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-teal-600 font-bold text-sm">2</span>
+            </div>
+            <div>
+              <p className="font-medium text-slate-900 text-sm">Regular Check-ins</p>
+              <p className="text-xs text-slate-500">Expect daily or weekly messages to support your wellness journey</p>
+            </div>
+          </div>
+          
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
+            <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-teal-600 font-bold text-sm">3</span>
+            </div>
+            <div>
+              <p className="font-medium text-slate-900 text-sm">Reply Anytime</p>
+              <p className="text-xs text-slate-500">Feel free to respond to your mentor via SMS</p>
+            </div>
+          </div>
+        </div>
+
         {shouldShowSurveyStep ? (
-          <>
-            <div className="bg-indigo-50 rounded-xl p-6 mb-4 border border-indigo-100 text-left">
+          <div className="mt-6 text-left">
+            <div className="bg-indigo-50 rounded-xl p-6 border border-indigo-100">
               <h2 className="font-semibold text-indigo-900 mb-2">Onboarding survey</h2>
-              <p className="text-indigo-900/80 text-sm">
-                This survey may include a few questions that require manual input. You can return to it if needed.
+              <p className="text-indigo-900/80 text-sm mb-4">
+                Please complete a short onboarding survey to help us tailor the pilot. It may include a few questions that require manual input.
               </p>
-            </div>
 
-            <Button
-              onClick={handleStartSurvey}
-              disabled={isRedirecting}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl"
-            >
-              {isRedirecting ? "Redirecting..." : "Start Survey"}
-            </Button>
-
-            <p className="text-xs text-slate-500 mt-3">
-              If you are not redirected automatically,{" "}
-              <a
-                href={surveyUrl}
-                className="text-indigo-700 hover:underline focus:underline focus:outline-none"
-                target="_blank"
-                rel="noreferrer"
+              <Button
+                onClick={handleStartSurvey}
+                disabled={isRedirecting}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl"
               >
-                click here to open the survey
-              </a>
-              .
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="bg-teal-50 rounded-xl p-6 mb-6 border border-teal-100">
-              <h2 className="font-semibold text-teal-800 mb-2">What happens next?</h2>
-              <p className="text-teal-700 text-sm">
-                Your assigned mentor will reach out to you via <strong>SMS</strong>. 
-                Keep an eye on your phone for messages!
+                {isRedirecting ? "Redirecting..." : "Start Survey"}
+              </Button>
+
+              <p className="text-xs text-slate-500 mt-3">
+                If you are not redirected automatically,{" "}
+                <a
+                  href={surveyUrl}
+                  className="text-indigo-700 hover:underline focus:underline focus:outline-none"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  click here to open the survey
+                </a>
+                .
               </p>
             </div>
-
-            <div className="space-y-3 text-left">
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
-                <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-teal-600 font-bold text-sm">1</span>
-                </div>
-                <div>
-                  <p className="font-medium text-slate-900 text-sm">Mentor Introduction</p>
-                  <p className="text-xs text-slate-500">Your mentor will send you a welcome message</p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
-                <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-teal-600 font-bold text-sm">2</span>
-                </div>
-                <div>
-                  <p className="font-medium text-slate-900 text-sm">Regular Check-ins</p>
-                  <p className="text-xs text-slate-500">Expect daily or weekly messages to support your wellness journey</p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
-                <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-teal-600 font-bold text-sm">3</span>
-                </div>
-                <div>
-                  <p className="font-medium text-slate-900 text-sm">Reply Anytime</p>
-                  <p className="text-xs text-slate-500">Feel free to respond to your mentor via SMS</p>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-500 mt-8">
-              You can close this page now. Your phone is all you need!
-            </p>
-          </>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 mt-8">
+            You can close this page now. Your phone is all you need!
+          </p>
         )}
       </div>
     </div>
