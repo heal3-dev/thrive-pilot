@@ -198,7 +198,7 @@ export function ParticipantManagement({
 
   const filteredParticipants = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return participants.filter((p) => {
+    const filtered = participants.filter((p) => {
       const matchesSearch =
         q.length === 0 ||
         (p.name ?? "").toLowerCase().includes(q) ||
@@ -231,6 +231,39 @@ export function ParticipantManagement({
 
       return matchesSearch && matchesStatus && matchesMentor && matchesGarmin;
     });
+
+    function invitedRank(p: ParticipantRow): number {
+      if (!p.is_unverified) return 99;
+      // Pending invites first, then expired, then unknown.
+      if (p.invite_status === "pending") return 0;
+      if (p.invite_status === "expired") return 1;
+      return 2;
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
+      const aInv = invitedRank(a);
+      const bInv = invitedRank(b);
+
+      // When viewing all statuses, always show invite-only rows first.
+      // When viewing invited-only rows, keep pending above expired.
+      if (statusFilter === "all" || statusFilter === "invited") {
+        if (aInv !== bInv) return aInv - bInv;
+      }
+
+      // Keep existing relative ordering for non-invite rows when "all" is selected.
+      if (statusFilter === "all") return 0;
+
+      // Fallback deterministic ordering (most recent first) for invited-only view.
+      if (statusFilter === "invited") {
+        const aTs = new Date(a.invite_sent_at ?? a.created_at ?? 0).getTime();
+        const bTs = new Date(b.invite_sent_at ?? b.created_at ?? 0).getTime();
+        return bTs - aTs;
+      }
+
+      return 0;
+    });
+
+    return sorted;
   }, [participants, searchQuery, statusFilter, mentorFilter, garminFilter]);
 
 
@@ -435,7 +468,7 @@ export function ParticipantManagement({
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="removed">Inactive</option>
-              <option value="unverified">Invited</option>
+              <option value="invited">Invited</option>
             </select>
 
             {mode !== "mentor-trends" && (
@@ -558,9 +591,15 @@ export function ParticipantManagement({
                     <td className="px-3 py-4">
                       <div className="flex flex-col gap-1 items-start">
                         {p.is_unverified ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
-                            Unverified
-                          </span>
+                          p.invite_status === "expired" ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
+                              Invite Expired
+                            </span>
+                          ) : (
+                            <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
+                              Invite Pending
+                            </span>
+                          )
                         ) : p.is_active === false ? (
                           <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
                             Inactive
