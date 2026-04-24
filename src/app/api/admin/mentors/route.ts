@@ -72,6 +72,7 @@ export async function POST(request: Request) {
       email_confirm: true, // Auto-confirm so they can log in immediately
       user_metadata: {
         role: payload.role,
+        name: payload.name,
       },
     });
 
