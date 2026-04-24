@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
@@ -40,22 +40,6 @@ type ParticipantRow = Participant & {
   garmin_connected?: boolean;
   garmin_sync_stale?: boolean;
   weekly_flag?: WeeklyFlag | null;
-};
-
-type AssignmentHistoryRow = {
-  id: string;
-  mentor_id: string;
-  participant_id: string;
-  assigned_at: string | null;
-  unassigned_at: string | null;
-  mentor: { id: string; name: string | null; email: string | null } | null;
-};
-
-type CreateParticipantPayload = {
-  email: string;
-  name?: string;
-  phone_number?: string;
-  sendInvite?: boolean;
 };
 
 type UpdateParticipantPayload = {
@@ -124,9 +108,6 @@ export function ParticipantManagement({
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(initialModal === "invite");
   const [isAddModalOpen, setIsAddModalOpen] = useState(initialModal === "add");
   const [editingParticipant, setEditingParticipant] = useState<ParticipantRow | null>(null);
-  const [history, setHistory] = useState<AssignmentHistoryRow[]>([]);
-  const [historyParticipant, setHistoryParticipant] = useState<ParticipantRow | null>(null);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -224,14 +205,14 @@ export function ParticipantManagement({
         (p.email ?? "").toLowerCase().includes(q) ||
         (p.phone_number ?? "").toLowerCase().includes(q);
 
-  const isUnverified = !!(p as ParticipantRow).is_unverified;
+      const isUnverified = !!(p as ParticipantRow).is_unverified;
       const isRemoved = !isUnverified && p.is_active === false;
       const isActive = !isUnverified && p.is_active !== false;
       const matchesStatus =
         statusFilter === "all" ||
         (statusFilter === "active" && isActive) ||
         (statusFilter === "removed" && isRemoved) ||
-        (statusFilter === "unverified" && isUnverified);
+        (statusFilter === "invited" && isUnverified);
 
       const assignedMentor = p.assigned_mentor;
       // Consider "assigned" only if it's an active assignment (unassigned_at is null)
