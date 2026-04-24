@@ -44,6 +44,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Mentor not found" }, { status: 404 });
   }
 
+  const isNameChange = typeof payload.name === "string" && payload.name.trim().length > 0;
+  const isRoleChange = typeof payload.role === "string" && payload.role.trim().length > 0;
+
   const requestedEmailRaw = Object.prototype.hasOwnProperty.call(payload, "email")
     ? payload.email
     : undefined;
@@ -172,6 +175,29 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
     }
     return NextResponse.json({ error: "Failed to update mentor" }, { status: 500 });
+  }
+
+  // Best-effort: keep auth user_metadata in sync for convenience/debugging.
+  // Permissions still come from `mentors.role` in the DB.
+  if (isNameChange || isRoleChange) {
+    const metaUpdate: Record<string, unknown> = {};
+    if (isNameChange) metaUpdate.name = payload.name?.trim();
+    if (isRoleChange) metaUpdate.role = payload.role?.trim();
+    try {
+      const { error: metaErr } = await admin.auth.admin.updateUserById(existingMentor.user_id, {
+        user_metadata: metaUpdate,
+      });
+      if (metaErr) {
+        Sentry.captureMessage("Failed to sync mentor auth metadata", {
+          level: "warning",
+          extra: { mentor_id: id, user_id: existingMentor.user_id, error: metaErr.message },
+        });
+      }
+    } catch (e) {
+      Sentry.captureException(e, {
+        extra: { mentor_id: id, user_id: existingMentor.user_id, action: "sync_auth_metadata" },
+      });
+    }
   }
 
   return NextResponse.json({ mentor: data });

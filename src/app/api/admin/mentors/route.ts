@@ -70,6 +70,10 @@ export async function POST(request: Request) {
       email: payload.email,
       password: payload.password,
       email_confirm: true, // Auto-confirm so they can log in immediately
+      user_metadata: {
+        role: payload.role,
+        name: payload.name,
+      },
     });
 
     if (createError || !userData?.user?.id) {

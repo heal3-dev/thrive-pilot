@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
@@ -16,7 +16,7 @@ import type { Mentor, Participant } from "@/types";
 // Debounced uniqueness check hook removed (using import from hooks)
 // toE164 removed (using import from utils)
 
-type StatusFilter = "all" | "active" | "removed" | "unverified";
+type StatusFilter = "all" | "active" | "removed" | "invited";
 
 type AssignedMentor = {
   mentor_id: string;
@@ -34,25 +34,12 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/comp
 type ParticipantRow = Participant & {
   assigned_mentor: AssignedMentor | null;
   is_unverified?: boolean;
+  invite_status?: "pending" | "expired";
+  invite_sent_at?: string | null;
+  invite_expires_at?: string | null;
   garmin_connected?: boolean;
   garmin_sync_stale?: boolean;
   weekly_flag?: WeeklyFlag | null;
-};
-
-type AssignmentHistoryRow = {
-  id: string;
-  mentor_id: string;
-  participant_id: string;
-  assigned_at: string | null;
-  unassigned_at: string | null;
-  mentor: { id: string; name: string | null; email: string | null } | null;
-};
-
-type CreateParticipantPayload = {
-  email: string;
-  name?: string;
-  phone_number?: string;
-  sendInvite?: boolean;
 };
 
 type UpdateParticipantPayload = {
@@ -121,9 +108,6 @@ export function ParticipantManagement({
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(initialModal === "invite");
   const [isAddModalOpen, setIsAddModalOpen] = useState(initialModal === "add");
   const [editingParticipant, setEditingParticipant] = useState<ParticipantRow | null>(null);
-  const [history, setHistory] = useState<AssignmentHistoryRow[]>([]);
-  const [historyParticipant, setHistoryParticipant] = useState<ParticipantRow | null>(null);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -214,21 +198,21 @@ export function ParticipantManagement({
 
   const filteredParticipants = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return participants.filter((p) => {
+    const filtered = participants.filter((p) => {
       const matchesSearch =
         q.length === 0 ||
         (p.name ?? "").toLowerCase().includes(q) ||
         (p.email ?? "").toLowerCase().includes(q) ||
         (p.phone_number ?? "").toLowerCase().includes(q);
 
-  const isUnverified = !!(p as ParticipantRow).is_unverified;
+      const isUnverified = !!(p as ParticipantRow).is_unverified;
       const isRemoved = !isUnverified && p.is_active === false;
       const isActive = !isUnverified && p.is_active !== false;
       const matchesStatus =
         statusFilter === "all" ||
         (statusFilter === "active" && isActive) ||
         (statusFilter === "removed" && isRemoved) ||
-        (statusFilter === "unverified" && isUnverified);
+        (statusFilter === "invited" && isUnverified);
 
       const assignedMentor = p.assigned_mentor;
       // Consider "assigned" only if it's an active assignment (unassigned_at is null)
@@ -247,6 +231,39 @@ export function ParticipantManagement({
 
       return matchesSearch && matchesStatus && matchesMentor && matchesGarmin;
     });
+
+    function invitedRank(p: ParticipantRow): number {
+      if (!p.is_unverified) return 99;
+      // Pending invites first, then expired, then unknown.
+      if (p.invite_status === "pending") return 0;
+      if (p.invite_status === "expired") return 1;
+      return 2;
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
+      const aInv = invitedRank(a);
+      const bInv = invitedRank(b);
+
+      // When viewing all statuses, always show invite-only rows first.
+      // When viewing invited-only rows, keep pending above expired.
+      if (statusFilter === "all" || statusFilter === "invited") {
+        if (aInv !== bInv) return aInv - bInv;
+      }
+
+      // Keep existing relative ordering for non-invite rows when "all" is selected.
+      if (statusFilter === "all") return 0;
+
+      // Fallback deterministic ordering (most recent first) for invited-only view.
+      if (statusFilter === "invited") {
+        const aTs = new Date(a.invite_sent_at ?? a.created_at ?? 0).getTime();
+        const bTs = new Date(b.invite_sent_at ?? b.created_at ?? 0).getTime();
+        return bTs - aTs;
+      }
+
+      return 0;
+    });
+
+    return sorted;
   }, [participants, searchQuery, statusFilter, mentorFilter, garminFilter]);
 
 
@@ -451,7 +468,7 @@ export function ParticipantManagement({
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="removed">Inactive</option>
-              <option value="unverified">Unverified</option>
+              <option value="invited">Unverified</option>
             </select>
 
             {mode !== "mentor-trends" && (
@@ -574,9 +591,15 @@ export function ParticipantManagement({
                     <td className="px-3 py-4">
                       <div className="flex flex-col gap-1 items-start">
                         {p.is_unverified ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
-                            Unverified
-                          </span>
+                          p.invite_status === "expired" ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
+                              Invite Expired
+                            </span>
+                          ) : (
+                            <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700">
+                              Invite Pending
+                            </span>
+                          )
                         ) : p.is_active === false ? (
                           <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
                             Inactive
