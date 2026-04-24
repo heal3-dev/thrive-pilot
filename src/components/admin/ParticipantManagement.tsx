@@ -468,7 +468,7 @@ export function ParticipantManagement({
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="removed">Inactive</option>
-              <option value="invited">Invited</option>
+              <option value="invited">Unverified</option>
             </select>
 
             {mode !== "mentor-trends" && (
