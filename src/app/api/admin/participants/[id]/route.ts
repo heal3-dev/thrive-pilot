@@ -374,3 +374,51 @@ export async function PATCH(
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const guard = await requireAdmin(request);
+  if (!guard.ok) return guard.response;
+
+  const admin = guard.admin;
+  const { id } = await params;
+
+  // Safety: never delete a real participant row via this endpoint.
+  const { data: participant } = await admin
+    .from("participants")
+    .select("id")
+    .eq("id", id)
+    .limit(1)
+    .maybeSingle();
+
+  if (participant?.id) {
+    return NextResponse.json(
+      { error: "Cannot delete an active participant via this endpoint" },
+      { status: 400 }
+    );
+  }
+
+  // Only allow deleting invite-only participant auth users.
+  const { data: authData, error: getUserError } = await admin.auth.admin.getUserById(id);
+  if (getUserError || !authData?.user) {
+    return NextResponse.json({ error: "Auth user not found" }, { status: 404 });
+  }
+
+  const meta = authData.user.user_metadata as Record<string, unknown> | undefined;
+  if (meta?.role !== "participant") {
+    return NextResponse.json(
+      { error: "This user is not a participant invite" },
+      { status: 400 }
+    );
+  }
+
+  const { error: deleteError } = await admin.auth.admin.deleteUser(id);
+  if (deleteError) {
+    Sentry.captureException(deleteError, { extra: { auth_user_id: id } });
+    return NextResponse.json({ error: "Failed to delete invited user" }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

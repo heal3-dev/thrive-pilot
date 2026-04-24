@@ -22,6 +22,22 @@ export async function GET(request: Request) {
 
   const admin = guard.admin;
 
+  const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // 24h (should match Supabase invite link expiry)
+
+  function computeInviteStatus(invitedAt: string | null | undefined): {
+    invite_status: "pending" | "expired";
+    invite_expires_at: string | null;
+  } {
+    if (!invitedAt) return { invite_status: "pending", invite_expires_at: null };
+    const invitedMs = new Date(invitedAt).getTime();
+    if (Number.isNaN(invitedMs)) return { invite_status: "pending", invite_expires_at: null };
+    const expiresMs = invitedMs + INVITE_TTL_MS;
+    return {
+      invite_status: Date.now() > expiresMs ? "expired" : "pending",
+      invite_expires_at: new Date(expiresMs).toISOString(),
+    };
+  }
+
   // Fetch all participants with their current mentor assignment (if any)
   const { data: participantsData, error: participantsError } = await admin
     .from("participants")
@@ -184,6 +200,23 @@ export async function GET(request: Request) {
   // ── Fetch Supabase Auth users invited as participants but not yet in the participants table ──
   const participantIds = new Set((participantsData ?? []).map((p) => p.id));
 
+  // Provide mentor list for filtering / display and to exclude mentors/admins from invite-only rows.
+  const { data: mentorsAll, error: mentorsError } = await admin
+    .from("mentors")
+    .select("id, user_id, name, email, role, is_active, created_at")
+    .order("created_at", { ascending: false });
+
+  if (mentorsError) {
+    return NextResponse.json({ error: "Failed to fetch mentors" }, { status: 500 });
+  }
+
+  const mentorUserIds = new Set((mentorsAll ?? []).map((m) => m.user_id).filter(Boolean));
+  const mentorEmails = new Set(
+    (mentorsAll ?? [])
+      .map((m) => (m.email ?? "").toLowerCase())
+      .filter((e) => e.length > 0)
+  );
+
   let unverifiedParticipants: typeof participants = [];
   try {
     // listUsers paginates; fetch up to a reasonable page size
@@ -196,10 +229,17 @@ export async function GET(request: Request) {
       unverifiedParticipants = authList.users
         .filter((u) => {
           const meta = u.user_metadata as Record<string, unknown> | undefined;
-          return meta?.role === "participant" && !participantIds.has(u.id);
+          if (meta?.role !== "participant") return false;
+          if (participantIds.has(u.id)) return false;
+          if (mentorUserIds.has(u.id)) return false;
+          const emailLower = (u.email ?? "").toLowerCase();
+          if (emailLower && mentorEmails.has(emailLower)) return false;
+          return true;
         })
         .map((u) => {
           const meta = u.user_metadata as Record<string, unknown> | undefined;
+          const invitedAt = (u.invited_at as string | null | undefined) ?? null;
+          const { invite_status, invite_expires_at } = computeInviteStatus(invitedAt);
           return {
             id: u.id,
             name: (meta?.name as string) ?? null,
@@ -214,6 +254,9 @@ export async function GET(request: Request) {
             garmin_connected: false,
             garmin_sync_stale: false,
             is_unverified: true,
+            invite_status,
+            invite_sent_at: invitedAt,
+            invite_expires_at,
             assigned_mentor: null,
             weekly_flag: null,
           };
@@ -226,18 +269,8 @@ export async function GET(request: Request) {
 
   const allParticipants = [...participants, ...unverifiedParticipants];
 
-  // Provide mentor list for filtering / display
-  const { data: mentors, error: mentorsError } = await admin
-    .from("mentors")
-    .select("id, name, email, role, is_active, created_at")
-    .neq("role", "admin")
-    .order("created_at", { ascending: false });
-
-  if (mentorsError) {
-    return NextResponse.json({ error: "Failed to fetch mentors" }, { status: 500 });
-  }
-
-  return NextResponse.json({ participants: allParticipants, mentors: mentors ?? [] });
+  const mentors = (mentorsAll ?? []).filter((m) => m.role !== "admin");
+  return NextResponse.json({ participants: allParticipants, mentors });
 }
 
 export async function POST(request: Request) {

@@ -16,7 +16,7 @@ import type { Mentor, Participant } from "@/types";
 // Debounced uniqueness check hook removed (using import from hooks)
 // toE164 removed (using import from utils)
 
-type StatusFilter = "all" | "active" | "removed" | "unverified";
+type StatusFilter = "all" | "active" | "removed" | "invited";
 
 type AssignedMentor = {
   mentor_id: string;
@@ -34,6 +34,9 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/comp
 type ParticipantRow = Participant & {
   assigned_mentor: AssignedMentor | null;
   is_unverified?: boolean;
+  invite_status?: "pending" | "expired";
+  invite_sent_at?: string | null;
+  invite_expires_at?: string | null;
   garmin_connected?: boolean;
   garmin_sync_stale?: boolean;
   weekly_flag?: WeeklyFlag | null;
@@ -451,7 +454,7 @@ export function ParticipantManagement({
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="removed">Inactive</option>
-              <option value="unverified">Unverified</option>
+              <option value="unverified">Invited</option>
             </select>
 
             {mode !== "mentor-trends" && (
