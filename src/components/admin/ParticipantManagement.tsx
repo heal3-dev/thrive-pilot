@@ -113,6 +113,10 @@ export function ParticipantManagement({
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [backfillLoadingId, setBackfillLoadingId] = useState<string | null>(null);
+  const [inviteAlertDismissed, setInviteAlertDismissed] = useState(false);
+  const [inviteAlertDismissedTotal, setInviteAlertDismissedTotal] = useState<number | null>(
+    null
+  );
 
   const getAccessToken = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -176,6 +180,27 @@ export function ParticipantManagement({
   useEffect(() => {
     fetchParticipants();
   }, [fetchParticipants]);
+
+  const inviteOnlyCounts = useMemo(() => {
+    const inviteOnly = participants.filter((p) => p.is_unverified);
+    const pending = inviteOnly.filter((p) => p.invite_status !== "expired").length;
+    const expired = inviteOnly.filter((p) => p.invite_status === "expired").length;
+    return {
+      total: inviteOnly.length,
+      pending,
+      expired,
+    };
+  }, [participants]);
+
+  // If new invite-only users appear after dismissal, re-show the banner.
+  useEffect(() => {
+    if (!inviteAlertDismissed) return;
+    if (inviteAlertDismissedTotal === null) return;
+    if (inviteOnlyCounts.total > inviteAlertDismissedTotal) {
+      setInviteAlertDismissed(false);
+      setInviteAlertDismissedTotal(null);
+    }
+  }, [inviteOnlyCounts.total, inviteAlertDismissed, inviteAlertDismissedTotal]);
 
   useEffect(() => {
     if (demoMode) return;
@@ -448,6 +473,76 @@ export function ParticipantManagement({
           </p>
         </div>
       )}
+
+      {mode === "management" &&
+        !demoMode &&
+        inviteOnlyCounts.total > 0 &&
+        !inviteAlertDismissed && (
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 shrink-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <svg
+                  className="w-5 h-5 text-amber-700 mt-0.5 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">
+                    {inviteOnlyCounts.total}{" "}
+                    {inviteOnlyCounts.total === 1 ? "unverified invite" : "unverified invites"}{" "}
+                    need attention
+                  </p>
+                  <p className="text-sm text-amber-800">
+                    {inviteOnlyCounts.pending} pending, {inviteOnlyCounts.expired} expired. Open the
+                    Unverified filter to resend invites or clean up old accounts.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => setStatusFilter("invited")}
+                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      View Unverified
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setInviteAlertDismissed(true);
+                        setInviteAlertDismissedTotal(inviteOnlyCounts.total);
+                      }}
+                      className="border-amber-300 text-amber-900 hover:bg-amber-100"
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Dismiss invite alert"
+                onClick={() => {
+                  setInviteAlertDismissed(true);
+                  setInviteAlertDismissedTotal(inviteOnlyCounts.total);
+                }}
+                className="p-1 rounded-md text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
 
       <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
         <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
