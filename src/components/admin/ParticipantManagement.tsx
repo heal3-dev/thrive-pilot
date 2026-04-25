@@ -758,7 +758,7 @@ export function ParticipantManagement({
                               size="sm"
                               onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
                               disabled={backfillLoadingId === p.id}
-                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2 text-xs whitespace-normal leading-tight py-2"
+                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
                             >
                               {backfillLoadingId === p.id ? (
                                 <span className="flex items-center gap-1">
