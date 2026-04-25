@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   const { data: participantsData, error: participantsError } = await admin
     .from("participants")
     .select(
-      "id, name, phone_number, email, is_active, garmin_user_id, garmin_device_model, consent_given, created_at, updated_at"
+      "id, name, phone_number, email, is_active, garmin_user_id, consent_given, created_at, updated_at"
     )
     .order("created_at", { ascending: false });
 
@@ -247,7 +247,6 @@ export async function GET(request: Request) {
             email: u.email ?? null,
             is_active: false,
             garmin_user_id: null,
-            garmin_device_model: null,
             consent_given: false,
             consent_timestamp: null,
             created_at: u.created_at,
