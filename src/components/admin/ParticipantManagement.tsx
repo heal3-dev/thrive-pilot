@@ -39,7 +39,6 @@ type ParticipantRow = Participant & {
   invite_expires_at?: string | null;
   garmin_connected?: boolean;
   garmin_sync_stale?: boolean;
-  garmin_device_model?: string | null;
   weekly_flag?: WeeklyFlag | null;
 };
 
@@ -759,7 +758,7 @@ export function ParticipantManagement({
                               size="sm"
                               onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
                               disabled={backfillLoadingId === p.id}
-                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2"
+                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2 text-xs whitespace-normal leading-tight py-2"
                             >
                               {backfillLoadingId === p.id ? (
                                 <span className="flex items-center gap-1">
@@ -770,17 +769,9 @@ export function ParticipantManagement({
                                   Syncing
                                 </span>
                               ) : (
-                                "Sync History"
+                                "Sync last 7 days"
                               )}
                             </Button>
-                            {p.garmin_device_model ? (
-                              <span
-                                className="text-[11px] text-slate-500 truncate max-w-[140px]"
-                                title={p.garmin_device_model}
-                              >
-                                {p.garmin_device_model}
-                              </span>
-                            ) : null}
                           </div>
                         ) : (
                           <Button
