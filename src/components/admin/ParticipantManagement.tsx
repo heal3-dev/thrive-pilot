@@ -379,18 +379,18 @@ export function ParticipantManagement({
   };
 
   const handleBackfill = async (p: ParticipantRow) => {
-    if (!confirm(`Sync last 30 days of Garmin data for ${p.name || p.email || "this participant"}?`)) return;
+    if (!confirm(`Sync last 7 days of Garmin data for ${p.name || p.email || "this participant"}?`)) return;
 
     setBackfillLoadingId(p.id);
     setError(null);
 
     try {
       const today = new Date();
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 30);
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 7);
 
       const endDate = today.toISOString().split("T")[0];
-      const startDate = thirtyDaysAgo.toISOString().split("T")[0];
+      const startDate = sevenDaysAgo.toISOString().split("T")[0];
 
       const result = await adminFetch("/api/garmin/backfill", {
         method: "POST",
@@ -752,25 +752,27 @@ export function ParticipantManagement({
                       )}
                       {!p.is_unverified && mode !== "mentor-trends" && (
                         isConnected ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
-                            disabled={backfillLoadingId === p.id}
-                            className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2"
-                          >
-                            {backfillLoadingId === p.id ? (
-                              <span className="flex items-center gap-1">
-                                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                Syncing
-                              </span>
-                            ) : (
-                              "Sync History"
-                            )}
-                          </Button>
+                          <div className="w-full flex flex-col items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
+                              disabled={backfillLoadingId === p.id}
+                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
+                            >
+                              {backfillLoadingId === p.id ? (
+                                <span className="flex items-center gap-1">
+                                  <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                  </svg>
+                                  Syncing
+                                </span>
+                              ) : (
+                                "Sync last 7 days"
+                              )}
+                            </Button>
+                          </div>
                         ) : (
                           <Button
                             variant="ghost"
