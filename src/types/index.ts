@@ -36,6 +36,8 @@ export interface Participant {
   email?: string | null;
   /** Garmin user id (if connected) */
   garmin_user_id?: string | null;
+  /** Garmin device model/type (best-effort, may be null) */
+  garmin_device_model?: string | null;
   /** Whether the participant is currently active */
   is_active?: boolean;
   /** Consent flags (if used) */

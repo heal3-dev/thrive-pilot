@@ -26,6 +26,7 @@ import {
   mapSleepToMetrics,
   mapHrvToMetrics,
   mapStressToMetrics,
+  extractGarminDeviceModel,
 } from '@/lib/garmin/webhook';
 import { GarminClient, GarminBackfillConflictError } from '@/lib/garmin/garmin-client';
 import { GarminTokenRevokedError } from '@/lib/garmin/token-manager';
@@ -291,6 +292,14 @@ async function upsertDailies(
       }
 
       imported++;
+
+      const deviceModel = extractGarminDeviceModel(summary as unknown as Record<string, unknown>);
+      if (deviceModel) {
+        await supabase
+          .from('participants')
+          .update({ garmin_device_model: deviceModel })
+          .eq('garmin_user_id', summary.userId);
+      }
 
       await supabase.from('ingestion_logs').insert({
         pseudonym_id: pseudonymId,

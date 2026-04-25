@@ -14,6 +14,68 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { hashParticipantId } from '@/lib/pseudonym-crypto';
 import * as Sentry from "@sentry/nextjs";
 
+export function extractGarminDeviceModel(payload: Record<string, unknown>): string | null {
+  const candidates: unknown[] = [
+    payload.deviceModel,
+    payload.device_model,
+    payload.deviceType,
+    payload.device_type,
+    payload.deviceName,
+    payload.device_name,
+    payload.productName,
+    payload.product_name,
+    payload.hardwareModel,
+    payload.hardware_model,
+    payload.sourceDevice,
+    payload.source_device,
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === "string") {
+      const s = c.trim();
+      if (s) return s.slice(0, 120);
+    }
+  }
+
+  // Sometimes nested under `device` object.
+  const device = payload.device;
+  if (device && typeof device === "object") {
+    const d = device as Record<string, unknown>;
+    const nestedCandidates: unknown[] = [
+      d.model,
+      d.modelName,
+      d.name,
+      d.product,
+      d.productName,
+      d.type,
+    ];
+    for (const c of nestedCandidates) {
+      if (typeof c === "string") {
+        const s = c.trim();
+        if (s) return s.slice(0, 120);
+      }
+    }
+  }
+
+  return null;
+}
+
+async function updateParticipantDeviceModel(participantId: string, model: string | null) {
+  if (!model) return;
+  try {
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase
+      .from("participants")
+      .update({ garmin_device_model: model })
+      .eq("id", participantId);
+    if (error) {
+      console.warn("[GARMIN_DEVICE] Failed to update garmin_device_model:", error.message);
+    }
+  } catch (e) {
+    console.warn("[GARMIN_DEVICE] Unexpected error updating garmin_device_model", e);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -397,6 +459,12 @@ export async function processDailySummary(
 
     result.participantId = participant.id;
 
+    // Best-effort: capture device model/type if Garmin includes it in payload.
+    await updateParticipantDeviceModel(
+      participant.id,
+      extractGarminDeviceModel(summary as unknown as Record<string, unknown>)
+    );
+
     // 2. Resolve pseudonym_id (the only ID stored in health tables)
     const pseudonymId = await resolvePseudonymId(participant.id);
     if (!pseudonymId) {
@@ -563,6 +631,11 @@ export async function processSleepSummary(
 
     result.participantId = participant.id;
 
+    await updateParticipantDeviceModel(
+      participant.id,
+      extractGarminDeviceModel(summary as unknown as Record<string, unknown>)
+    );
+
     const pseudonymId = await resolvePseudonymId(participant.id);
     if (!pseudonymId) {
       throw new Error(`No pseudonym found for participant ${participant.id}`);
@@ -688,6 +761,11 @@ export async function processHrvSummary(
     }
 
     result.participantId = participant.id;
+
+    await updateParticipantDeviceModel(
+      participant.id,
+      extractGarminDeviceModel(summary as unknown as Record<string, unknown>)
+    );
 
     const pseudonymId = await resolvePseudonymId(participant.id);
     if (!pseudonymId) {
@@ -854,6 +932,11 @@ export async function processStressDetailSummary(
     }
 
     result.participantId = participant.id;
+
+    await updateParticipantDeviceModel(
+      participant.id,
+      extractGarminDeviceModel(summary as unknown as Record<string, unknown>)
+    );
 
     const pseudonymId = await resolvePseudonymId(participant.id);
     if (!pseudonymId) {
