@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from "@sentry/nextjs";
 import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { verifyStateToken } from '@/lib/garmin/oauth-state';
 import { exchangeCodeForToken, fetchGarminUserId } from '@/lib/garmin/oauth-client';
 import { hashParticipantId, encryptParticipantId } from '@/lib/pseudonym-crypto';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -53,21 +52,6 @@ export async function GET(request: NextRequest) {
   // INSERT privileges on participant_pseudonyms, garmin_tokens, etc.
   const adminClient = getSupabaseAdmin();
 
-  // Verify state token from encrypted HttpOnly cookie to prevent CSRF.
-  const oauthState = await verifyStateToken(state);
-  if (!oauthState) {
-    Sentry.captureMessage("[GARMIN_CALLBACK] CSRF state verification failed", {
-      level: "warning",
-    });
-    await Sentry.flush(1500);
-    return signOutAndRedirectToError(supabase, request, 'csrf_failure');
-  }
-
-  Sentry.setUser({ id: oauthState.user_id });
-  Sentry.setTag("flow", "garmin_connect");
-  Sentry.setTag("route", "api/garmin/callback");
-  Sentry.setContext('garmin', { participant_id_hash: hashParticipantId(oauthState.participant_id) });
-
   const { data: tempData, error: tempError } = await adminClient
     .from('garmin_oauth_temp')
     .select('state_token, code_verifier, participant_id, expires_at')
@@ -91,22 +75,6 @@ export async function GET(request: NextRequest) {
     return signOutAndRedirectToError(supabase, request, 'session_expired');
   }
 
-  if (oauthState.participant_id !== tempData.participant_id) {
-    console.error('[GARMIN_CALLBACK] State participant mismatch:', {
-      cookie_participant_id: oauthState.participant_id,
-      temp_participant_id: tempData.participant_id,
-    });
-    Sentry.captureMessage("[GARMIN_CALLBACK] State participant mismatch", {
-      level: "warning",
-      extra: {
-        cookie_participant_id: oauthState.participant_id,
-        temp_participant_id: tempData.participant_id,
-      },
-    });
-    await Sentry.flush(1500);
-    return signOutAndRedirectToError(supabase, request, 'csrf_failure');
-  }
-
   if (new Date(tempData.expires_at).getTime() < Date.now()) {
     await adminClient
       .from('garmin_oauth_temp')
@@ -119,6 +87,14 @@ export async function GET(request: NextRequest) {
     await Sentry.flush(1500);
     return signOutAndRedirectToError(supabase, request, 'session_expired');
   }
+
+  Sentry.setTag("flow", "garmin_connect");
+  Sentry.setTag("route", "api/garmin/callback");
+  Sentry.setContext('garmin', { participant_id_hash: hashParticipantId(tempData.participant_id) });
+  Sentry.setContext('oauth', {
+    state_length: state.length,
+    has_code: Boolean(code),
+  });
 
   let tokens: Awaited<ReturnType<typeof exchangeCodeForToken>>;
   try {
@@ -247,7 +223,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { error: auditError } = await adminClient.from('audit_logs').insert({
-    user_id: oauthState.user_id,
+    user_id: null,
     action: 'garmin_connected',
     table_name: 'garmin_tokens',
     record_id: tempData.participant_id,
