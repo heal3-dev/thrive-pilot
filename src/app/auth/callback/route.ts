@@ -19,6 +19,7 @@ function renderConfirmHtml(params: {
   type?: string | null
 }) {
   const next = params.next || '/invite/consent'
+  const isGarminConnect = next.startsWith('/garmin/connect')
   const action = `${params.origin}/auth/callback`
   const hiddenInputs = [
     params.code ? `<input type="hidden" name="code" value="${escapeHtml(params.code)}" />` : '',
@@ -42,20 +43,30 @@ function renderConfirmHtml(params: {
       .card { max-width: 520px; margin: 0 auto; background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; box-shadow: 0 10px 30px rgba(2, 6, 23, 0.08); }
       h1 { font-size: 20px; margin: 0 0 8px; }
       p { margin: 0 0 16px; line-height: 1.5; color: #334155; }
+      ul { margin: 0 0 16px; padding-left: 18px; color: #334155; }
+      li { margin: 6px 0; }
       button { width: 100%; padding: 12px 16px; border: 0; border-radius: 12px; background: #0d9488; color: white; font-size: 16px; font-weight: 600; cursor: pointer; }
       button:hover { background: #0f766e; }
       .small { margin-top: 12px; font-size: 12px; color: #64748b; }
+      .help { margin-top: 10px; font-size: 13px; color: #475569; }
+      .help a { color: #0d9488; text-decoration: none; }
+      .help a:hover { text-decoration: underline; }
     </style>
   </head>
   <body>
     <main class="card">
-      <h1>Continue to Thrive Pilot</h1>
-      <p>Tap continue to finish signing in and connect your Garmin.</p>
+      <h1>${isGarminConnect ? 'Connect your Garmin' : 'Continue to Thrive Pilot'}</h1>
+      <p>${isGarminConnect ? 'Tap Continue to securely sign in and connect your Garmin account.' : 'Tap Continue to securely finish signing in.'}</p>
+      ${isGarminConnect ? `<ul>
+        <li>If you’re on a phone, open this link in <strong>Chrome</strong> (Android) or <strong>Safari</strong> (iPhone).</li>
+        <li>Avoid opening inside an email app “preview” browser when possible.</li>
+      </ul>` : ''}
       <form method="post" action="${escapeHtml(action)}">
         ${hiddenInputs}
-        <button type="submit">Continue</button>
+        <button type="submit">${isGarminConnect ? 'Continue to Garmin' : 'Continue'}</button>
       </form>
-      <p class="small">If this link was opened by an email security scanner, it won’t complete sign-in until you tap Continue.</p>
+      <p class="small">Some email providers automatically preview links for safety. For security, your sign-in won’t complete until you tap Continue.</p>
+      <p class="help">If you see an “Invalid or Expired Link” message after continuing, request a fresh connect email from your program administrator.</p>
     </main>
   </body>
 </html>`
@@ -99,6 +110,7 @@ export async function POST(request: Request) {
   const token_hash = (form.get('token_hash') ?? '').toString() || null
   const type = (form.get('type') ?? '').toString() || null
   const next = (form.get('next') ?? '').toString() || '/invite/consent'
+  const isGarminConnect = next.startsWith('/garmin/connect')
 
   const supabase = await createClient()
 
@@ -107,6 +119,9 @@ export async function POST(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (error) {
       console.error('[AUTH_CALLBACK] Code exchange error:', error)
+      if (isGarminConnect) {
+        return NextResponse.redirect(new URL('/garmin/error?reason=invalid_link', requestUrl.origin))
+      }
       return NextResponse.redirect(new URL('/?error=auth_code_error', requestUrl.origin))
     }
     return NextResponse.redirect(new URL(next, requestUrl.origin))
@@ -121,6 +136,9 @@ export async function POST(request: Request) {
     })
     if (error) {
       console.error('[AUTH_CALLBACK] OTP verification error:', error)
+      if (isGarminConnect) {
+        return NextResponse.redirect(new URL('/garmin/error?reason=invalid_link', requestUrl.origin))
+      }
       return NextResponse.redirect(new URL('/?error=invalid_token', requestUrl.origin))
     }
     return NextResponse.redirect(new URL(next, requestUrl.origin))
