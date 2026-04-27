@@ -251,10 +251,14 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
                 filteredMentors.map((mentor) => (
                   <tr key={mentor.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
-                      <p className="font-semibold text-slate-900">{mentor.name || "—"}</p>
+                      <p className="font-semibold text-slate-900 whitespace-normal break-words leading-snug">
+                        {mentor.name || "—"}
+                      </p>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-slate-600">{mentor.email || "—"}</p>
+                      <p className="text-slate-600 whitespace-normal break-words leading-snug">
+                        {mentor.email || "—"}
+                      </p>
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 capitalize">

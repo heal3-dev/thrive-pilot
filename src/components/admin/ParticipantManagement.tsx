@@ -629,9 +629,9 @@ export function ParticipantManagement({
         <div className={rowsScrollOnly ? "h-full overflow-auto" : "overflow-x-auto"}>
           <table className="w-full table-fixed">
             <colgroup>
-              <col className="w-[12%]" />
+              <col className="w-[14%]" />
               <col className="w-[15%]" />
-              <col className="w-[21%]" />
+              <col className="w-[18%]" />
               <col className="w-[17%]" />
               <col className="w-[12%]" />
               <col className="w-[9%]" />
@@ -666,18 +666,18 @@ export function ParticipantManagement({
                     className="hover:bg-slate-50 transition-colors"
                   >
                     <td className="px-3 py-4">
-                      <p className="font-semibold text-slate-900 truncate" title={p.name ?? ""}>{p.name || "—"}</p>
+                      <p className="font-semibold text-slate-900 whitespace-normal leading-snug break-words" title={p.name ?? ""}>{p.name || "—"}</p>
                       <p className="text-xs text-slate-500">
                         {p.is_unverified ? "Invited" : "Created"} {formatDate(p.created_at ?? null)}
                       </p>
                     </td>
                     <td className="px-3 py-4 text-slate-700 text-sm truncate" title={formatPhone(p.phone_number) ?? ""}>{formatPhone(p.phone_number)}</td>
-                    <td className="px-3 py-4 text-slate-700 text-sm truncate" title={p.email ?? ""}>{p.email || "—"}</td>
+                    <td className="px-2 py-4 text-slate-700 text-sm whitespace-normal break-words leading-snug" title={p.email ?? ""}>{p.email || "—"}</td>
                     <td className="px-3 py-4">
                       {p.assigned_mentor && !p.assigned_mentor.unassigned_at ? (
                         <div>
-                          <p className="font-semibold text-slate-900 truncate" title={p.assigned_mentor.mentor_name ?? ""}>{p.assigned_mentor.mentor_name || "—"}</p>
-                          <p className="text-xs text-slate-500 truncate" title={p.assigned_mentor.mentor_email ?? ""}>{p.assigned_mentor.mentor_email || ""}</p>
+                          <p className="font-semibold text-slate-900 whitespace-normal break-words leading-snug" title={p.assigned_mentor.mentor_name ?? ""}>{p.assigned_mentor.mentor_name || "—"}</p>
+                          <p className="text-xs text-slate-500 whitespace-normal break-words leading-snug" title={p.assigned_mentor.mentor_email ?? ""}>{p.assigned_mentor.mentor_email || ""}</p>
                         </div>
                       ) : (
                         <span className="text-slate-500">Unassigned</span>
