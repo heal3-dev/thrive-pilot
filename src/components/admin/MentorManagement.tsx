@@ -457,6 +457,7 @@ function MentorModal({
             className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm cursor-pointer"
           >
             <option value="mentor">Mentor</option>
+            <option value="admin">Admin</option>
           </select>
         </div>
 
