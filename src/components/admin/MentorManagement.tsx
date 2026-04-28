@@ -296,16 +296,6 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleSendPasswordRecovery(mentor)}
-                          disabled={!mentor.email || isSendingRecoveryForMentorId === mentor.id}
-                          className="text-slate-600 hover:text-slate-900"
-                          title={!mentor.email ? "Mentor has no email on record" : "Send password reset email"}
-                        >
-                          {isSendingRecoveryForMentorId === mentor.id ? "Sending..." : "Reset password"}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
                           onClick={() => setEditingMentor(mentor)}
                           className="text-slate-600 hover:text-slate-900"
                         >
@@ -367,6 +357,8 @@ function MentorModal({
   mentor,
   onClose,
   onSubmit,
+  onSendPasswordResetEmail,
+  isSendingPasswordResetEmail,
   isSaving,
   error,
 }: {
@@ -375,6 +367,8 @@ function MentorModal({
   mentor?: Mentor;
   onClose: () => void;
   onSubmit: (data: MentorFormData) => Promise<void>;
+  onSendPasswordResetEmail?: () => void;
+  isSendingPasswordResetEmail?: boolean;
   isSaving: boolean;
   error: string | null;
 }) {
@@ -465,6 +459,21 @@ function MentorModal({
             <option value="mentor">Mentor</option>
           </select>
         </div>
+
+        {mode === "edit" && mentor && (
+          <div className="pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onSendPasswordResetEmail}
+              disabled={!mentor.email || Boolean(isSendingPasswordResetEmail)}
+              className="w-full justify-center cursor-pointer"
+              title={!mentor.email ? "Mentor has no email on record" : "Send reset password email"}
+            >
+              {isSendingPasswordResetEmail ? "Sending reset password email..." : "Send reset password email"}
+            </Button>
+          </div>
+        )}
 
         <div className="flex gap-3 pt-4">
           <Button type="button" variant="outline" onClick={onClose} className="flex-1 cursor-pointer">
