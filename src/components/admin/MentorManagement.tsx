@@ -28,6 +28,7 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [isSendingRecoveryForMentorId, setIsSendingRecoveryForMentorId] = useState<string | null>(null);
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(initialModal === "add");
@@ -150,6 +151,24 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
     } catch (err) {
       console.error("Error toggling mentor status:", err);
       setError(err instanceof Error ? err.message : "Failed to update mentor status");
+    }
+  };
+
+  const handleSendPasswordRecovery = async (mentor: Mentor) => {
+    setError(null);
+    setSuccessMessage(null);
+    setIsSendingRecoveryForMentorId(mentor.id);
+    try {
+      await adminFetch(`/api/admin/mentors/${mentor.id}/send-password-recovery`, {
+        method: "POST",
+      });
+      setSuccessMessage(`Password reset email sent to ${mentor.email ?? "mentor"}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error("Error sending password recovery:", err);
+      setError(err instanceof Error ? err.message : "Failed to send password reset email");
+    } finally {
+      setIsSendingRecoveryForMentorId(null);
     }
   };
 
@@ -338,6 +357,8 @@ function MentorModal({
   mentor,
   onClose,
   onSubmit,
+  onSendPasswordResetEmail,
+  isSendingPasswordResetEmail,
   isSaving,
   error,
 }: {
@@ -346,6 +367,8 @@ function MentorModal({
   mentor?: Mentor;
   onClose: () => void;
   onSubmit: (data: MentorFormData) => Promise<void>;
+  onSendPasswordResetEmail?: () => void;
+  isSendingPasswordResetEmail?: boolean;
   isSaving: boolean;
   error: string | null;
 }) {
@@ -434,8 +457,24 @@ function MentorModal({
             className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm cursor-pointer"
           >
             <option value="mentor">Mentor</option>
+            <option value="admin">Admin</option>
           </select>
         </div>
+
+        {mode === "edit" && mentor && (
+          <div className="pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onSendPasswordResetEmail}
+              disabled={!mentor.email || Boolean(isSendingPasswordResetEmail)}
+              className="w-full justify-center cursor-pointer"
+              title={!mentor.email ? "Mentor has no email on record" : "Send reset password email"}
+            >
+              {isSendingPasswordResetEmail ? "Sending reset password email..." : "Send reset password email"}
+            </Button>
+          </div>
+        )}
 
         <div className="flex gap-3 pt-4">
           <Button type="button" variant="outline" onClick={onClose} className="flex-1 cursor-pointer">
