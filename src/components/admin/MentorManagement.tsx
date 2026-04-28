@@ -28,6 +28,7 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [isSendingRecoveryForMentorId, setIsSendingRecoveryForMentorId] = useState<string | null>(null);
   
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(initialModal === "add");
@@ -153,6 +154,24 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
     }
   };
 
+  const handleSendPasswordRecovery = async (mentor: Mentor) => {
+    setError(null);
+    setSuccessMessage(null);
+    setIsSendingRecoveryForMentorId(mentor.id);
+    try {
+      await adminFetch(`/api/admin/mentors/${mentor.id}/send-password-recovery`, {
+        method: "POST",
+      });
+      setSuccessMessage(`Password reset email sent to ${mentor.email ?? "mentor"}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error("Error sending password recovery:", err);
+      setError(err instanceof Error ? err.message : "Failed to send password reset email");
+    } finally {
+      setIsSendingRecoveryForMentorId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="bg-white rounded-2xl border-2 border-slate-100 p-8 flex items-center justify-center min-h-[400px]">
@@ -274,6 +293,16 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSendPasswordRecovery(mentor)}
+                          disabled={!mentor.email || isSendingRecoveryForMentorId === mentor.id}
+                          className="text-slate-600 hover:text-slate-900"
+                          title={!mentor.email ? "Mentor has no email on record" : "Send password reset email"}
+                        >
+                          {isSendingRecoveryForMentorId === mentor.id ? "Sending..." : "Reset password"}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
