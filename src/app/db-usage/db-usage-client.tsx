@@ -93,7 +93,7 @@ export default function DbUsageClient() {
   }, [fetchUsage]);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <div className="flex items-center justify-end gap-2">
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-600">Top tables</span>
@@ -144,8 +144,8 @@ export default function DbUsageClient() {
             <div className="px-5 py-4 border-b border-slate-100">
               <h2 className="text-sm font-bold text-slate-800">Largest tables</h2>
             </div>
-            <div className="overflow-auto">
-              <table className="w-full table-fixed">
+            <div className="overflow-auto px-5">
+              <table className="w-full table-fixed border-collapse border-spacing-0">
                 <colgroup>
                   <col className="w-[28%]" />
                   <col className="w-[18%]" />
@@ -155,19 +155,19 @@ export default function DbUsageClient() {
                 </colgroup>
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr>
-                    <th className="text-left px-5 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="text-left py-3 pr-4 text-xs font-bold text-slate-700 uppercase tracking-wider">
                       Table
                     </th>
-                    <th className="text-right px-5 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="text-right py-3 pl-4 text-xs font-bold text-slate-700 uppercase tracking-wider">
                       Total
                     </th>
-                    <th className="text-right px-5 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="text-right py-3 pl-4 text-xs font-bold text-slate-700 uppercase tracking-wider">
                       Table
                     </th>
-                    <th className="text-right px-5 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="text-right py-3 pl-4 text-xs font-bold text-slate-700 uppercase tracking-wider">
                       Indexes
                     </th>
-                    <th className="text-right px-5 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="text-right py-3 pl-4 text-xs font-bold text-slate-700 uppercase tracking-wider">
                       Rows (est.)
                     </th>
                   </tr>
@@ -175,21 +175,21 @@ export default function DbUsageClient() {
                 <tbody className="divide-y divide-slate-100">
                   {data.top_tables.map((t) => (
                     <tr key={`${t.schema_name}.${t.table_name}`} className="hover:bg-slate-50">
-                      <td className="px-5 py-3">
+                      <td className="py-3 pr-4">
                         <p className="font-semibold text-slate-900 break-words">
                           {t.schema_name}.{t.table_name}
                         </p>
                       </td>
-                      <td className="px-5 py-3 text-right font-semibold text-slate-900">
+                      <td className="py-3 pl-4 text-right font-semibold text-slate-900">
                         {formatBytes(t.total_bytes)}
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-700">
+                      <td className="py-3 pl-4 text-right text-slate-700">
                         {formatBytes(t.table_bytes)}
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-700">
+                      <td className="py-3 pl-4 text-right text-slate-700">
                         {formatBytes(t.index_bytes)}
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-700">
+                      <td className="py-3 pl-4 text-right text-slate-700">
                         {formatInt(t.row_estimate)}
                       </td>
                     </tr>
