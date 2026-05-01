@@ -93,38 +93,24 @@ export default function DbUsageClient() {
   }, [fetchUsage]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div>
-          <h1 className="font-clash text-3xl font-bold text-slate-900">DB Usage</h1>
-          <p className="mt-2 text-slate-500">
-            Monitor total database size and identify the biggest tables (growth areas).
-          </p>
-          {data?.generated_at && (
-            <p className="mt-1 text-xs text-slate-400">
-              Generated {new Date(data.generated_at).toLocaleString()}
-            </p>
-          )}
-        </div>
-
+    <div className="max-w-6xl mx-auto space-y-6">
+      <div className="flex items-center justify-end gap-2">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600">Top tables</span>
-            <Input
-              value={limit}
-              onChange={(e) => setLimit(e.target.value)}
-              className="w-20 h-10"
-              inputMode="numeric"
-            />
-          </div>
-          <Button
-            onClick={() => fetchUsage({ refresh: true })}
-            disabled={isLoading || isRefreshing}
-            className="bg-teal-500 hover:bg-teal-600 text-white"
-          >
-            {isRefreshing ? "Refreshing…" : "Refresh"}
-          </Button>
+          <span className="text-sm text-slate-600">Top tables</span>
+          <Input
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+            className="w-20 h-10"
+            inputMode="numeric"
+          />
         </div>
+        <Button
+          onClick={() => fetchUsage({ refresh: true })}
+          disabled={isLoading || isRefreshing}
+          className="bg-teal-500 hover:bg-teal-600 text-white"
+        >
+          {isRefreshing ? "Refreshing…" : "Refresh"}
+        </Button>
       </div>
 
       {error && (

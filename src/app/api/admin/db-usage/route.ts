@@ -1,18 +1,23 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/app/api/admin/_utils";
 
-type DbUsageRow = {
-  schema_name: string;
-  table_name: string;
-  row_estimate: number | null;
-  total_bytes: number;
-  total_pretty: string;
-  index_bytes: number;
-  index_pretty: string;
-  toast_bytes: number;
-  toast_pretty: string;
-  table_bytes: number;
-  table_pretty: string;
+type AdminDbUsageJson = {
+  captured_at?: string;
+  db?: { size_bytes?: number; size_pretty?: string };
+  public_schema?: { size_bytes?: number; size_pretty?: string };
+  tables?: Array<{
+    schema_name: string;
+    table_name: string;
+    total_bytes: number;
+    total_pretty: string;
+    table_bytes: number;
+    table_pretty: string;
+    index_bytes: number;
+    index_pretty: string;
+    toast_bytes: number;
+    toast_pretty: string;
+    row_estimate: number | null;
+  }>;
 };
 
 export async function GET(request: Request) {
@@ -23,7 +28,7 @@ export async function GET(request: Request) {
   const limitRaw = url.searchParams.get("limit");
   const limit = Math.max(1, Math.min(200, Number(limitRaw ?? "30") || 30));
 
-  const { data, error } = await guard.admin.rpc("admin_db_usage", { p_limit: limit });
+  const { data, error } = await guard.admin.rpc("admin_db_usage", { top_n: limit });
   if (error) {
     return NextResponse.json(
       { error: `Failed to load db usage: ${error.message}` },
@@ -31,31 +36,33 @@ export async function GET(request: Request) {
     );
   }
 
-  const tables = ((data ?? []) as DbUsageRow[]).map((r) => ({
-    schema: r.schema_name,
-    table: r.table_name,
-    rows_estimate: r.row_estimate,
-    bytes: {
-      total: r.total_bytes,
-      table: r.table_bytes,
-      index: r.index_bytes,
-      toast: r.toast_bytes,
-    },
-    pretty: {
-      total: r.total_pretty,
-      table: r.table_pretty,
-      index: r.index_pretty,
-      toast: r.toast_pretty,
-    },
-  }));
+  const parsed: AdminDbUsageJson | null =
+    typeof data === "string"
+      ? ((() => {
+          try {
+            return JSON.parse(data) as AdminDbUsageJson;
+          } catch {
+            return null;
+          }
+        })())
+      : ((data as AdminDbUsageJson | null) ?? null);
 
-  const totalBytes = tables.reduce((sum, t) => sum + (t.bytes.total ?? 0), 0);
+  if (!parsed?.db?.size_bytes || !Array.isArray(parsed.tables)) {
+    return NextResponse.json(
+      { error: "Failed to load db usage: unexpected function response" },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
-    generated_at: new Date().toISOString(),
-    limit,
-    total_bytes_top_tables: totalBytes,
-    tables,
+    generated_at: parsed.captured_at ?? new Date().toISOString(),
+    totals: {
+      database_bytes: parsed.db.size_bytes,
+      database_pretty: parsed.db.size_pretty ?? null,
+      public_schema_bytes: parsed.public_schema?.size_bytes ?? null,
+      public_schema_pretty: parsed.public_schema?.size_pretty ?? null,
+    },
+    top_tables: parsed.tables,
   });
 }
 
