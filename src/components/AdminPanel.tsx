@@ -23,7 +23,34 @@ type Stats = {
   messagesToday: number;
   activeAssignments: number;
   connectedGarmin: number;
+  trendsToday: number;
+  totalTrends: number;
 };
+
+type DbUsageMini = {
+  totals: {
+    database_bytes: number;
+    public_schema_bytes: number | null;
+  };
+  top_tables: Array<{
+    schema_name: string;
+    table_name: string;
+    total_bytes: number;
+  }>;
+};
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes)) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  const decimals = i <= 1 ? 0 : i === 2 ? 1 : 2;
+  return `${v.toFixed(decimals)} ${units[i]}`;
+}
 
 // Parse tab from URL hash
 function getTabFromHash(): AdminTab {
@@ -94,6 +121,7 @@ export function AdminPanel() {
   // Initialize from URL hash for back button support
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [stats, setStats] = useState<Stats | null>(null);
+  const [dbUsage, setDbUsage] = useState<DbUsageMini | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -149,7 +177,14 @@ export function AdminPanel() {
       const todayISO = today.toISOString();
 
       // Parallel fetch all stats
-      const [mentorsRes, participantsRes, messagesRes, assignmentsRes, garminRes] = await Promise.all([
+      const [
+        mentorsRes,
+        participantsRes,
+        messagesRes,
+        assignmentsRes,
+        garminRes,
+        trendsTodayRowsRes,
+      ] = await Promise.all([
         supabase.from("mentors").select("id", { count: "exact", head: true }).neq("role", "admin"),
         supabase.from("participants").select("id", { count: "exact", head: true }),
         supabase
@@ -158,6 +193,11 @@ export function AdminPanel() {
           .gte("created_at", todayISO),
         supabase.from("mentor_assignments").select("id", { count: "exact", head: true }),
         supabase.from("participants").select("id", { count: "exact", head: true }).not("garmin_user_id", "is", null),
+        supabase
+          .from("garmin_metrics")
+          .select("pseudonym_id")
+          .not("pseudonym_id", "is", null)
+          .gte("updated_at", todayISO),
       ]);
 
       // Check for errors
@@ -165,6 +205,14 @@ export function AdminPanel() {
       if (participantsRes.error) throw participantsRes.error;
       if (messagesRes.error) throw messagesRes.error;
       if (assignmentsRes.error) throw assignmentsRes.error;
+      if (trendsTodayRowsRes.error) throw trendsTodayRowsRes.error;
+
+      const trendsTodayUnique = new Set(
+        (trendsTodayRowsRes.data ?? [])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((r: any) => r?.pseudonym_id)
+          .filter(Boolean),
+      ).size;
 
       setStats({
         totalMentors: mentorsRes.count ?? 0,
@@ -172,7 +220,52 @@ export function AdminPanel() {
         messagesToday: messagesRes.count ?? 0,
         activeAssignments: assignmentsRes.count ?? 0,
         connectedGarmin: (garminRes?.count ?? 0),
+        trendsToday: trendsTodayUnique,
+        // Interpret "total trends" as number of participants with trend data available.
+        // Today updates are computed separately as distinct pseudonym_ids updated since UTC midnight.
+        totalTrends: (garminRes?.count ?? 0),
       });
+
+      // Best-effort: fetch DB usage overview (top 5 tables)
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token ?? null;
+        if (token) {
+          const res = await fetch("/api/admin/db-usage?limit=5", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const json = await res.json().catch(() => null);
+          if (res.ok && json && typeof json === "object") {
+            const topTables = Array.isArray((json as { top_tables?: unknown }).top_tables)
+              ? ((json as { top_tables: DbUsageMini["top_tables"] }).top_tables ?? [])
+              : [];
+            const totalsRaw = (json as { totals?: unknown }).totals;
+            if (
+              totalsRaw &&
+              typeof totalsRaw === "object" &&
+              typeof (totalsRaw as { database_bytes?: unknown }).database_bytes === "number"
+            ) {
+              setDbUsage({
+                totals: {
+                  database_bytes: (totalsRaw as { database_bytes: number }).database_bytes,
+                  public_schema_bytes:
+                    typeof (totalsRaw as { public_schema_bytes?: unknown }).public_schema_bytes === "number"
+                      ? (totalsRaw as { public_schema_bytes: number }).public_schema_bytes
+                      : null,
+                },
+                top_tables: topTables.map((t) => ({
+                  schema_name: t.schema_name,
+                  table_name: t.table_name,
+                  total_bytes: t.total_bytes,
+                })),
+              });
+            }
+          }
+        }
+      } catch {
+        // Ignore DB usage errors; stats should still load.
+      }
+
       setError(null);
     } catch (err) {
       console.error("Error fetching stats:", err);
@@ -211,6 +304,11 @@ export function AdminPanel() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "mentor_assignments" },
+        () => fetchStats()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "garmin_metrics" },
         () => fetchStats()
       )
       .subscribe();
@@ -333,9 +431,11 @@ export function AdminPanel() {
         {activeTab === "dashboard" && (
           <DashboardTab 
             stats={stats} 
+            dbUsage={dbUsage}
             isLoading={isLoading} 
             error={error} 
             onNavigate={(tab) => navigateToTab(tab)}
+            onDbUsage={() => router.push("/db-usage")}
             onQuickAction={(action) => {
               if (action === "view-messages") {
                 navigateToTab("messages");
@@ -415,15 +515,19 @@ export function AdminPanel() {
  */
 function DashboardTab({
   stats,
+  dbUsage,
   isLoading,
   error,
   onNavigate,
+  onDbUsage,
   onQuickAction,
 }: {
   stats: Stats | null;
+  dbUsage: DbUsageMini | null;
   isLoading: boolean;
   error: string | null;
   onNavigate: (tab: AdminTab) => void;
+  onDbUsage: () => void;
   onQuickAction: (action: "add-mentor" | "add-participant" | "invite-participant" | "create-assignment" | "view-messages") => void;
 }) {
   if (error) {
@@ -506,6 +610,35 @@ function DashboardTab({
             color="purple"
             onClick={() => onNavigate("messages")}
           />
+          <StatCard
+            title="Trends updated today"
+            value={stats?.trendsToday}
+            isLoading={isLoading}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 14l3-3 3 2 5-7" />
+              </svg>
+            }
+            color="purple"
+            onClick={() => onNavigate("garmin-trends")}
+          />
+          <StatCard
+            title="Participants with trends"
+            value={stats?.totalTrends}
+            isLoading={isLoading}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 19V5m6 14V9m6 10V7m6 12V11" />
+              </svg>
+            }
+            color="purple"
+            onClick={() => onNavigate("garmin-trends")}
+          />
+          <DbUsageOverviewCard
+            isLoading={isLoading}
+            dbUsage={dbUsage}
+            onClick={onDbUsage}
+          />
         </div>
       </div>
 
@@ -583,36 +716,6 @@ function DashboardTab({
         </div>
       </div>
 
-
-      {/* Garmin Insights */}
-      <div className="bg-white rounded-2xl border-2 border-slate-100 p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-            <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Garmin Insights</h2>
-            <p className="text-sm text-slate-500">Device connection and activity trends</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Participant Trends"
-            value={stats?.connectedGarmin}
-            isLoading={isLoading}
-            icon={
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            }
-            color="purple"
-            onClick={() => onNavigate("garmin-trends")}
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -658,6 +761,49 @@ function StatCard({
           ) : (
             <p className="text-2xl font-bold text-slate-900 dark:text-white">{value?.toLocaleString() ?? "—"}</p>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DbUsageOverviewCard({
+  dbUsage,
+  isLoading,
+  onClick,
+}: {
+  dbUsage: DbUsageMini | null;
+  isLoading: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <div
+      className={`bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-5 ${
+        onClick ? "cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all" : ""
+      }`}
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-teal-50 text-teal-600">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2a4 4 0 014-4h2M7 7h10M7 11h6M7 15h4" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">DB usage</p>
+          {isLoading ? (
+            <div className="h-7 w-40 bg-slate-200 dark:bg-slate-800 rounded animate-pulse mt-1" />
+          ) : (
+            <p className="text-lg font-bold text-slate-900 dark:text-white">
+              {dbUsage ? formatBytes(dbUsage.totals.database_bytes) : "—"}
+              <span className="ml-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                total
+              </span>
+            </p>
+          )}
+        </div>
+        <div className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-100 px-2 py-1 rounded-lg">
+          View
         </div>
       </div>
     </div>
