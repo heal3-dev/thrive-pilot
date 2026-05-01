@@ -806,23 +806,6 @@ function DbUsageOverviewCard({
           View
         </div>
       </div>
-
-      <div className="mt-3">
-        {isLoading ? (
-          <div className="space-y-2">
-            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-          </div>
-        ) : dbUsage?.top_tables?.[0] ? (
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Top table:{" "}
-            {`${dbUsage.top_tables[0].schema_name}.${dbUsage.top_tables[0].table_name} (${formatBytes(dbUsage.top_tables[0].total_bytes)})`}
-          </p>
-        ) : (
-          <p className="text-xs text-slate-500 dark:text-slate-400">No table stats available.</p>
-        )}
-      </div>
     </div>
   );
 }
