@@ -93,7 +93,7 @@ export default function DbUsageClient() {
   }, [fetchUsage]);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <div className="flex items-center justify-end gap-2">
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-600">Top tables</span>
