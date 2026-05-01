@@ -610,6 +610,30 @@ function DashboardTab({
             color="purple"
             onClick={() => onNavigate("messages")}
           />
+          <StatCard
+            title="Trends updated today"
+            value={stats?.trendsToday}
+            isLoading={isLoading}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 14l3-3 3 2 5-7" />
+              </svg>
+            }
+            color="purple"
+            onClick={() => onNavigate("garmin-trends")}
+          />
+          <StatCard
+            title="Participants with trends"
+            value={stats?.totalTrends}
+            isLoading={isLoading}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 19V5m6 14V9m6 10V7m6 12V11" />
+              </svg>
+            }
+            color="purple"
+            onClick={() => onNavigate("garmin-trends")}
+          />
           <DbUsageOverviewCard
             isLoading={isLoading}
             dbUsage={dbUsage}
@@ -692,48 +716,6 @@ function DashboardTab({
         </div>
       </div>
 
-
-      {/* Garmin Insights */}
-      <div className="bg-white rounded-2xl border-2 border-slate-100 p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-            <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Garmin Insights</h2>
-            <p className="text-sm text-slate-500">Device connection and activity trends</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Trends updated today"
-            value={stats?.trendsToday}
-            isLoading={isLoading}
-            icon={
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 14l3-3 3 2 5-7" />
-              </svg>
-            }
-            color="purple"
-            onClick={() => onNavigate("garmin-trends")}
-          />
-          <StatCard
-            title="Participants with trends"
-            value={stats?.totalTrends}
-            isLoading={isLoading}
-            icon={
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 19V5m6 14V9m6 10V7m6 12V11" />
-              </svg>
-            }
-            color="purple"
-            onClick={() => onNavigate("garmin-trends")}
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -796,7 +778,7 @@ function DbUsageOverviewCard({
 }) {
   return (
     <div
-      className={`bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-5 lg:col-span-2 ${
+      className={`bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-5 ${
         onClick ? "cursor-pointer hover:border-slate-200 hover:shadow-sm transition-all" : ""
       }`}
       onClick={onClick}
@@ -832,19 +814,11 @@ function DbUsageOverviewCard({
             <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
             <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
           </div>
-        ) : dbUsage && dbUsage.top_tables.length > 0 ? (
-          <ul className="space-y-1.5">
-            {dbUsage.top_tables.slice(0, 5).map((t) => (
-              <li key={`${t.schema_name}.${t.table_name}`} className="flex items-center justify-between gap-3">
-                <span className="text-xs text-slate-600 dark:text-slate-300 truncate">
-                  {t.schema_name}.{t.table_name}
-                </span>
-                <span className="text-xs font-semibold text-slate-900 dark:text-white shrink-0">
-                  {formatBytes(t.total_bytes)}
-                </span>
-              </li>
-            ))}
-          </ul>
+        ) : dbUsage?.top_tables?.[0] ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Top table:{" "}
+            {`${dbUsage.top_tables[0].schema_name}.${dbUsage.top_tables[0].table_name} (${formatBytes(dbUsage.top_tables[0].total_bytes)})`}
+          </p>
         ) : (
           <p className="text-xs text-slate-500 dark:text-slate-400">No table stats available.</p>
         )}
