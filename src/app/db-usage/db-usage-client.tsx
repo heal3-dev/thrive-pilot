@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 type DbUsageTotals = {
   database_bytes: number;
   public_schema_bytes: number;
+  database_growth_bytes_7d?: number | null;
+  database_growth_bytes_per_day_7d?: number | null;
 };
 
 type DbUsageTable = {
@@ -20,6 +22,8 @@ type DbUsageTable = {
   index_bytes: number;
   toast_bytes: number;
   row_estimate: number;
+  growth_bytes_7d?: number | null;
+  growth_bytes_per_day_7d?: number | null;
 };
 
 type DbUsageResponse = {
@@ -44,6 +48,11 @@ function formatBytes(bytes: number): string {
 function formatInt(n: number): string {
   if (!Number.isFinite(n)) return "—";
   return new Intl.NumberFormat().format(Math.round(n));
+}
+
+function formatSignedBytes(bytes: number): string {
+  const sign = bytes < 0 ? "-" : "+";
+  return `${sign}${formatBytes(Math.abs(bytes))}`;
 }
 
 export default function DbUsageClient() {
@@ -146,6 +155,20 @@ export default function DbUsageClient() {
               <p className="mt-2 text-2xl font-bold text-slate-900">
                 {formatBytes(data.totals.database_bytes)}
               </p>
+              {(typeof data.totals.database_growth_bytes_7d === "number" ||
+                typeof data.totals.database_growth_bytes_per_day_7d === "number") && (
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  7d:{" "}
+                  {typeof data.totals.database_growth_bytes_7d === "number"
+                    ? formatSignedBytes(data.totals.database_growth_bytes_7d)
+                    : "—"}
+                  <span className="mx-2 text-slate-300">·</span>
+                  /day:{" "}
+                  {typeof data.totals.database_growth_bytes_per_day_7d === "number"
+                    ? formatSignedBytes(Math.round(data.totals.database_growth_bytes_per_day_7d))
+                    : "—"}
+                </p>
+              )}
             </div>
             <div className="bg-white rounded-2xl border-2 border-slate-100 p-5">
               <p className="text-sm font-semibold text-slate-700">Public schema size</p>
@@ -177,13 +200,13 @@ export default function DbUsageClient() {
                       Total
                     </th>
                     <th className="text-right py-3 pl-4 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      7d/day
+                    </th>
+                    <th className="text-right py-3 pl-4 text-xs font-bold text-slate-700 uppercase tracking-wider">
                       Table
                     </th>
                     <th className="text-right py-3 pl-4 text-xs font-bold text-slate-700 uppercase tracking-wider">
                       Indexes
-                    </th>
-                    <th className="text-right py-3 pl-4 text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Rows (est.)
                     </th>
                   </tr>
                 </thead>
@@ -198,14 +221,23 @@ export default function DbUsageClient() {
                       <td className="py-3 pl-4 text-right font-semibold text-slate-900">
                         {formatBytes(t.total_bytes)}
                       </td>
+                      <td className="py-3 pl-4 text-right text-slate-700 tabular-nums">
+                        <div className="flex flex-col items-end leading-tight">
+                          <span className="font-semibold text-slate-900">
+                            {typeof t.growth_bytes_7d === "number" ? formatSignedBytes(t.growth_bytes_7d) : "—"}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {typeof t.growth_bytes_per_day_7d === "number"
+                              ? `${formatSignedBytes(Math.round(t.growth_bytes_per_day_7d))}/day`
+                              : "—"}
+                          </span>
+                        </div>
+                      </td>
                       <td className="py-3 pl-4 text-right text-slate-700">
                         {formatBytes(t.table_bytes)}
                       </td>
                       <td className="py-3 pl-4 text-right text-slate-700">
                         {formatBytes(t.index_bytes)}
-                      </td>
-                      <td className="py-3 pl-4 text-right text-slate-700">
-                        {formatInt(t.row_estimate)}
                       </td>
                     </tr>
                   ))}
