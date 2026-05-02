@@ -73,6 +73,7 @@ export default function DbUsageClient() {
         if (!token) throw new Error("Authentication required");
 
         const res = await fetch(`/api/admin/db-usage?limit=${effectiveLimit}`, {
+          cache: "no-store",
           headers: { Authorization: `Bearer ${token}` },
         });
         const json = await res.json().catch(() => null);

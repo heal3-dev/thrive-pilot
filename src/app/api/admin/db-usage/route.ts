@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/app/api/admin/_utils";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type AdminDbUsageJson = {
   captured_at?: string;
   db?: { size_bytes?: number; size_pretty?: string };
@@ -54,7 +57,7 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     generated_at: parsed.captured_at ?? new Date().toISOString(),
     totals: {
       database_bytes: parsed.db.size_bytes,
@@ -64,5 +67,7 @@ export async function GET(request: Request) {
     },
     top_tables: parsed.tables,
   });
+  res.headers.set("Cache-Control", "no-store, max-age=0");
+  return res;
 }
 
