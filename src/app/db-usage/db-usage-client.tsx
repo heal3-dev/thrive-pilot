@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/ui/back-button";
 import { Input } from "@/components/ui/input";
 
 type DbUsageTotals = {
@@ -45,6 +47,7 @@ function formatInt(n: number): string {
 }
 
 export default function DbUsageClient() {
+  const router = useRouter();
   const [limit, setLimit] = useState("25");
   const [data, setData] = useState<DbUsageResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +121,18 @@ export default function DbUsageClient() {
           <p className="text-sm font-semibold text-red-700">{error}</p>
         </div>
       )}
+
+      <div className="flex items-center">
+        <BackButton
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+            } else {
+              router.push("/dashboard");
+            }
+          }}
+        />
+      </div>
 
       {isLoading ? (
         <div className="bg-white rounded-2xl border-2 border-slate-100 p-8 text-slate-500">
