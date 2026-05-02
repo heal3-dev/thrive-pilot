@@ -97,33 +97,9 @@ export default function DbUsageClient() {
 
   return (
     <div className="w-full space-y-6">
-      <div className="flex items-center justify-end gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600">Top tables</span>
-          <Input
-            value={limit}
-            onChange={(e) => setLimit(e.target.value)}
-            className="w-20 h-10"
-            inputMode="numeric"
-          />
-        </div>
-        <Button
-          onClick={() => fetchUsage({ refresh: true })}
-          disabled={isLoading || isRefreshing}
-          className="bg-teal-500 hover:bg-teal-600 text-white"
-        >
-          {isRefreshing ? "Refreshing…" : "Refresh"}
-        </Button>
-      </div>
-
-      {error && (
-        <div className="p-4 rounded-xl bg-red-50 border-2 border-red-200">
-          <p className="text-sm font-semibold text-red-700">{error}</p>
-        </div>
-      )}
-
-      <div className="flex items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <BackButton
+          className="h-10 px-3 w-fit"
           onClick={() => {
             if (typeof window !== "undefined" && window.history.length > 1) {
               router.back();
@@ -132,7 +108,33 @@ export default function DbUsageClient() {
             }
           }}
         />
+
+        <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-600">Top tables</span>
+            <Input
+              value={limit}
+              onChange={(e) => setLimit(e.target.value)}
+              className="w-20 h-10"
+              inputMode="numeric"
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={() => fetchUsage({ refresh: true })}
+            disabled={isLoading || isRefreshing}
+            className="h-10 bg-teal-500 hover:bg-teal-600 text-white"
+          >
+            {isRefreshing ? "Refreshing…" : "Refresh"}
+          </Button>
+        </div>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border-2 border-red-200">
+          <p className="text-sm font-semibold text-red-700">{error}</p>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="bg-white rounded-2xl border-2 border-slate-100 p-8 text-slate-500">
