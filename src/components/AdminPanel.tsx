@@ -398,21 +398,24 @@ export function AdminPanel() {
     <div className="h-full min-h-0 flex flex-col gap-6">
       {/* Tab Navigation */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-3">
-        <div className="flex gap-3">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => navigateToTab(tab.id)}
-            className={`inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-sm font-semibold transition-colors flex-1 cursor-pointer ${
-              activeTab === tab.id
-                ? "bg-teal-500 text-white shadow-md shadow-teal-500/25"
-                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+        <div
+          className="flex gap-2 overflow-x-auto sm:overflow-x-visible sm:gap-3 sm:px-0 px-1 -mx-1
+                     [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => navigateToTab(tab.id)}
+              className={`inline-flex items-center justify-center gap-2 px-4 sm:px-8 py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 sm:flex-1 ${
+                activeTab === tab.id
+                  ? "bg-teal-500 text-white shadow-md shadow-teal-500/25"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
