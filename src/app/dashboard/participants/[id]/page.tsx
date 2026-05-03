@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useDashboard } from "@/app/dashboard/layout";
 import { BackButton } from "@/components/ui/back-button";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
+import { ParticipantMetricsCharts } from "@/components/admin/ParticipantMetricsCharts";
 import { getDemoParticipant } from "@/lib/demo-data";
 import { type Metric, type WeeklyFlag } from "@/lib/flags/rules";
 import { weeklyCompositeTooltip } from "@/lib/flags/weekly-tooltips";
@@ -36,6 +37,7 @@ export default function ParticipantDetailsPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [metricsView, setMetricsView] = useState<"table" | "charts">("table");
 
   const getEndpoint = useCallback(
     (offset: number) => {
@@ -228,19 +230,54 @@ export default function ParticipantDetailsPage() {
 
       {/* Metrics Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
           <h3 className="font-semibold text-slate-800">Daily Metrics</h3>
+
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <button
+              type="button"
+              onClick={() => setMetricsView("table")}
+              className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                metricsView === "table"
+                  ? "bg-slate-200 text-slate-900 shadow-inner"
+                  : "text-slate-600 hover:bg-white"
+              }`}
+            >
+              Table
+            </button>
+            <button
+              type="button"
+              onClick={() => setMetricsView("charts")}
+              className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                metricsView === "charts"
+                  ? "bg-slate-200 text-slate-900 shadow-inner"
+                  : "text-slate-600 hover:bg-white"
+              }`}
+            >
+              Charts
+            </button>
+          </div>
         </div>
 
-        <ParticipantMetricsTable
-          metrics={metrics}
-          weeklyFlag={weeklyFlag}
-          edgePadding="lg"
-          isLoadingMore={isLoadingMore}
-          hasMore={hasMore}
-          onLoadMore={handleLoadMore}
-          emptyMessage={`No metrics found.${participant.garmin_user_id ? " Wait for daily sync." : ""}`}
-        />
+        {metricsView === "table" ? (
+          <ParticipantMetricsTable
+            metrics={metrics}
+            weeklyFlag={weeklyFlag}
+            edgePadding="lg"
+            isLoadingMore={isLoadingMore}
+            hasMore={hasMore}
+            onLoadMore={handleLoadMore}
+            emptyMessage={`No metrics found.${participant.garmin_user_id ? " Wait for daily sync." : ""}`}
+          />
+        ) : (
+          <ParticipantMetricsCharts
+            metrics={metrics}
+            weeklyFlag={weeklyFlag}
+            isLoadingMore={isLoadingMore}
+            hasMore={hasMore}
+            onLoadMore={handleLoadMore}
+          />
+        )}
       </div>
     </div>
   );
