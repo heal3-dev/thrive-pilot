@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { AssignMentorModal } from "./modals/AssignMentorModal";
@@ -34,6 +35,8 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<AssignmentFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [mentorFilter, setMentorFilter] = useState<string>("all"); // mentor id | "all" | "unassigned"
 
   // Modal states
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(initialModal === "assign");
@@ -108,6 +111,27 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
     if (filter === "active") return row.status === "active";
     if (filter === "unassigned") return row.status === "never_assigned" || row.status === "ended";
     return true; // "all"
+  }).filter((row) => {
+    const q = searchQuery.trim().toLowerCase();
+    const participant = row.participant;
+    const mentor = row.mentor;
+
+    const matchesSearch =
+      q.length === 0 ||
+      (participant?.name ?? "").toLowerCase().includes(q) ||
+      (participant?.email ?? "").toLowerCase().includes(q) ||
+      (participant?.phone_number ?? "").toLowerCase().includes(q);
+
+    // For ended/active assignments, use row.mentor_id. For never_assigned, mentor_id is null.
+    const isUnassigned = row.status === "never_assigned" || !row.mentor_id;
+    const matchesMentor =
+      mentorFilter === "all" ||
+      (mentorFilter === "unassigned" && isUnassigned) ||
+      (!isUnassigned && row.mentor_id === mentorFilter) ||
+      // Fallback for ended rows if mentor_id is present but mentor object missing
+      (!isUnassigned && mentor?.id === mentorFilter);
+
+    return matchesSearch && matchesMentor;
   });
 
 // handleCreateAssignment removed (using AssignMentorModal)
@@ -231,8 +255,9 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
 
       {/* Header with filter and actions */}
       <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-          <div className="flex gap-1.5">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <div className="flex gap-1.5">
             {(["all", "active", "unassigned"] as AssignmentFilter[]).map((f) => (
               <button
                 key={f}
@@ -258,6 +283,32 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
             </svg>
             Assign Mentor
           </Button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+            <Input
+              placeholder="Search by participant name, phone, or email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full sm:w-80 h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
+            />
+
+            <select
+              value={mentorFilter}
+              onChange={(e) => setMentorFilter(e.target.value)}
+              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+            >
+              <option value="all">All Mentors</option>
+              <option value="unassigned">Unassigned</option>
+              {activeMentors
+                .filter((m) => m.is_active !== false && m.role !== "admin")
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name || m.email || "Unnamed mentor"}
+                  </option>
+                ))}
+            </select>
+          </div>
         </div>
       </div>
 
