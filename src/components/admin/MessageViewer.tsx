@@ -667,7 +667,12 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
                       <p className="font-bold text-slate-900 dark:text-white">
                         {threadData.participant.name || "Unnamed"}
                       </p>
-                      <p className="text-xs text-slate-500">{formatPhone(threadData.participant.phone_number)}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-xs text-slate-500">{formatPhone(threadData.participant.phone_number)}</p>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                          Read-only · Use Mentor Inbox to send
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -775,13 +780,6 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
                   ))
                 )}
                 <div ref={messagesEndRef} />
-              </div>
-
-              {/* Read-only notice */}
-              <div className="p-3 border-t-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
-                <p className="text-xs text-slate-400 text-center">
-                  This is a read-only view. To send messages, use the Mentor Inbox.
-                </p>
               </div>
             </>
           ) : null}
