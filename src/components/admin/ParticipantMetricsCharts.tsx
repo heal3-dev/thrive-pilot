@@ -156,6 +156,12 @@ export function ParticipantMetricsCharts({ metrics, weeklyFlag, hasMore, isLoadi
     return oldest;
   }, [metrics]);
 
+  const needsOlderData = useMemo(() => {
+    if (!earliestNeededDate) return false;
+    if (!oldestLoadedDate) return true;
+    return oldestLoadedDate > earliestNeededDate;
+  }, [earliestNeededDate, oldestLoadedDate]);
+
   // Best-effort: auto-fetch more rows when chart range needs older data.
   useEffect(() => {
     if (!latestDate || !earliestNeededDate) return;
@@ -293,14 +299,13 @@ export function ParticipantMetricsCharts({ metrics, weeklyFlag, hasMore, isLoadi
             <div className="text-xs text-slate-500">
               Showing {rangeDays} days ending {latestDate}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onLoadMore?.()}
-              disabled={!hasMore || isLoadingMore}
-            >
-              Load more
-            </Button>
+            {needsOlderData && hasMore && onLoadMore && !isLoadingMore ? (
+              <Button variant="outline" size="sm" onClick={() => onLoadMore()}>
+                Load older data
+              </Button>
+            ) : (
+              <span className="text-xs text-slate-400" />
+            )}
           </div>
         </div>
       )}
