@@ -17,6 +17,7 @@ import type { Mentor, Participant } from "@/types";
 // toE164 removed (using import from utils)
 
 type StatusFilter = "all" | "active" | "removed" | "invited";
+type FlagsFilter = "all" | "sync_stale" | "weekly_green" | "weekly_yellow" | "weekly_orange" | "weekly_red";
 
 type AssignedMentor = {
   mentor_id: string;
@@ -104,6 +105,7 @@ export function ParticipantManagement({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(mode === "management" ? "active" : "all");
   const [mentorFilter, setMentorFilter] = useState<string>("all"); // mentor id | "all" | "unassigned"
   const [garminFilter, setGarminFilter] = useState<"all" | "connected" | "disconnected">(initialGarminFilter);
+  const [flagsFilter, setFlagsFilter] = useState<FlagsFilter>("all");
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(initialModal === "invite");
   const [isAddModalOpen, setIsAddModalOpen] = useState(initialModal === "add");
@@ -113,6 +115,7 @@ export function ParticipantManagement({
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [backfillLoadingId, setBackfillLoadingId] = useState<string | null>(null);
+  const [garminInviteLoadingId, setGarminInviteLoadingId] = useState<string | null>(null);
   const [inviteAlertDismissed, setInviteAlertDismissed] = useState(false);
   const [inviteAlertDismissedTotal, setInviteAlertDismissedTotal] = useState<number | null>(
     null
@@ -254,7 +257,16 @@ export function ParticipantManagement({
         (garminFilter === "connected" && isConnected) ||
         (garminFilter === "disconnected" && !isConnected);
 
-      return matchesSearch && matchesStatus && matchesMentor && matchesGarmin;
+      const weeklyColor = p.weekly_flag?.finalColor ?? null;
+      const matchesFlags =
+        flagsFilter === "all" ||
+        (flagsFilter === "sync_stale" && p.garmin_sync_stale === true) ||
+        (flagsFilter === "weekly_green" && weeklyColor === "green") ||
+        (flagsFilter === "weekly_yellow" && weeklyColor === "yellow") ||
+        (flagsFilter === "weekly_orange" && weeklyColor === "orange") ||
+        (flagsFilter === "weekly_red" && weeklyColor === "red");
+
+      return matchesSearch && matchesStatus && matchesMentor && matchesGarmin && matchesFlags;
     });
 
     function invitedRank(p: ParticipantRow): number {
@@ -289,7 +301,7 @@ export function ParticipantManagement({
     });
 
     return sorted;
-  }, [participants, searchQuery, statusFilter, mentorFilter, garminFilter]);
+  }, [participants, searchQuery, statusFilter, mentorFilter, garminFilter, flagsFilter]);
 
 
 
@@ -353,7 +365,7 @@ export function ParticipantManagement({
     }
   };
 
-  const handleConnectGarmin = async (p: ParticipantRow) => {
+  const handleConnectGarmin = async (p: ParticipantRow, opts?: { force?: boolean }) => {
     if (!p.email) {
       setError("Participant is missing an email address");
       return;
@@ -361,13 +373,14 @@ export function ParticipantManagement({
 
     try {
       setError(null);
+      setGarminInviteLoadingId(p.id);
       const result = await adminFetch("/api/garmin/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           participant_id: p.id,
           email: p.email,
-          force: Boolean(p.garmin_connected),
+          force: Boolean(opts?.force),
         }),
       });
       setSuccessMessage(result?.message ?? `Garmin invite sent to ${p.email}`);
@@ -375,6 +388,8 @@ export function ParticipantManagement({
     } catch (err) {
       console.error("Error sending Garmin invite:", err);
       setError(err instanceof Error ? err.message : "Failed to send Garmin invite");
+    } finally {
+      setGarminInviteLoadingId(null);
     }
   };
 
@@ -593,6 +608,20 @@ export function ParticipantManagement({
               <option value="connected">Connected</option>
               <option value="disconnected">Disconnected</option>
             </select>
+
+            <select
+              value={flagsFilter}
+              onChange={(e) => setFlagsFilter(e.target.value as FlagsFilter)}
+              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              disabled={mode === "mentor-trends"}
+            >
+              <option value="all">All Flags</option>
+              <option value="sync_stale">Sync Stale</option>
+              <option value="weekly_green">Weekly: Green</option>
+              <option value="weekly_yellow">Weekly: Yellow</option>
+              <option value="weekly_orange">Weekly: Orange</option>
+              <option value="weekly_red">Weekly: Red</option>
+            </select>
           </div>
 
           <div className="flex gap-2">
@@ -772,6 +801,35 @@ export function ParticipantManagement({
                                 "Sync last 7 days"
                               )}
                             </Button>
+
+                            {p.garmin_sync_stale ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleConnectGarmin(p, { force: true });
+                                }}
+                                disabled={garminInviteLoadingId === p.id}
+                                className="text-teal-700 hover:text-teal-800 hover:bg-teal-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
+                              >
+                                {garminInviteLoadingId === p.id ? (
+                                  <span className="flex items-center gap-1">
+                                    <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                      <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                      />
+                                    </svg>
+                                    Sending…
+                                  </span>
+                                ) : (
+                                  "Refresh Garmin"
+                                )}
+                              </Button>
+                            ) : null}
                           </div>
                         ) : (
                           <Button
