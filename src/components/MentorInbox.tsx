@@ -326,6 +326,27 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
           if (newMessage.participant_id === selectedParticipant?.id) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMessage.id)) return prev;
+              // Reconcile optimistic outbound message (temp id) with the real DB row.
+              // This prevents a brief "double bubble" (optimistic + inserted) during sends.
+              if (newMessage.direction === "outbound" && newMessage.twilio_sid) {
+                const optimisticIdx = prev.findIndex(
+                  (m) =>
+                    String(m.id).startsWith("temp-") &&
+                    m.direction === "outbound" &&
+                    m.participant_id === newMessage.participant_id &&
+                    m.message_body === newMessage.message_body
+                );
+                if (optimisticIdx !== -1) {
+                  const next = [...prev];
+                  next[optimisticIdx] = { ...newMessage, status: undefined };
+                  return next.sort((a, b) => {
+                    const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+                    const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+                    return at - bt;
+                  });
+                }
+              }
+
               const next = [...prev, newMessage].sort((a, b) => {
                 const at = a.created_at ? new Date(a.created_at).getTime() : 0;
                 const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -441,20 +462,31 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to send message");
+        const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
+        const base = (errorData as { error?: string }).error || "Failed to send message";
+        const twilio = (errorData as { twilio?: { code?: string | number | null } }).twilio;
+        const code = twilio?.code ? ` (Twilio code: ${twilio.code})` : "";
+        throw new Error(base + code);
       }
 
       // Success - message will be updated via Realtime or next poll
       // However, we can replace the temp message with the actual one from response if provided
       const responseData = await response.json();
       if (responseData.message) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? { ...responseData.message, status: undefined } : m))
-        );
+        setMessages((prev) => {
+          // If realtime inserted row already arrived, prefer it and just remove the temp.
+          const alreadyHas = prev.some((m) => m.id === responseData.message.id);
+          if (alreadyHas) {
+            return prev.filter((m) => m.id !== tempId);
+          }
+          return prev.map((m) =>
+            m.id === tempId ? { ...responseData.message, status: undefined } : m
+          );
+        });
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Failed to send message";
+      setSendError(errorMsg);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempId ? { ...m, status: "error", error: errorMsg } : m
@@ -765,7 +797,9 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                               </svg>
-                              <span>Something went wrong</span>
+                              <span title={message.error || "Something went wrong"}>
+                                {message.error || "Something went wrong"}
+                              </span>
                             </div>
                           )}
                         </div>

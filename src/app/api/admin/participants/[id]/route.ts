@@ -4,6 +4,7 @@ import { requireAdmin } from "@/app/api/admin/_utils";
 import { computeWeeklyFlagFromMetrics, type Metric, type WeeklyFlag } from "@/lib/flags/rules";
 import { hashParticipantId } from "@/lib/pseudonym-crypto";
 import * as Sentry from "@sentry/nextjs";
+import { toE164 } from "@/lib/utils";
 
 function ymdAddDays(ymd: string, deltaDays: number): string {
   const d = new Date(`${ymd}T00:00:00.000Z`);
@@ -174,6 +175,26 @@ export async function PATCH(
   }
 
   try {
+    // Normalize phone number to E.164 (Twilio requires E.164).
+    // We accept basic formats but persist consistently.
+    if (Object.prototype.hasOwnProperty.call(update, "phone_number")) {
+      const raw = update.phone_number;
+      if (raw === null || raw === undefined || raw === "") {
+        update.phone_number = null;
+      } else if (typeof raw === "string") {
+        const normalized = toE164(raw);
+        if (!normalized) {
+          return NextResponse.json(
+            { error: "Invalid phone number. Use E.164 (+15551234567) or a basic 10-digit format." },
+            { status: 400 }
+          );
+        }
+        update.phone_number = normalized;
+      } else {
+        return NextResponse.json({ error: "Invalid phone_number value" }, { status: 400 });
+      }
+    }
+
     const { data: existingParticipant, error: existingParticipantError } = await admin
       .from("participants")
       .select("id, email")
