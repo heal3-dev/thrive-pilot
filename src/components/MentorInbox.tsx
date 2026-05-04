@@ -326,6 +326,27 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
           if (newMessage.participant_id === selectedParticipant?.id) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMessage.id)) return prev;
+              // Reconcile optimistic outbound message (temp id) with the real DB row.
+              // This prevents a brief "double bubble" (optimistic + inserted) during sends.
+              if (newMessage.direction === "outbound" && newMessage.twilio_sid) {
+                const optimisticIdx = prev.findIndex(
+                  (m) =>
+                    String(m.id).startsWith("temp-") &&
+                    m.direction === "outbound" &&
+                    m.participant_id === newMessage.participant_id &&
+                    m.message_body === newMessage.message_body
+                );
+                if (optimisticIdx !== -1) {
+                  const next = [...prev];
+                  next[optimisticIdx] = { ...newMessage, status: undefined };
+                  return next.sort((a, b) => {
+                    const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+                    const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+                    return at - bt;
+                  });
+                }
+              }
+
               const next = [...prev, newMessage].sort((a, b) => {
                 const at = a.created_at ? new Date(a.created_at).getTime() : 0;
                 const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -452,9 +473,16 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
       // However, we can replace the temp message with the actual one from response if provided
       const responseData = await response.json();
       if (responseData.message) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? { ...responseData.message, status: undefined } : m))
-        );
+        setMessages((prev) => {
+          // If realtime inserted row already arrived, prefer it and just remove the temp.
+          const alreadyHas = prev.some((m) => m.id === responseData.message.id);
+          if (alreadyHas) {
+            return prev.filter((m) => m.id !== tempId);
+          }
+          return prev.map((m) =>
+            m.id === tempId ? { ...responseData.message, status: undefined } : m
+          );
+        });
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Failed to send message";

@@ -88,18 +88,25 @@ export async function POST(request: Request) {
       body: payload.messageBody,
     });
 
-    const { error: insertError } = await supabase.from("sms_messages").insert({
+    const insertPayload = {
       participant_id: payload.participantId,
       mentor_id: mentor.id,
-      direction: "outbound",
-      message_type: "mentor_message",
+      direction: "outbound" as const,
+      message_type: "mentor_message" as const,
       message_body: payload.messageBody,
       phone_number: to,
       twilio_sid: message.sid,
       twilio_status: message.status,
       created_at: new Date().toISOString(), // Explicit UTC timestamp
-    });
-    if (insertError) {
+    };
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("sms_messages")
+      .insert(insertPayload)
+      .select("*")
+      .single();
+
+    if (insertError || !inserted) {
       return NextResponse.json(
         { error: "Failed to store message record" },
         { status: 500 }
@@ -109,6 +116,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       messageId: message.sid,
       status: message.status,
+      message: inserted,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Twilio API request failed";
