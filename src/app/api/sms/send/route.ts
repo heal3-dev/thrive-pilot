@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { twilioClient, TWILIO_PHONE_NUMBER } from "@/lib/twilio";
 import { createSupabaseClientWithAuth } from "@/lib/supabase";
+import { toE164 } from "@/lib/utils";
 
 const requestSchema = z.object({
   participantId: z.string().min(1),
@@ -68,10 +69,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Participant not found", details: participantError  }, { status: 404 });
   }
 
+  const to = toE164(participant.phone_number);
+  if (!to) {
+    return NextResponse.json(
+      {
+        error:
+          "Participant phone number is invalid. Please update it to E.164 (e.g., +15551234567).",
+      },
+      { status: 400 }
+    );
+  }
+
   // Step 8: Send SMS via Twilio, then persist message record
   try {
     const message = await twilioClient.messages.create({
-      to: participant.phone_number,
+      to,
       from: TWILIO_PHONE_NUMBER,
       body: payload.messageBody,
     });
@@ -82,7 +94,7 @@ export async function POST(request: Request) {
       direction: "outbound",
       message_type: "mentor_message",
       message_body: payload.messageBody,
-      phone_number: participant.phone_number,
+      phone_number: to,
       twilio_sid: message.sid,
       twilio_status: message.status,
       created_at: new Date().toISOString(), // Explicit UTC timestamp
@@ -98,9 +110,26 @@ export async function POST(request: Request) {
       messageId: message.sid,
       status: message.status,
     });
-  } catch {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Twilio API request failed";
+    // Twilio errors typically include .code, .status, and .moreInfo
+    const twilioMeta =
+      e && typeof e === "object"
+        ? {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            code: (e as any).code ?? null,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            status: (e as any).status ?? null,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            moreInfo: (e as any).moreInfo ?? null,
+          }
+        : null;
+
     return NextResponse.json(
-      { error: "Twilio API request failed" },
+      {
+        error: msg,
+        ...(twilioMeta ? { twilio: twilioMeta } : {}),
+      },
       { status: 502 }
     );
   }

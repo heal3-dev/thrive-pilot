@@ -441,8 +441,11 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to send message");
+        const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
+        const base = (errorData as { error?: string }).error || "Failed to send message";
+        const twilio = (errorData as { twilio?: { code?: string | number | null } }).twilio;
+        const code = twilio?.code ? ` (Twilio code: ${twilio.code})` : "";
+        throw new Error(base + code);
       }
 
       // Success - message will be updated via Realtime or next poll
@@ -455,6 +458,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Failed to send message";
+      setSendError(errorMsg);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempId ? { ...m, status: "error", error: errorMsg } : m
@@ -765,7 +769,9 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                               </svg>
-                              <span>Something went wrong</span>
+                              <span title={message.error || "Something went wrong"}>
+                                {message.error || "Something went wrong"}
+                              </span>
                             </div>
                           )}
                         </div>
