@@ -421,7 +421,7 @@ export function AdminPanel() {
 
       {/* Tab Content */}
       <div
-        className={`flex-1 min-h-0 ${
+        className={`flex-1 min-h-0 h-full ${
           activeTab === "messages" ||
           activeTab === "garmin-trends" ||
           activeTab === "participants" ||
