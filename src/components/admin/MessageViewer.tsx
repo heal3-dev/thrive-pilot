@@ -412,12 +412,12 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* Main content - flex-1 with min-h-0 allows proper flex shrinking */}
-      <div className="flex-1 flex h-full bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden min-h-0">
+      <div className="flex-1 flex bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden min-h-0">
         {/* Sidebar */}
         <div
           className={`${
             sidebarOpen ? "w-full md:w-80" : "hidden"
-          } md:block h-full border-r-2 border-slate-100 dark:border-slate-800 flex flex-col flex-shrink-0 min-h-0`}
+          } md:block border-r-2 border-slate-100 dark:border-slate-800 flex flex-col flex-shrink-0 min-h-0`}
         >
           {/* Filters */}
           <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-3 flex-shrink-0">
@@ -455,7 +455,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* Conversation list */}
-          <div className="flex-1 h-full overflow-y-auto min-h-0">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {isLoadingList ? (
               <div className="p-4 space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -713,7 +713,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 pt-6 space-y-6 min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 space-y-6 min-h-0">
                 {threadData.messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <p className="text-slate-400 text-sm">No messages in this conversation</p>
