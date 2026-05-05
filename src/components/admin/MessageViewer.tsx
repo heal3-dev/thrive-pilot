@@ -713,7 +713,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-6 min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 pt-6 space-y-6 min-h-0">
                 {threadData.messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <p className="text-slate-400 text-sm">No messages in this conversation</p>
@@ -779,7 +779,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
                     </div>
                   ))
                 )}
-                <div ref={messagesEndRef} />
+                <div ref={messagesEndRef} className="h-2" />
               </div>
             </>
           ) : null}
