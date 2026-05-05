@@ -417,10 +417,10 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
         <div
           className={`${
             sidebarOpen ? "w-full md:w-80" : "hidden"
-          } md:block border-r-2 border-slate-100 dark:border-slate-800 flex flex-col flex-shrink-0 min-h-0 overflow-hidden`}
+          } md:block border-r-2 border-slate-100 dark:border-slate-800 flex flex-col flex-shrink-0 min-h-0 overflow-y-auto`}
         >
           {/* Filters */}
-          <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-3 flex-shrink-0">
+          <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-3 flex-shrink-0 sticky top-0 z-10 bg-white dark:bg-slate-900">
             {/* Search */}
             <Input
               placeholder={viewMode === "mentor" ? "Search by mentor name" : "Search by participant name or phone number"}
@@ -455,7 +455,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* Conversation list */}
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="min-h-0">
             {isLoadingList ? (
               <div className="p-4 space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
