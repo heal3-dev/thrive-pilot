@@ -412,12 +412,12 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* Main content - flex-1 with min-h-0 allows proper flex shrinking */}
-      <div className="flex-1 flex bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden min-h-0">
+      <div className="flex-1 flex h-full bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden min-h-0">
         {/* Sidebar */}
         <div
           className={`${
             sidebarOpen ? "w-full md:w-80" : "hidden"
-          } md:block border-r-2 border-slate-100 dark:border-slate-800 flex flex-col flex-shrink-0 min-h-0`}
+          } md:block h-full border-r-2 border-slate-100 dark:border-slate-800 flex flex-col flex-shrink-0 min-h-0`}
         >
           {/* Filters */}
           <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-3 flex-shrink-0">
@@ -455,7 +455,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* Conversation list */}
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex-1 h-full overflow-y-auto min-h-0">
             {isLoadingList ? (
               <div className="p-4 space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -667,7 +667,12 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
                       <p className="font-bold text-slate-900 dark:text-white">
                         {threadData.participant.name || "Unnamed"}
                       </p>
-                      <p className="text-xs text-slate-500">{formatPhone(threadData.participant.phone_number)}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-xs text-slate-500">{formatPhone(threadData.participant.phone_number)}</p>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                          Read-only · Use Mentor Inbox to send
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -775,13 +780,6 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
                   ))
                 )}
                 <div ref={messagesEndRef} />
-              </div>
-
-              {/* Read-only notice */}
-              <div className="p-3 border-t-2 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
-                <p className="text-xs text-slate-400 text-center">
-                  This is a read-only view. To send messages, use the Mentor Inbox.
-                </p>
               </div>
             </>
           ) : null}

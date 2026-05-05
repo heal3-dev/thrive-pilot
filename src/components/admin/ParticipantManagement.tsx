@@ -983,7 +983,8 @@ function EditParticipantModal({
     e.preventDefault();
     setLocalError(null);
 
-    if (!isValidPhone(phone)) {
+    const e164Phone = phone.trim() ? toE164(phone) : null;
+    if (phone.trim() && !e164Phone) {
       setLocalError("Invalid phone number. Use E.164 (+15551234567) or a basic 10-digit format.");
       return;
     }
@@ -991,7 +992,8 @@ function EditParticipantModal({
     await onSubmit({
       name: name.trim() ? name.trim() : null,
       email: email.trim() ? email.trim() : null,
-      phone_number: phone.trim() ? phone.trim() : null,
+      // Store in E.164 so Twilio can reliably deliver messages.
+      phone_number: e164Phone,
     });
   };
 
