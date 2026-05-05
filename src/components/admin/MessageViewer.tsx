@@ -455,7 +455,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* Conversation list */}
-          <div className="flex-1 min-h-0 h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {isLoadingList ? (
               <div className="p-4 space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -717,7 +717,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 min-h-0 h-0 overflow-y-auto p-4 space-y-6">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6">
                 {threadData.messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <p className="text-slate-400 text-sm">No messages in this conversation</p>
