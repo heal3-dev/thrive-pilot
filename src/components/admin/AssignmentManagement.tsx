@@ -304,7 +304,7 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
             className="bg-teal-500 hover:bg-teal-600 text-white shrink-0 px-3"
           >
             <svg className="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 13a5 5 0 007.07 0l1.83-1.83a5 5 0 000-7.07 5 5 0 00-7.07 0L10.5 5.43M14 11a5 5 0 01-7.07 0L5.1 9.17a5 5 0 010-7.07 5 5 0 017.07 0L13.5 3.43" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
             Assign Mentor
           </Button>
