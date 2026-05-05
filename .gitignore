@@ -50,3 +50,6 @@ next-env.d.ts
 
 # supabase
 supabase/.temp/
+
+# local toolchains (cloud agent)
+.local/
