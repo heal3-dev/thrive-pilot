@@ -605,7 +605,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
 
         {/* Message detail panel */}
         <div
-          className={`flex-1 flex flex-col min-h-0 overflow-hidden ${
+          className={`flex-1 flex flex-col min-h-0 h-full overflow-hidden ${
             sidebarOpen ? "hidden md:flex" : "flex"
           }`}
         >
