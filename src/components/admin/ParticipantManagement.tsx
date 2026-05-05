@@ -561,7 +561,7 @@ export function ParticipantManagement({
 
       <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
         <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center min-w-0">
             <Input
               placeholder="Search by name, phone, or email..."
               value={searchQuery}
