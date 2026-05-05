@@ -417,7 +417,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
         <div
           className={`${
             sidebarOpen ? "w-full md:w-80" : "hidden"
-          } md:block border-r-2 border-slate-100 dark:border-slate-800 flex flex-col flex-shrink-0 min-h-0`}
+          } md:block border-r-2 border-slate-100 dark:border-slate-800 flex flex-col flex-shrink-0 min-h-0 overflow-hidden`}
         >
           {/* Filters */}
           <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-3 flex-shrink-0">
@@ -455,7 +455,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* Conversation list */}
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex-1 min-h-0 h-0 overflow-y-auto">
             {isLoadingList ? (
               <div className="p-4 space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -604,7 +604,11 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
         </div>
 
         {/* Message detail panel */}
-        <div className={`flex-1 flex flex-col min-h-0 ${sidebarOpen ? "hidden md:flex" : "flex"}`}>
+        <div
+          className={`flex-1 flex flex-col min-h-0 overflow-hidden ${
+            sidebarOpen ? "hidden md:flex" : "flex"
+          }`}
+        >
           {!selectedParticipantId ? (
             <div className="flex-1 flex items-center justify-center bg-slate-50/50 dark:bg-slate-800/30">
               <div className="text-center">
@@ -713,7 +717,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-6 min-h-0">
+              <div className="flex-1 min-h-0 h-0 overflow-y-auto p-4 space-y-6">
                 {threadData.messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <p className="text-slate-400 text-sm">No messages in this conversation</p>
