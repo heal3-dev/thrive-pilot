@@ -255,48 +255,35 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
 
       {/* Header with filter and actions */}
       <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-            <div className="flex gap-1.5">
-            {(["all", "active", "unassigned"] as AssignmentFilter[]).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`h-10 px-4 rounded-lg text-base font-bold transition-colors cursor-pointer ${
-                  filter === f
-                    ? "bg-teal-500 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {f === "active" ? "Active" : f === "unassigned" ? "Unassigned" : "All"}
-              </button>
-            ))}
-          </div>
-          <Button
-            size="sm"
-            onClick={() => setIsAssignModalOpen(true)}
-            disabled={unassignedParticipants.length === 0 || activeMentors.length === 0}
-            className="bg-teal-500 hover:bg-teal-600 text-white"
-          >
-            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Assign Mentor
-          </Button>
-          </div>
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-1 min-w-0">
+            <div className="flex gap-1.5 shrink-0">
+              {(["all", "active", "unassigned"] as AssignmentFilter[]).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`h-10 px-4 rounded-lg text-base font-bold transition-colors cursor-pointer ${
+                    filter === f
+                      ? "bg-teal-500 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {f === "active" ? "Active" : f === "unassigned" ? "Unassigned" : "All"}
+                </button>
+              ))}
+            </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
             <Input
               placeholder="Search by participant name, phone, or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-80 h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
+              className="w-full sm:flex-1 h-10 rounded-lg shadow-none text-sm placeholder:text-sm min-w-0"
             />
 
             <select
               value={mentorFilter}
               onChange={(e) => setMentorFilter(e.target.value)}
-              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none sm:w-56 shrink-0"
             >
               <option value="all">All Mentors</option>
               <option value="unassigned">Unassigned</option>
@@ -309,6 +296,18 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
                 ))}
             </select>
           </div>
+
+          <Button
+            size="sm"
+            onClick={() => setIsAssignModalOpen(true)}
+            disabled={unassignedParticipants.length === 0 || activeMentors.length === 0}
+            className="bg-teal-500 hover:bg-teal-600 text-white shrink-0"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Assign Mentor
+          </Button>
         </div>
       </div>
 
