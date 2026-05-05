@@ -371,9 +371,9 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
   return (
     // Fill the available dashboard content height (dashboard main is locked to viewport).
     // No browser scrolling; only inner panels scroll.
-    <div className="h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 grid grid-rows-[auto_1fr] gap-3 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 mb-3 flex-shrink-0">
+      <div className="flex items-center justify-between gap-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <BackButton onClick={onBack} />
         </div>
@@ -411,8 +411,8 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {/* Main content - flex-1 with min-h-0 allows proper flex shrinking */}
-      <div className="flex-1 flex bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden min-h-0">
+      {/* Main content row (1fr) */}
+      <div className="min-h-0 flex bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden">
         {/* Sidebar */}
         <div
           className={`${
