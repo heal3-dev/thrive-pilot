@@ -301,10 +301,10 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
             size="sm"
             onClick={() => setIsAssignModalOpen(true)}
             disabled={unassignedParticipants.length === 0 || activeMentors.length === 0}
-            className="bg-teal-500 hover:bg-teal-600 text-white shrink-0"
+            className="bg-teal-500 hover:bg-teal-600 text-white shrink-0 px-3"
           >
-            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            <svg className="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 13a5 5 0 007.07 0l1.83-1.83a5 5 0 000-7.07 5 5 0 00-7.07 0L10.5 5.43M14 11a5 5 0 01-7.07 0L5.1 9.17a5 5 0 010-7.07 5 5 0 017.07 0L13.5 3.43" />
             </svg>
             Assign Mentor
           </Button>

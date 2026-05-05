@@ -229,8 +229,8 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
             </select>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => setIsAddModalOpen(true)} className="bg-teal-500 hover:bg-teal-600 text-white cursor-pointer">
-              <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <Button size="sm" onClick={() => setIsAddModalOpen(true)} className="bg-teal-500 hover:bg-teal-600 text-white cursor-pointer px-3">
+              <svg className="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
               Add Mentor

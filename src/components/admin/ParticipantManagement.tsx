@@ -561,18 +561,18 @@ export function ParticipantManagement({
 
       <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
         <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
-          <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center min-w-0">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center min-w-0 sm:flex-nowrap sm:overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Input
               placeholder="Search by name, phone, or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-72 h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
+              className="w-full sm:w-48 h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
             />
 
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
               disabled={mode === "mentor-trends"}
             >
               <option value="all">All Status</option>
@@ -585,7 +585,7 @@ export function ParticipantManagement({
               <select
                 value={mentorFilter}
                 onChange={(e) => setMentorFilter(e.target.value)}
-                className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+                className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[9.5rem]"
               >
                 <option value="all">All Mentors</option>
                 <option value="unassigned">Unassigned</option>
@@ -602,7 +602,7 @@ export function ParticipantManagement({
             <select
               value={garminFilter}
               onChange={(e) => setGarminFilter(e.target.value as "all" | "connected" | "disconnected")}
-              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
             >
               <option value="all">All Garmin</option>
               <option value="connected">Connected</option>
@@ -612,7 +612,7 @@ export function ParticipantManagement({
             <select
               value={flagsFilter}
               onChange={(e) => setFlagsFilter(e.target.value as FlagsFilter)}
-              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
               disabled={mode === "mentor-trends"}
             >
               <option value="all">All Flags</option>
@@ -624,16 +624,16 @@ export function ParticipantManagement({
             </select>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             {mode === "management" && (
               <>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setIsAddModalOpen(true)}
-                  className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                  className="border-slate-300 text-slate-700 hover:bg-slate-100 px-2.5"
                 >
-                  <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                   Add Participant
@@ -641,9 +641,9 @@ export function ParticipantManagement({
                 <Button
                   size="sm"
                   onClick={() => setIsInviteModalOpen(true)}
-                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                  className="bg-teal-500 hover:bg-teal-600 text-white px-2.5"
                 >
-                  <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                   Invite Participant
