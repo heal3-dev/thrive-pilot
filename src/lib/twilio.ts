@@ -17,7 +17,10 @@ function getTwilioClient(): Twilio {
   return _twilioClient;
 }
 
-function wrapCallablePreservingProps<TThis extends object, TFn extends (...args: any[]) => any>(
+function wrapCallablePreservingProps<
+  TThis extends object,
+  TFn extends (...args: unknown[]) => unknown,
+>(
   fn: TFn,
   thisArg: TThis
 ): TFn {
