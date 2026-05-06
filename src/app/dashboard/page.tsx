@@ -12,7 +12,7 @@ export default function DashboardPage() {
     <div className="h-full min-h-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col">
       {/* Page Header */}
       <div className="mb-4">
-        <h1 className="font-clash text-3xl font-bold text-slate-900">
+        <h1 className="font-clash text-2xl font-bold text-slate-900">
           {isAdmin ? "Admin Panel" : "Inbox"}
         </h1>
         {!isAdmin && (
