@@ -603,17 +603,6 @@ export function ParticipantManagement({
             )}
 
             <select
-              value={garminFilter}
-              onChange={(e) => setGarminFilter(e.target.value as GarminFilter)}
-              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
-            >
-              <option value="all">All Garmin</option>
-              <option value="connected">Connected</option>
-              <option value="disconnected">Disconnected</option>
-              <option value="sync_stale">Sync Stale</option>
-            </select>
-
-            <select
               value={flagsFilter}
               onChange={(e) => setFlagsFilter(e.target.value as FlagsFilter)}
               className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
@@ -624,6 +613,17 @@ export function ParticipantManagement({
               <option value="weekly_yellow">Weekly: Yellow</option>
               <option value="weekly_orange">Weekly: Orange</option>
               <option value="weekly_red">Weekly: Red</option>
+            </select>
+
+            <select
+              value={garminFilter}
+              onChange={(e) => setGarminFilter(e.target.value as GarminFilter)}
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
+            >
+              <option value="all">All Garmin</option>
+              <option value="connected">Connected</option>
+              <option value="disconnected">Disconnected</option>
+              <option value="sync_stale">Sync Stale</option>
             </select>
           </div>
 
