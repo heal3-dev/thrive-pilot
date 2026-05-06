@@ -428,7 +428,8 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
     const onMove = (event: PointerEvent) => {
       const start = composerResizeStartRef.current;
       if (!start) return;
-      const delta = event.clientY - start.startY;
+      // Dragging up should expand; dragging down should shrink.
+      const delta = start.startY - event.clientY;
       const next = clampComposerHeight(start.startHeight + delta);
       setComposerManualHeight(next);
     };
@@ -1035,7 +1036,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                 <div className="flex gap-2 items-end">
                   <button
                     onClick={() => setShowTemplates(!showTemplates)}
-                    className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer"
+                    className="h-10 w-10 shrink-0 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer"
                     title="Message templates"
                   >
                     <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1051,7 +1052,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       placeholder={(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? "Conversation is read-only" : "Type a message..."}
                       disabled={!!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
                       rows={1}
-                      className="w-full min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium shadow-sm transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto"
+                      className="w-full min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium shadow-sm transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto resize-none"
                     />
                     {/* Center-top resize handle (drag to resize; double-click to reset to auto). */}
                     <button
@@ -1070,15 +1071,20 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                         setIsComposerResizing(true);
                         (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
                       }}
-                      className="absolute -top-2 left-1/2 -translate-x-1/2 w-12 h-4 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center cursor-ns-resize hover:bg-slate-300"
+                      className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-8 h-3 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center cursor-ns-resize hover:bg-slate-200"
                     >
-                      <span className="block w-5 h-0.5 rounded bg-slate-500" />
+                      <span className="flex items-center gap-0.5">
+                        <span className="block w-1 h-1 rounded-full bg-slate-400" />
+                        <span className="block w-1 h-1 rounded-full bg-slate-400" />
+                        <span className="block w-1 h-1 rounded-full bg-slate-400" />
+                      </span>
                     </button>
                   </div>
                   <Button
                     onClick={handleSendMessage}
                     disabled={!messageInput.trim() || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
-                    className="bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    size="sm"
+                    className="h-10 bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
