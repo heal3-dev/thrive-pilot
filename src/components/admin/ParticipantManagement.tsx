@@ -115,7 +115,6 @@ export function ParticipantManagement({
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [inactiveMentorTrendsBanner, setInactiveMentorTrendsBanner] = useState(false);
   const [backfillLoadingId, setBackfillLoadingId] = useState<string | null>(null);
   const [garminInviteLoadingId, setGarminInviteLoadingId] = useState<string | null>(null);
   const [inviteAlertDismissed, setInviteAlertDismissed] = useState(false);
@@ -174,7 +173,6 @@ export function ParticipantManagement({
       setParticipants((json.participants as ParticipantRow[]) ?? []);
       setMentors((json.mentors as Mentor[]) ?? []);
       setError(null);
-      setInactiveMentorTrendsBanner(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load participants";
       // When viewing mentor trends, inactive mentors may get a 403 "Mentor account is inactive".
@@ -185,8 +183,11 @@ export function ParticipantManagement({
       } else {
         console.info("Mentor trends disabled: mentor account is inactive");
       }
-      setError(message);
-      setInactiveMentorTrendsBanner(isInactiveMentor);
+      setError(
+        isInactiveMentor
+          ? "Mentor account is inactive. Please contact your admin to reactivate your account."
+          : message
+      );
     } finally {
       setIsLoading(false);
     }
@@ -499,20 +500,6 @@ export function ParticipantManagement({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             {error}
-          </p>
-        </div>
-      )}
-
-      {mode === "mentor-trends" && inactiveMentorTrendsBanner && (
-        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 shrink-0">
-          <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            Mentor account is inactive
-          </p>
-          <p className="text-sm text-amber-700 mt-0.5">
-            Please contact your admin to reactivate your account.
           </p>
         </div>
       )}
