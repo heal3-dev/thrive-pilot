@@ -862,7 +862,7 @@ export function ParticipantManagement({
                                 e.stopPropagation();
                                 handleConnectGarmin(p);
                               }}
-                              className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center px-2"
+                              className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
                             >
                               Connect Garmin
                             </Button>
@@ -879,16 +879,7 @@ export function ParticipantManagement({
                         }
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {mode === "trends" || mode === "mentor-trends" ? (
-                          <Button
-                             variant="outline"
-                             size="sm"
-                             onClick={() => router.push(`/dashboard/participants/${p.id}`)}
-                             className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
-                          >
-                            View Trend
-                          </Button>
-                        ) : p.is_unverified ? (
+                        {p.is_unverified ? (
                           <>
                             <Button
                               variant="ghost"
@@ -907,6 +898,15 @@ export function ParticipantManagement({
                               Delete
                             </Button>
                           </>
+                        ) : mode === "trends" || mode === "mentor-trends" ? (
+                          <Button
+                             variant="outline"
+                             size="sm"
+                             onClick={() => router.push(`/dashboard/participants/${p.id}`)}
+                             className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
+                          >
+                            View Trend
+                          </Button>
                         ) : (
                           <>
                             <Button
