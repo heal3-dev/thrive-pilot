@@ -265,7 +265,8 @@ export function MentorInbox({
         counts[pid] = (counts[pid] ?? 0) + 1;
       }
 
-      setUnreadCounts((prev) => ({ ...prev, ...counts }));
+      // Replace (don't merge) so stale unread badges can't linger.
+      setUnreadCounts(counts);
     } catch (e) {
       console.warn("refreshUnreadCounts error:", e);
     }
@@ -962,6 +963,8 @@ export function MentorInbox({
                 key={participant.id}
                 onClick={() => {
                   setSelectedParticipant(participant);
+                  // Mark as seen immediately to avoid badges reappearing while the thread fetch is in-flight.
+                  setLastSeen(participant.id, new Date().toISOString());
                   // Clear unread count for this participant
                   setUnreadCounts(prev => {
                     const updated = { ...prev };
