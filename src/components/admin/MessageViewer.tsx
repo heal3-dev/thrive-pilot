@@ -371,9 +371,9 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
   return (
     // Fill the available dashboard content height (dashboard main is locked to viewport).
     // No browser scrolling; only inner panels scroll.
-    <div className="h-full min-h-0 grid grid-rows-[auto_1fr] gap-3 overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-shrink-0">
+      <div className="flex items-center justify-between gap-4 mb-3 flex-shrink-0">
         <div className="flex items-center gap-3">
           <BackButton onClick={onBack} />
         </div>
@@ -411,16 +411,16 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {/* Main content row (1fr) */}
-      <div className="min-h-0 flex bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden">
+      {/* Main content - flex-1 with min-h-0 allows proper flex shrinking */}
+      <div className="flex-1 flex bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden min-h-0 items-stretch">
         {/* Sidebar */}
         <div
           className={`${
             sidebarOpen ? "w-full md:w-80" : "hidden"
-          } md:block border-r-2 border-slate-100 dark:border-slate-800 grid grid-rows-[auto_1fr] flex-shrink-0 min-h-0`}
+          } md:block border-r-2 border-slate-100 dark:border-slate-800 flex flex-col flex-shrink-0 min-h-0 self-stretch`}
         >
           {/* Filters */}
-          <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-3 bg-white dark:bg-slate-900">
+          <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-3 flex-shrink-0 bg-white dark:bg-slate-900">
             {/* Search */}
             <Input
               placeholder={viewMode === "mentor" ? "Search by mentor name" : "Search by participant name or phone number"}
@@ -455,7 +455,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* Conversation list */}
-          <div className="min-h-0 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {isLoadingList ? (
               <div className="p-4 space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
