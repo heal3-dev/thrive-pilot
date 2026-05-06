@@ -48,6 +48,8 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const [messages, setMessages] = useState<OptimisticSMSMessage[]>([]);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
+  const [composerManualHeight, setComposerManualHeight] = useState<number | null>(null);
+  const [isComposerResizing, setIsComposerResizing] = useState(false);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -66,6 +68,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const desktopLayoutRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const composerResizeStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
   // Message templates
   const messageTemplates = [
@@ -76,9 +79,17 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
     }
   ];
 
+  const totalUnread = useMemo(() => {
+    return Object.values(unreadCounts).reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0);
+  }, [unreadCounts]);
+
   // Scroll to bottom of messages
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  const clampComposerHeight = useCallback((h: number) => {
+    return Math.min(Math.max(h, 40), 180);
   }, []);
 
   const lastSeenKey = useCallback((participantId: string) => `mentorInbox.lastSeen.${participantId}`, []);
@@ -403,9 +414,42 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
     // Keep the composer height in sync with input content.
     const el = composerRef.current;
     if (!el) return;
+    if (composerManualHeight != null) {
+      el.style.height = `${clampComposerHeight(composerManualHeight)}px`;
+      return;
+    }
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-  }, [messageInput]);
+  }, [messageInput, composerManualHeight, clampComposerHeight]);
+
+  useEffect(() => {
+    if (!isComposerResizing) return;
+
+    const onMove = (event: PointerEvent) => {
+      const start = composerResizeStartRef.current;
+      if (!start) return;
+      const delta = event.clientY - start.startY;
+      const next = clampComposerHeight(start.startHeight + delta);
+      setComposerManualHeight(next);
+    };
+
+    const onUp = () => {
+      setIsComposerResizing(false);
+      composerResizeStartRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [isComposerResizing, clampComposerHeight]);
 
   useEffect(() => {
     if (!enableHealthPanel || !showHealthPanel || !selectedParticipant) return;
@@ -767,8 +811,15 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
       {/* Sidebar - Participant List */}
       <div className="w-full md:w-72 md:border-r-2 border-slate-100 flex flex-col shrink-0 min-h-0">
         <div className="p-4 border-b-2 border-slate-100">
-          <h2 className="font-bold text-slate-900">Participants</h2>
-          <p className="text-xs text-slate-500 mt-0.5">{participants.length} assigned</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-slate-900">Participants</h2>
+              <p className="text-xs text-slate-500 mt-0.5">{participants.length} assigned</p>
+            </div>
+            <div className="text-xs font-semibold text-slate-600 whitespace-nowrap">
+              Total new messages: {totalUnread}
+            </div>
+          </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
           {participants.map((participant) => {
@@ -991,16 +1042,39 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </button>
-                  <textarea
-                    ref={composerRef}
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? "Conversation is read-only" : "Type a message..."}
-                    disabled={!!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
-                    rows={1}
-                    className="flex-1 min-h-[40px] max-h-[180px] resize-y rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium shadow-sm transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto"
-                  />
+                  <div className="flex-1 relative">
+                    <textarea
+                      ref={composerRef}
+                      value={messageInput}
+                      onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? "Conversation is read-only" : "Type a message..."}
+                      disabled={!!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
+                      rows={1}
+                      className="w-full min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium shadow-sm transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto"
+                    />
+                    {/* Center-top resize handle (drag to resize; double-click to reset to auto). */}
+                    <button
+                      type="button"
+                      aria-label="Resize message composer"
+                      title="Drag to resize (double-click to reset)"
+                      onDoubleClick={() => setComposerManualHeight(null)}
+                      onPointerDown={(e) => {
+                        if (selectedParticipant.unassigned_at || selectedParticipant.is_active === false) return;
+                        const el = composerRef.current;
+                        if (!el) return;
+                        composerResizeStartRef.current = {
+                          startY: e.clientY,
+                          startHeight: el.getBoundingClientRect().height,
+                        };
+                        setIsComposerResizing(true);
+                        (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
+                      }}
+                      className="absolute -top-2 left-1/2 -translate-x-1/2 w-12 h-4 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center cursor-ns-resize hover:bg-slate-300"
+                    >
+                      <span className="block w-5 h-0.5 rounded bg-slate-500" />
+                    </button>
+                  </div>
                   <Button
                     onClick={handleSendMessage}
                     disabled={!messageInput.trim() || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
