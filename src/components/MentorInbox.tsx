@@ -37,7 +37,13 @@ type HealthMetric = {
 /**
  * MentorInbox - Displays participant conversations for mentors
  */
-export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?: boolean }) {
+export function MentorInbox({
+  enableHealthPanel = false,
+  isMentorActive = true,
+}: {
+  enableHealthPanel?: boolean;
+  isMentorActive?: boolean;
+}) {
   const MIN_HEALTH_PANEL_WIDTH = 300;
   const MIN_CHAT_PANEL_WIDTH = 420;
   const SIDEBAR_WIDTH = 288;
@@ -82,6 +88,8 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const totalUnread = useMemo(() => {
     return Object.values(unreadCounts).reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0);
   }, [unreadCounts]);
+
+  const isInboxReadOnly = !isMentorActive;
 
   // Scroll to bottom of messages
   const scrollToBottom = useCallback(() => {
@@ -587,6 +595,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
 
   // Send message
   const handleSendMessage = async () => {
+    if (isInboxReadOnly) return;
     if (!messageInput.trim() || !selectedParticipant || isSending) return;
 
     const currentInput = messageInput.trim();
@@ -672,6 +681,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      if (isInboxReadOnly) return;
       handleSendMessage();
     }
   };
@@ -802,6 +812,14 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
 
   return (
     <>
+    {isInboxReadOnly && (
+      <div className="mb-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+        <p className="text-sm font-semibold text-amber-800">Mentor account is inactive</p>
+        <p className="text-sm text-amber-700 mt-0.5">
+          This inbox is read-only. Please contact your admin to reactivate your account.
+        </p>
+      </div>
+    )}
     {/* Fill the available dashboard content height; scroll only inside panels. */}
     <div
       ref={desktopLayoutRef}
@@ -1024,6 +1042,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       <button
                         key={template.id}
                         onClick={() => {
+                          if (isInboxReadOnly) return;
                           setMessageInput(template.message);
                           setShowTemplates(false);
                         }}
@@ -1039,8 +1058,12 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                 {/* Input and buttons */}
                 <div className="flex gap-2 items-center">
                   <button
-                    onClick={() => setShowTemplates(!showTemplates)}
-                    className="h-10 w-10 shrink-0 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer"
+                    onClick={() => {
+                      if (isInboxReadOnly) return;
+                      setShowTemplates(!showTemplates);
+                    }}
+                    disabled={isInboxReadOnly}
+                    className="h-10 w-10 shrink-0 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                     title="Message templates"
                   >
                     <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1053,8 +1076,14 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       value={messageInput}
                       onChange={(e) => setMessageInput(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder={(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? "Conversation is read-only" : "Type a message..."}
-                      disabled={!!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
+                      placeholder={
+                        isInboxReadOnly
+                          ? "Inbox is read-only"
+                          : (selectedParticipant.unassigned_at || selectedParticipant.is_active === false)
+                            ? "Conversation is read-only"
+                            : "Type a message..."
+                      }
+                      disabled={isInboxReadOnly || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
                       rows={1}
                       className="block w-full min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2 text-base font-medium leading-5 transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto resize-none"
                     />
@@ -1065,6 +1094,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       title="Drag to resize (double-click to reset)"
                       onDoubleClick={() => setComposerManualHeight(null)}
                       onPointerDown={(e) => {
+                        if (isInboxReadOnly) return;
                         if (selectedParticipant.unassigned_at || selectedParticipant.is_active === false) return;
                         const el = composerRef.current;
                         if (!el) return;
@@ -1075,7 +1105,8 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                         setIsComposerResizing(true);
                         (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
                       }}
-                      className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-8 h-3 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center cursor-ns-resize hover:bg-slate-200"
+                      className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-8 h-3 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center cursor-ns-resize hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isInboxReadOnly || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
                     >
                       <span className="flex items-center gap-0.5">
                         <span className="block w-1 h-1 rounded-full bg-slate-400" />
@@ -1086,7 +1117,12 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                   </div>
                   <Button
                     onClick={handleSendMessage}
-                    disabled={!messageInput.trim() || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
+                    disabled={
+                      isInboxReadOnly ||
+                      !messageInput.trim() ||
+                      !!selectedParticipant.unassigned_at ||
+                      selectedParticipant.is_active === false
+                    }
                     size="sm"
                     className="h-10 bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -1096,11 +1132,15 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                     Send
                   </Button>
                 </div>
-                {(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) && (
-                   <p className="text-xs text-center text-slate-400 mt-2">
-                     This conversation is read-only because the participant is unassigned.
-                   </p>
-                )}
+                {isInboxReadOnly ? (
+                  <p className="text-xs text-center text-slate-500 mt-2">
+                    Your mentor account is inactive. Messaging is disabled.
+                  </p>
+                ) : (selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? (
+                  <p className="text-xs text-center text-slate-400 mt-2">
+                    This conversation is read-only because the participant is unassigned.
+                  </p>
+                ) : null}
               </div>
             </div>
           </>

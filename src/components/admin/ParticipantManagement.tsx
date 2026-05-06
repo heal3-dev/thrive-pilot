@@ -174,8 +174,16 @@ export function ParticipantManagement({
       setMentors((json.mentors as Mentor[]) ?? []);
       setError(null);
     } catch (err) {
-      console.error("Error fetching participants:", err);
-      setError(err instanceof Error ? err.message : "Failed to load participants");
+      const message = err instanceof Error ? err.message : "Failed to load participants";
+      // When viewing mentor trends, inactive mentors may get a 403 "Mentor account is inactive".
+      // That's an expected state and should not surface as a console error overlay in Next.
+      const isInactiveMentor = mode === "mentor-trends" && /mentor account is inactive/i.test(message);
+      if (!isInactiveMentor) {
+        console.error("Error fetching participants:", err);
+      } else {
+        console.info("Mentor trends disabled: mentor account is inactive");
+      }
+      setError(message);
     } finally {
       setIsLoading(false);
     }

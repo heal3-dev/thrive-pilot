@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useDashboard } from "@/app/dashboard/layout";
 import { MentorInbox } from "@/components/MentorInbox";
 import { ParticipantManagement } from "@/components/admin/ParticipantManagement";
 
@@ -14,6 +15,7 @@ function getTabFromHash(): MentorTab {
 }
 
 export function MentorPanel() {
+  const { mentor } = useDashboard();
   const [activeTab, setActiveTab] = useState<MentorTab>(() => getTabFromHash());
 
   useEffect(() => {
@@ -66,7 +68,7 @@ export function MentorPanel() {
 
       <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === "inbox" ? (
-          <MentorInbox enableHealthPanel />
+          <MentorInbox enableHealthPanel isMentorActive={mentor.is_active !== false} />
         ) : (
           <div className="h-full min-h-0 overflow-hidden">
             <ParticipantManagement mode="mentor-trends" />
