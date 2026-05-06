@@ -1043,7 +1043,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </button>
-                  <div className="flex-1 relative">
+                  <div className="flex-1 relative min-h-10">
                     <textarea
                       ref={composerRef}
                       value={messageInput}
@@ -1052,7 +1052,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       placeholder={(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? "Conversation is read-only" : "Type a message..."}
                       disabled={!!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
                       rows={1}
-                      className="w-full h-10 min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2 text-base font-medium transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto resize-none"
+                      className="block w-full min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2 text-base font-medium leading-5 transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto resize-none"
                     />
                     {/* Center-top resize handle (drag to resize; double-click to reset to auto). */}
                     <button
