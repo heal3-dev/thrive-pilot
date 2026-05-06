@@ -1033,7 +1033,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                 )}
                 
                 {/* Input and buttons */}
-                <div className="flex gap-2 items-end">
+                <div className="flex gap-2 items-center">
                   <button
                     onClick={() => setShowTemplates(!showTemplates)}
                     className="h-10 w-10 shrink-0 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer"
@@ -1052,7 +1052,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       placeholder={(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? "Conversation is read-only" : "Type a message..."}
                       disabled={!!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
                       rows={1}
-                      className="w-full min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium shadow-sm transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto resize-none"
+                      className="w-full h-10 min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2 text-base font-medium transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto resize-none"
                     />
                     {/* Center-top resize handle (drag to resize; double-click to reset to auto). */}
                     <button
