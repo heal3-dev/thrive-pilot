@@ -641,7 +641,21 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
       {/* Sidebar - Participant List */}
       <div className="w-full md:w-72 md:border-r-2 border-slate-100 flex flex-col shrink-0 min-h-0">
         <div className="p-4 border-b-2 border-slate-100">
-          <h2 className="font-bold text-slate-900">Participants</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-bold text-slate-900">Participants</h2>
+            {Object.keys(unreadCounts).length > 0 && (
+              <span
+                className="inline-flex h-9 w-9 aspect-square items-center justify-center rounded-full bg-red-500 text-white text-sm font-bold leading-none shrink-0"
+                aria-label={`Total unread messages: ${Object.values(unreadCounts).reduce((sum, n) => sum + (n || 0), 0)}`}
+                title={`${Object.values(unreadCounts).reduce((sum, n) => sum + (n || 0), 0)} unread`}
+              >
+                {(() => {
+                  const total = Object.values(unreadCounts).reduce((sum, n) => sum + (n || 0), 0);
+                  return total > 99 ? "99+" : String(total);
+                })()}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">{participants.length} assigned</p>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
