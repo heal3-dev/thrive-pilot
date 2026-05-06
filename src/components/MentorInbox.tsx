@@ -393,7 +393,15 @@ export function MentorInbox({
         delete next[participantId];
         return next;
       });
-      setLastSeen(participantId, new Date().toISOString());
+      // Use server timestamps to avoid clock-skew causing unread badges to reappear.
+      const latestInbound = [...sorted]
+        .reverse()
+        .find((m) => m.direction === "inbound" && typeof m.created_at === "string")?.created_at;
+      if (latestInbound) {
+        setLastSeen(participantId, latestInbound);
+      } else {
+        setLastSeen(participantId, new Date().toISOString());
+      }
     } catch (err) {
       console.error("Fetch messages error:", err);
       setMessages([]);
@@ -643,7 +651,12 @@ export function MentorInbox({
           } else if (newMessage.direction === "inbound") {
             // If the thread is open, treat as read; otherwise mark unread.
             if (newMessage.participant_id === selectedParticipant?.id) {
-              setLastSeen(newMessage.participant_id, new Date().toISOString());
+              // Use the DB timestamp to avoid client/server clock skew.
+              if (typeof newMessage.created_at === "string") {
+                setLastSeen(newMessage.participant_id, newMessage.created_at);
+              } else {
+                setLastSeen(newMessage.participant_id, new Date().toISOString());
+              }
             } else {
               setUnreadCounts((prev) => ({
                 ...prev,
@@ -963,8 +976,9 @@ export function MentorInbox({
                 key={participant.id}
                 onClick={() => {
                   setSelectedParticipant(participant);
-                  // Mark as seen immediately to avoid badges reappearing while the thread fetch is in-flight.
-                  setLastSeen(participant.id, new Date().toISOString());
+                  // Mark as seen immediately (use DB timestamp when available to avoid clock-skew issues).
+                  const lm = lastMessageByParticipantId[participant.id]?.created_at ?? null;
+                  if (lm) setLastSeen(participant.id, lm);
                   // Clear unread count for this participant
                   setUnreadCounts(prev => {
                     const updated = { ...prev };
