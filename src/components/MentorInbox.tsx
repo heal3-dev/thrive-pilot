@@ -17,6 +17,12 @@ type OptimisticSMSMessage = SMSMessage & {
   error?: string;
 };
 
+type LastMessagePreview = {
+  created_at: string;
+  direction: SMSMessage["direction"];
+  message_body: string;
+};
+
 type HealthMetric = {
   id: string;
   metric_date: string;
@@ -62,6 +68,7 @@ export function MentorInbox({
   const [error, setError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [lastMessageByParticipantId, setLastMessageByParticipantId] = useState<Record<string, LastMessagePreview>>({});
   const lastSeenRef = useRef<Record<string, string>>({});
   const [showTemplates, setShowTemplates] = useState(false);
   const [showHealthPanel, setShowHealthPanel] = useState(false);
@@ -88,6 +95,19 @@ export function MentorInbox({
   const totalUnread = useMemo(() => {
     return Object.values(unreadCounts).reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0);
   }, [unreadCounts]);
+
+  const sortedParticipants = useMemo(() => {
+    const byId = lastMessageByParticipantId;
+    return [...participants].sort((a, b) => {
+      const aLast = byId[a.id]?.created_at ?? a.updated_at ?? a.created_at ?? null;
+      const bLast = byId[b.id]?.created_at ?? b.updated_at ?? b.created_at ?? null;
+      const aTs = aLast ? new Date(aLast).getTime() : 0;
+      const bTs = bLast ? new Date(bLast).getTime() : 0;
+      if (aTs !== bTs) return bTs - aTs;
+      // Deterministic fallback for equal timestamps / empty threads.
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }, [participants, lastMessageByParticipantId]);
 
   const isInboxReadOnly = !isMentorActive;
 
@@ -245,11 +265,58 @@ export function MentorInbox({
         counts[pid] = (counts[pid] ?? 0) + 1;
       }
 
-      setUnreadCounts((prev) => ({ ...prev, ...counts }));
+      // Replace (don't merge) so stale unread badges can't linger.
+      setUnreadCounts(counts);
     } catch (e) {
       console.warn("refreshUnreadCounts error:", e);
     }
   }, [participants, selectedParticipant?.id, getLastSeen]);
+
+  const refreshLastMessages = useCallback(async () => {
+    if (participants.length === 0) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+    try {
+      const participantIds = participants.map((p) => p.id);
+      if (participantIds.length === 0) return;
+
+      // Pull a bounded number of most-recent messages across all assigned participants,
+      // then take the first (most recent) message per participant.
+      const { data, error } = await supabase
+        .from("sms_messages")
+        .select("participant_id, created_at, direction, message_body, message_type")
+        .in("participant_id", participantIds)
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (error) {
+        console.warn("refreshLastMessages failed:", error.message);
+        return;
+      }
+
+      const next: Record<string, LastMessagePreview> = {};
+      for (const row of (data ?? []) as Array<{
+        participant_id: string;
+        created_at: string;
+        direction: SMSMessage["direction"];
+        message_body: string;
+        message_type?: string | null;
+      }>) {
+        if (!row.participant_id || !row.created_at) continue;
+        if ((row.message_type ?? null) === "system_auto_reply") continue;
+        if (next[row.participant_id]) continue; // already have most-recent for this participant
+        next[row.participant_id] = {
+          created_at: row.created_at,
+          direction: row.direction,
+          message_body: row.message_body,
+        };
+      }
+
+      setLastMessageByParticipantId((prev) => ({ ...prev, ...next }));
+    } catch (e) {
+      console.warn("refreshLastMessages error:", e);
+    }
+  }, [participants]);
 
   useEffect(() => {
     void refreshUnreadCounts();
@@ -266,11 +333,23 @@ export function MentorInbox({
     const onVis = () => {
       if (document.visibilityState === "visible") {
         void refreshUnreadCounts();
+        void refreshLastMessages();
       }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [refreshUnreadCounts]);
+  }, [refreshUnreadCounts, refreshLastMessages]);
+
+  useEffect(() => {
+    void refreshLastMessages();
+  }, [refreshLastMessages]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void refreshLastMessages();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [refreshLastMessages]);
 
   // Fetch messages when participant is selected
   // silent: true skips the loading state (used for background polling)
@@ -314,7 +393,15 @@ export function MentorInbox({
         delete next[participantId];
         return next;
       });
-      setLastSeen(participantId, new Date().toISOString());
+      // Use server timestamps to avoid clock-skew causing unread badges to reappear.
+      const latestInbound = [...sorted]
+        .reverse()
+        .find((m) => m.direction === "inbound" && typeof m.created_at === "string")?.created_at;
+      if (latestInbound) {
+        setLastSeen(participantId, latestInbound);
+      } else {
+        setLastSeen(participantId, new Date().toISOString());
+      }
     } catch (err) {
       console.error("Fetch messages error:", err);
       setMessages([]);
@@ -505,8 +592,47 @@ export function MentorInbox({
             return;
           }
 
+          // Update last-message cache (drives sidebar ordering).
+          const pid = newMessage.participant_id;
+          const createdAt = newMessage.created_at;
+          if (pid && createdAt) {
+            setLastMessageByParticipantId((prev) => {
+              const current = prev[pid];
+              if (current) {
+                const curTs = new Date(current.created_at).getTime();
+                const nextTs = new Date(createdAt).getTime();
+                if (Number.isFinite(curTs) && Number.isFinite(nextTs) && nextTs <= curTs) {
+                  return prev;
+                }
+              }
+              return {
+                ...prev,
+                [pid]: {
+                  created_at: createdAt,
+                  direction: newMessage.direction,
+                  message_body: newMessage.message_body,
+                },
+              };
+            });
+          }
+
           // If it's for the currently selected participant, append immediately (avoid refetch)
           if (newMessage.participant_id === selectedParticipant?.id) {
+            // If an inbound message arrives while the thread is open, treat it as read.
+            // Use the DB timestamp to avoid client/server clock skew.
+            if (newMessage.direction === "inbound") {
+              if (typeof newMessage.created_at === "string") {
+                setLastSeen(newMessage.participant_id, newMessage.created_at);
+              } else {
+                setLastSeen(newMessage.participant_id, new Date().toISOString());
+              }
+              setUnreadCounts((prev) => {
+                if (!prev[newMessage.participant_id]) return prev;
+                const next = { ...prev };
+                delete next[newMessage.participant_id];
+                return next;
+              });
+            }
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMessage.id)) return prev;
               // Reconcile optimistic outbound message (temp id) with the real DB row.
@@ -540,7 +666,12 @@ export function MentorInbox({
           } else if (newMessage.direction === "inbound") {
             // If the thread is open, treat as read; otherwise mark unread.
             if (newMessage.participant_id === selectedParticipant?.id) {
-              setLastSeen(newMessage.participant_id, new Date().toISOString());
+              // Use the DB timestamp to avoid client/server clock skew.
+              if (typeof newMessage.created_at === "string") {
+                setLastSeen(newMessage.participant_id, newMessage.created_at);
+              } else {
+                setLastSeen(newMessage.participant_id, new Date().toISOString());
+              }
             } else {
               setUnreadCounts((prev) => ({
                 ...prev,
@@ -625,6 +756,14 @@ export function MentorInbox({
 
     // Update UI immediately
     setMessages((prev) => [...prev, optimisticMsg]);
+    setLastMessageByParticipantId((prev) => ({
+      ...prev,
+      [selectedParticipant.id]: {
+        created_at: now,
+        direction: "outbound",
+        message_body: currentInput,
+      },
+    }));
     setMessageInput("");
     setSendError(null);
     setIsSending(true);
@@ -837,7 +976,7 @@ export function MentorInbox({
             </div>
             {totalUnread > 0 ? (
               <div className="shrink-0">
-                <span className="inline-flex min-w-8 h-7 px-2 bg-red-500 text-white text-sm font-bold rounded-full items-center justify-center">
+                <span className="inline-flex h-7 w-7 aspect-square items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold leading-none shrink-0">
                   {totalUnread > 99 ? "99+" : totalUnread}
                 </span>
               </div>
@@ -845,13 +984,16 @@ export function MentorInbox({
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
-          {participants.map((participant) => {
+          {sortedParticipants.map((participant) => {
             const unreadCount = unreadCounts[participant.id] || 0;
             return (
               <button
                 key={participant.id}
                 onClick={() => {
                   setSelectedParticipant(participant);
+                  // Mark as seen immediately (use DB timestamp when available to avoid clock-skew issues).
+                  const lm = lastMessageByParticipantId[participant.id]?.created_at ?? null;
+                  if (lm) setLastSeen(participant.id, lm);
                   // Clear unread count for this participant
                   setUnreadCounts(prev => {
                     const updated = { ...prev };
