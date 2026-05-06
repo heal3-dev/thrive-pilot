@@ -880,12 +880,12 @@ export function ParticipantManagement({
                         onClick={(e) => e.stopPropagation()}
                       >
                         {p.is_unverified ? (
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleResendInvite(p)}
-                              className="text-teal-600 hover:text-teal-700"
+                              className="text-teal-600 hover:text-teal-700 px-2"
                             >
                               Resend Invite
                             </Button>
@@ -893,7 +893,7 @@ export function ParticipantManagement({
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDeleteUnverified(p)}
-                              className="text-red-600 hover:text-red-700"
+                              className="text-red-600 hover:text-red-700 px-2"
                             >
                               Delete
                             </Button>
