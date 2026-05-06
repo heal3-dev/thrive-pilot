@@ -73,7 +73,7 @@ export function MentorInbox({
   const [healthWeeklyFlag, setHealthWeeklyFlag] = useState<WeeklyFlag | null>(null);
   const [isLoadingHealthMetrics, setIsLoadingHealthMetrics] = useState(false);
   const [healthMetricsError, setHealthMetricsError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const desktopLayoutRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const composerResizeStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -95,7 +95,10 @@ export function MentorInbox({
 
   // Scroll to bottom of messages
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    // Important: scroll only inside the message list panel, not the whole page.
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, []);
 
   useEffect(() => {
@@ -985,7 +988,7 @@ export function MentorInbox({
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div ref={messagesScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
               {messagesError ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center max-w-sm">
@@ -1053,7 +1056,6 @@ export function MentorInbox({
                       </div>
                     </div>
                   ))}
-                  <div ref={messagesEndRef} />
                 </>
               )}
             </div>
