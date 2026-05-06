@@ -55,6 +55,7 @@ export async function GET(
       .from("garmin_tokens")
       .select("pseudonym_id")
       .eq("pseudonym_id", pseudonymId)
+      .is("revoked_at", null)
       .maybeSingle();
     isConnected = Boolean(tokenData);
   }

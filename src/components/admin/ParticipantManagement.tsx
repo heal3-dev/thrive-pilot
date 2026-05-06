@@ -17,7 +17,8 @@ import type { Mentor, Participant } from "@/types";
 // toE164 removed (using import from utils)
 
 type StatusFilter = "all" | "active" | "removed" | "invited";
-type FlagsFilter = "all" | "sync_stale" | "weekly_green" | "weekly_yellow" | "weekly_orange" | "weekly_red";
+type GarminFilter = "all" | "connected" | "disconnected" | "sync_stale";
+type FlagsFilter = "all" | "weekly_green" | "weekly_yellow" | "weekly_orange" | "weekly_red";
 
 type AssignedMentor = {
   mentor_id: string;
@@ -89,7 +90,7 @@ export function ParticipantManagement({
 }: { 
   initialModal?: "add" | "invite";
   mode?: "management" | "trends" | "mentor-trends";
-  initialGarminFilter?: "all" | "connected" | "disconnected";
+  initialGarminFilter?: GarminFilter;
   demoMode?: boolean;
 }) {
   const router = useRouter();
@@ -104,7 +105,7 @@ export function ParticipantManagement({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(mode === "management" ? "active" : "all");
   const [mentorFilter, setMentorFilter] = useState<string>("all"); // mentor id | "all" | "unassigned"
-  const [garminFilter, setGarminFilter] = useState<"all" | "connected" | "disconnected">(initialGarminFilter);
+  const [garminFilter, setGarminFilter] = useState<GarminFilter>(initialGarminFilter);
   const [flagsFilter, setFlagsFilter] = useState<FlagsFilter>("all");
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(initialModal === "invite");
@@ -252,15 +253,17 @@ export function ParticipantManagement({
         (mentorFilter !== "unassigned" && mentorFilter !== "all" && isActiveAssignment && assignedMentor?.mentor_id === mentorFilter);
 
       const isConnected = p.garmin_connected === true || Boolean(p.garmin_user_id);
+      const isSyncStale = p.garmin_sync_stale === true;
+      const isConnectedFresh = isConnected && !isSyncStale;
       const matchesGarmin =
         garminFilter === "all" ||
-        (garminFilter === "connected" && isConnected) ||
+        (garminFilter === "connected" && isConnectedFresh) ||
+        (garminFilter === "sync_stale" && isSyncStale) ||
         (garminFilter === "disconnected" && !isConnected);
 
       const weeklyColor = p.weekly_flag?.finalColor ?? null;
       const matchesFlags =
         flagsFilter === "all" ||
-        (flagsFilter === "sync_stale" && p.garmin_sync_stale === true) ||
         (flagsFilter === "weekly_green" && weeklyColor === "green") ||
         (flagsFilter === "weekly_yellow" && weeklyColor === "yellow") ||
         (flagsFilter === "weekly_orange" && weeklyColor === "orange") ||
@@ -466,7 +469,7 @@ export function ParticipantManagement({
   // Removed blocking error return. Error is displayed in the banner below.
 
   return (
-    <div className={rowsScrollOnly ? "h-full min-h-0 flex flex-col gap-4" : "space-y-4"}>
+    <div className={rowsScrollOnly ? "h-full min-h-0 flex flex-col gap-3" : "space-y-3"}>
       {successMessage && (
         <div className="p-4 rounded-xl bg-green-50 border border-green-200 shrink-0">
           <p className="text-sm font-medium text-green-700 flex items-center gap-2">
@@ -559,33 +562,21 @@ export function ParticipantManagement({
           </div>
         )}
 
-      <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
+      <div className="bg-white rounded-2xl border-2 border-slate-100 p-3 shrink-0">
         <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center min-w-0 sm:flex-nowrap sm:overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Input
               placeholder="Search by name, phone, or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-72 h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
+              className="w-full sm:w-48 h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
             />
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
-              disabled={mode === "mentor-trends"}
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="removed">Inactive</option>
-              <option value="invited">Unverified</option>
-            </select>
 
             {mode !== "mentor-trends" && (
               <select
                 value={mentorFilter}
                 onChange={(e) => setMentorFilter(e.target.value)}
-                className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+                className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[9.5rem]"
               >
                 <option value="all">All Mentors</option>
                 <option value="unassigned">Unassigned</option>
@@ -600,40 +591,52 @@ export function ParticipantManagement({
             )}
 
             <select
-              value={garminFilter}
-              onChange={(e) => setGarminFilter(e.target.value as "all" | "connected" | "disconnected")}
-              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
+              disabled={mode === "mentor-trends"}
             >
-              <option value="all">All Garmin</option>
-              <option value="connected">Connected</option>
-              <option value="disconnected">Disconnected</option>
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="removed">Inactive</option>
+              <option value="invited">Unverified</option>
             </select>
 
             <select
               value={flagsFilter}
               onChange={(e) => setFlagsFilter(e.target.value as FlagsFilter)}
-              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
               disabled={mode === "mentor-trends"}
             >
               <option value="all">All Flags</option>
-              <option value="sync_stale">Sync Stale</option>
               <option value="weekly_green">Weekly: Green</option>
               <option value="weekly_yellow">Weekly: Yellow</option>
               <option value="weekly_orange">Weekly: Orange</option>
               <option value="weekly_red">Weekly: Red</option>
             </select>
+
+            <select
+              value={garminFilter}
+              onChange={(e) => setGarminFilter(e.target.value as GarminFilter)}
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
+            >
+              <option value="all">All Garmin</option>
+              <option value="connected">Connected</option>
+              <option value="disconnected">Disconnected</option>
+              <option value="sync_stale">Sync Stale</option>
+            </select>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             {mode === "management" && (
               <>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setIsAddModalOpen(true)}
-                  className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                  className="border-slate-300 text-slate-700 hover:bg-slate-100 px-2.5"
                 >
-                  <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                   Add Participant
@@ -641,9 +644,9 @@ export function ParticipantManagement({
                 <Button
                   size="sm"
                   onClick={() => setIsInviteModalOpen(true)}
-                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                  className="bg-teal-500 hover:bg-teal-600 text-white px-2.5"
                 >
-                  <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                   Invite Participant
@@ -689,6 +692,7 @@ export function ParticipantManagement({
               ) : (
                 filteredParticipants.map((p) => {
                    const isConnected = p.garmin_connected === true || Boolean(p.garmin_user_id);
+                   const isSyncStale = p.garmin_sync_stale === true;
                    return (
                   <tr
                     key={p.id}
@@ -727,10 +731,6 @@ export function ParticipantManagement({
                         ) : p.is_active === false ? (
                           <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-700">
                             Inactive
-                          </span>
-                        ) : p.garmin_sync_stale ? (
-                          <span className="inline-flex w-fit whitespace-nowrap px-2 py-0.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                            Active (Sync Stale)
                           </span>
                         ) : (
                           <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700">
@@ -772,75 +772,102 @@ export function ParticipantManagement({
                       </div>
                     </td>
                     <td className="px-2 py-4 text-center">
-                      {!p.is_unverified && mode === "mentor-trends" && (
-                        <span className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
-                          isConnected ? "bg-teal-100 text-teal-700" : "bg-slate-100 text-slate-600"
-                        }`}>
-                          {isConnected ? "Connected" : "Not Connected"}
+                      {p.is_unverified ? null : mode === "mentor-trends" ? (
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
+                            isSyncStale
+                              ? "bg-amber-100 text-amber-800 border border-amber-200"
+                              : isConnected
+                              ? "bg-teal-100 text-teal-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {isSyncStale ? "Sync Stale" : isConnected ? "Connected" : "Disconnected"}
                         </span>
-                      )}
-                      {!p.is_unverified && mode !== "mentor-trends" && (
-                        isConnected ? (
-                          <div className="w-full flex flex-col items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
-                              disabled={backfillLoadingId === p.id}
-                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
-                            >
-                              {backfillLoadingId === p.id ? (
-                                <span className="flex items-center gap-1">
-                                  <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                  </svg>
-                                  Syncing
-                                </span>
-                              ) : (
-                                "Sync last 7 days"
-                              )}
-                            </Button>
-
-                            {p.garmin_sync_stale ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void handleConnectGarmin(p, { force: true });
-                                }}
-                                disabled={garminInviteLoadingId === p.id}
-                                className="text-teal-700 hover:text-teal-800 hover:bg-teal-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
-                              >
-                                {garminInviteLoadingId === p.id ? (
-                                  <span className="flex items-center gap-1">
-                                    <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                      <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                      />
-                                    </svg>
-                                    Sending…
-                                  </span>
-                                ) : (
-                                  "Refresh Garmin"
-                                )}
-                              </Button>
-                            ) : null}
-                          </div>
-                        ) : (
+                      ) : isConnected ? (
+                        <div className="w-full flex flex-col items-center gap-1">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
+                              isSyncStale
+                                ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                : "bg-teal-100 text-teal-700"
+                            }`}
+                          >
+                            {isSyncStale ? "Sync Stale" : "Connected"}
+                          </span>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => { e.stopPropagation(); handleConnectGarmin(p); }}
-                            className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center px-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleBackfill(p);
+                            }}
+                            disabled={backfillLoadingId === p.id}
+                            className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
+                          >
+                            {backfillLoadingId === p.id ? (
+                              <span className="flex items-center gap-1">
+                                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                  />
+                                </svg>
+                                Syncing
+                              </span>
+                            ) : (
+                              "Sync last 7 days"
+                            )}
+                          </Button>
+
+                          {p.garmin_sync_stale ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleConnectGarmin(p, { force: true });
+                              }}
+                              disabled={garminInviteLoadingId === p.id}
+                              className="text-teal-700 hover:text-teal-800 hover:bg-teal-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
+                            >
+                              {garminInviteLoadingId === p.id ? (
+                                <span className="flex items-center gap-1">
+                                  <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    />
+                                  </svg>
+                                  Sending…
+                                </span>
+                              ) : (
+                                "Refresh Garmin"
+                              )}
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="w-full flex flex-col items-center gap-1">
+                          <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600">
+                            Disconnected
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleConnectGarmin(p);
+                            }}
+                            className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
                           >
                             Connect Garmin
                           </Button>
-                        )
+                        </div>
                       )}
                     </td>
                     <td className="px-2 py-4">
@@ -852,7 +879,26 @@ export function ParticipantManagement({
                         }
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {mode === "trends" || mode === "mentor-trends" ? (
+                        {p.is_unverified ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResendInvite(p)}
+                              className="text-teal-600 hover:text-teal-700 px-2"
+                            >
+                              Resend Invite
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteUnverified(p)}
+                              className="text-red-600 hover:text-red-700 px-2"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        ) : mode === "trends" || mode === "mentor-trends" ? (
                           <Button
                              variant="outline"
                              size="sm"
@@ -861,25 +907,6 @@ export function ParticipantManagement({
                           >
                             View Trend
                           </Button>
-                        ) : p.is_unverified ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleResendInvite(p)}
-                              className="text-teal-600 hover:text-teal-700"
-                            >
-                              Resend Invite
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteUnverified(p)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              Delete
-                            </Button>
-                          </>
                         ) : (
                           <>
                             <Button

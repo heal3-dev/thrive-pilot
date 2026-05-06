@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { AssignMentorModal } from "./modals/AssignMentorModal";
@@ -34,6 +35,8 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<AssignmentFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [mentorFilter, setMentorFilter] = useState<string>("all"); // mentor id | "all" | "unassigned"
 
   // Modal states
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(initialModal === "assign");
@@ -108,6 +111,27 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
     if (filter === "active") return row.status === "active";
     if (filter === "unassigned") return row.status === "never_assigned" || row.status === "ended";
     return true; // "all"
+  }).filter((row) => {
+    const q = searchQuery.trim().toLowerCase();
+    const participant = row.participant;
+    const mentor = row.mentor;
+
+    const matchesSearch =
+      q.length === 0 ||
+      (participant?.name ?? "").toLowerCase().includes(q) ||
+      (participant?.email ?? "").toLowerCase().includes(q) ||
+      (participant?.phone_number ?? "").toLowerCase().includes(q);
+
+    // For ended/active assignments, use row.mentor_id. For never_assigned, mentor_id is null.
+    const isUnassigned = row.status === "never_assigned" || !row.mentor_id;
+    const matchesMentor =
+      mentorFilter === "all" ||
+      (mentorFilter === "unassigned" && isUnassigned) ||
+      (!isUnassigned && row.mentor_id === mentorFilter) ||
+      // Fallback for ended rows if mentor_id is present but mentor object missing
+      (!isUnassigned && mentor?.id === mentorFilter);
+
+    return matchesSearch && matchesMentor;
   });
 
 // handleCreateAssignment removed (using AssignMentorModal)
@@ -231,30 +255,56 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
 
       {/* Header with filter and actions */}
       <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-          <div className="flex gap-1.5">
-            {(["all", "active", "unassigned"] as AssignmentFilter[]).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`h-10 px-4 rounded-lg text-base font-bold transition-colors cursor-pointer ${
-                  filter === f
-                    ? "bg-teal-500 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {f === "active" ? "Active" : f === "unassigned" ? "Unassigned" : "All"}
-              </button>
-            ))}
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-1 min-w-0">
+            <div className="flex gap-1.5 shrink-0">
+              {(["all", "active", "unassigned"] as AssignmentFilter[]).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`h-10 px-4 rounded-lg text-base font-bold transition-colors cursor-pointer ${
+                    filter === f
+                      ? "bg-teal-500 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {f === "active" ? "Active" : f === "unassigned" ? "Unassigned" : "All"}
+                </button>
+              ))}
+            </div>
+
+            <Input
+              placeholder="Search by participant name, phone, or email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full sm:flex-1 h-10 rounded-lg shadow-none text-sm placeholder:text-sm min-w-0"
+            />
+
+            <select
+              value={mentorFilter}
+              onChange={(e) => setMentorFilter(e.target.value)}
+              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none sm:w-56 shrink-0"
+            >
+              <option value="all">All Mentors</option>
+              <option value="unassigned">Unassigned</option>
+              {activeMentors
+                .filter((m) => m.is_active !== false && m.role !== "admin")
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name || m.email || "Unnamed mentor"}
+                  </option>
+                ))}
+            </select>
           </div>
+
           <Button
             size="sm"
             onClick={() => setIsAssignModalOpen(true)}
             disabled={unassignedParticipants.length === 0 || activeMentors.length === 0}
-            className="bg-teal-500 hover:bg-teal-600 text-white"
+            className="bg-teal-500 hover:bg-teal-600 text-white shrink-0 px-3"
           >
-            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            <svg className="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
             Assign Mentor
           </Button>
