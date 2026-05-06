@@ -869,9 +869,11 @@ export function ParticipantManagement({
                     <td className="px-2 py-4">
                       <div
                         className={
-                          mode === "trends" || mode === "mentor-trends"
-                            ? "flex items-center justify-end gap-1"
-                            : "flex flex-col items-end gap-0.5"
+                          p.is_unverified
+                            ? "flex flex-col items-center gap-0.5"
+                            : mode === "trends" || mode === "mentor-trends"
+                              ? "flex items-center justify-end gap-1"
+                              : "flex flex-col items-end gap-0.5"
                         }
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -881,7 +883,7 @@ export function ParticipantManagement({
                               variant="ghost"
                               size="sm"
                               onClick={() => handleResendInvite(p)}
-                              className="text-teal-600 hover:text-teal-700"
+                              className="text-teal-600 hover:text-teal-700 w-full justify-center px-2"
                             >
                               Resend Invite
                             </Button>
@@ -889,7 +891,7 @@ export function ParticipantManagement({
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDeleteUnverified(p)}
-                              className="text-red-600 hover:text-red-700"
+                              className="text-red-600 hover:text-red-700 w-full justify-center px-2"
                             >
                               Delete
                             </Button>
