@@ -572,18 +572,6 @@ export function ParticipantManagement({
               className="w-full sm:w-48 h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
             />
 
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
-              disabled={mode === "mentor-trends"}
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="removed">Inactive</option>
-              <option value="invited">Unverified</option>
-            </select>
-
             {mode !== "mentor-trends" && (
               <select
                 value={mentorFilter}
@@ -601,6 +589,18 @@ export function ParticipantManagement({
                   ))}
               </select>
             )}
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
+              disabled={mode === "mentor-trends"}
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="removed">Inactive</option>
+              <option value="invited">Unverified</option>
+            </select>
 
             <select
               value={flagsFilter}
