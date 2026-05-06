@@ -469,7 +469,7 @@ export function ParticipantManagement({
   // Removed blocking error return. Error is displayed in the banner below.
 
   return (
-    <div className={rowsScrollOnly ? "h-full min-h-0 flex flex-col gap-4" : "space-y-4"}>
+    <div className={rowsScrollOnly ? "h-full min-h-0 flex flex-col gap-3" : "space-y-3"}>
       {successMessage && (
         <div className="p-4 rounded-xl bg-green-50 border border-green-200 shrink-0">
           <p className="text-sm font-medium text-green-700 flex items-center gap-2">
@@ -562,7 +562,7 @@ export function ParticipantManagement({
           </div>
         )}
 
-      <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
+      <div className="bg-white rounded-2xl border-2 border-slate-100 p-3 shrink-0">
         <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center min-w-0 sm:flex-nowrap sm:overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Input

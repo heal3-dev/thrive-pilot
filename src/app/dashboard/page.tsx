@@ -9,17 +9,15 @@ export default function DashboardPage() {
   const isAdmin = mentor.role === "admin";
 
   return (
-    <div className="h-full min-h-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col">
+    <div className="h-full min-h-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col">
       {/* Page Header */}
-      <div className="mb-8">
+      <div className="mb-4">
         <h1 className="font-clash text-3xl font-bold text-slate-900">
           {isAdmin ? "Admin Panel" : "Inbox"}
         </h1>
-        <p className="mt-2 text-base text-slate-500">
-          {isAdmin
-            ? "Manage mentors, participants, and system settings."
-            : "Manage your inbox and participant health trends."}
-        </p>
+        {!isAdmin && (
+          <p className="mt-1.5 text-base text-slate-500">Manage your inbox and participant health trends.</p>
+        )}
       </div>
 
       {/* Role-based Content */}
