@@ -817,9 +817,13 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
               <h2 className="font-bold text-slate-900">Participants</h2>
               <p className="text-xs text-slate-500 mt-0.5">{participants.length} assigned</p>
             </div>
-            <div className="font-bold text-slate-900 whitespace-nowrap">
-              Unread: {totalUnread}
-            </div>
+            {totalUnread > 0 ? (
+              <div className="shrink-0">
+                <span className="inline-flex min-w-8 h-7 px-2 bg-red-500 text-white text-sm font-bold rounded-full items-center justify-center">
+                  {totalUnread > 99 ? "99+" : totalUnread}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
