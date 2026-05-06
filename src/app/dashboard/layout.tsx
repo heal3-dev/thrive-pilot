@@ -110,6 +110,7 @@ export default function DashboardLayout({
   }
 
   const isAdmin = mentor.role === "admin";
+  const isMentor = !isAdmin;
 
   return (
     <DashboardContext.Provider value={{ user, mentor }}>
@@ -128,6 +129,11 @@ export default function DashboardLayout({
                 {isAdmin && (
                   <span className="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-700 rounded-md">
                     Admin
+                  </span>
+                )}
+                {isMentor && (
+                  <span className="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 rounded-md">
+                    Mentor
                   </span>
                 )}
               </div>

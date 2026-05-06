@@ -50,12 +50,16 @@ export async function POST(request: Request) {
   // Our RLS policies for sms_messages expect sms_messages.mentor_id = mentors.id.
   const { data: mentor, error: mentorError } = await supabase
     .from("mentors")
-    .select("id")
+    .select("id, is_active")
     .eq("user_id", userData.user.id)
     .single();
 
   if (mentorError || !mentor?.id) {
     return NextResponse.json({ error: "Mentor record not found" }, { status: 404 });
+  }
+
+  if (mentor.is_active === false) {
+    return NextResponse.json({ error: "Mentor account is inactive" }, { status: 403 });
   }
 
   // Step 7: Fetch participant phone number (RLS should ensure mentor is assigned)
