@@ -17,7 +17,8 @@ import type { Mentor, Participant } from "@/types";
 // toE164 removed (using import from utils)
 
 type StatusFilter = "all" | "active" | "removed" | "invited";
-type FlagsFilter = "all" | "sync_stale" | "weekly_green" | "weekly_yellow" | "weekly_orange" | "weekly_red";
+type GarminFilter = "all" | "connected" | "disconnected" | "sync_stale";
+type FlagsFilter = "all" | "weekly_green" | "weekly_yellow" | "weekly_orange" | "weekly_red";
 
 type AssignedMentor = {
   mentor_id: string;
@@ -89,7 +90,7 @@ export function ParticipantManagement({
 }: { 
   initialModal?: "add" | "invite";
   mode?: "management" | "trends" | "mentor-trends";
-  initialGarminFilter?: "all" | "connected" | "disconnected";
+  initialGarminFilter?: GarminFilter;
   demoMode?: boolean;
 }) {
   const router = useRouter();
@@ -104,7 +105,7 @@ export function ParticipantManagement({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(mode === "management" ? "active" : "all");
   const [mentorFilter, setMentorFilter] = useState<string>("all"); // mentor id | "all" | "unassigned"
-  const [garminFilter, setGarminFilter] = useState<"all" | "connected" | "disconnected">(initialGarminFilter);
+  const [garminFilter, setGarminFilter] = useState<GarminFilter>(initialGarminFilter);
   const [flagsFilter, setFlagsFilter] = useState<FlagsFilter>("all");
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(initialModal === "invite");
@@ -255,12 +256,12 @@ export function ParticipantManagement({
       const matchesGarmin =
         garminFilter === "all" ||
         (garminFilter === "connected" && isConnected) ||
-        (garminFilter === "disconnected" && !isConnected);
+    (garminFilter === "disconnected" && !isConnected) ||
+    (garminFilter === "sync_stale" && p.garmin_sync_stale === true);
 
       const weeklyColor = p.weekly_flag?.finalColor ?? null;
       const matchesFlags =
         flagsFilter === "all" ||
-        (flagsFilter === "sync_stale" && p.garmin_sync_stale === true) ||
         (flagsFilter === "weekly_green" && weeklyColor === "green") ||
         (flagsFilter === "weekly_yellow" && weeklyColor === "yellow") ||
         (flagsFilter === "weekly_orange" && weeklyColor === "orange") ||
@@ -601,12 +602,13 @@ export function ParticipantManagement({
 
             <select
               value={garminFilter}
-              onChange={(e) => setGarminFilter(e.target.value as "all" | "connected" | "disconnected")}
+              onChange={(e) => setGarminFilter(e.target.value as GarminFilter)}
               className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
             >
               <option value="all">All Garmin</option>
               <option value="connected">Connected</option>
               <option value="disconnected">Disconnected</option>
+              <option value="sync_stale">Sync Stale</option>
             </select>
 
             <select
@@ -616,7 +618,6 @@ export function ParticipantManagement({
               disabled={mode === "mentor-trends"}
             >
               <option value="all">All Flags</option>
-              <option value="sync_stale">Sync Stale</option>
               <option value="weekly_green">Weekly: Green</option>
               <option value="weekly_yellow">Weekly: Yellow</option>
               <option value="weekly_orange">Weekly: Orange</option>
