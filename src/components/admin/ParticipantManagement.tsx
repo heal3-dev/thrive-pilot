@@ -772,21 +772,7 @@ export function ParticipantManagement({
                       </div>
                     </td>
                     <td className="px-2 py-4 text-center">
-                      {p.is_unverified ? (
-                        <div className="w-full flex flex-col items-center gap-0.5">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleResendInvite(p);
-                            }}
-                            className="text-teal-600 hover:text-teal-700 w-full justify-center px-2"
-                          >
-                            Resend Invite
-                          </Button>
-                        </div>
-                      ) : mode === "mentor-trends" ? (
+                      {p.is_unverified ? null : mode === "mentor-trends" ? (
                         <span
                           className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
                             isSyncStale
@@ -894,14 +880,24 @@ export function ParticipantManagement({
                         onClick={(e) => e.stopPropagation()}
                       >
                         {p.is_unverified ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteUnverified(p)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            Delete
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResendInvite(p)}
+                              className="text-teal-600 hover:text-teal-700"
+                            >
+                              Resend Invite
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteUnverified(p)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         ) : mode === "trends" || mode === "mentor-trends" ? (
                           <Button
                              variant="outline"
