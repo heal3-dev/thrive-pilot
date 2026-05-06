@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 import type { Participant, SMSMessage } from "@/types";
 import type { WeeklyFlag } from "@/lib/flags/rules";
@@ -38,7 +37,13 @@ type HealthMetric = {
 /**
  * MentorInbox - Displays participant conversations for mentors
  */
-export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?: boolean }) {
+export function MentorInbox({
+  enableHealthPanel = false,
+  isMentorActive = true,
+}: {
+  enableHealthPanel?: boolean;
+  isMentorActive?: boolean;
+}) {
   const MIN_HEALTH_PANEL_WIDTH = 300;
   const MIN_CHAT_PANEL_WIDTH = 420;
   const SIDEBAR_WIDTH = 288;
@@ -49,12 +54,15 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const [messages, setMessages] = useState<OptimisticSMSMessage[]>([]);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
+  const [composerManualHeight, setComposerManualHeight] = useState<number | null>(null);
+  const [isComposerResizing, setIsComposerResizing] = useState(false);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const lastSeenRef = useRef<Record<string, string>>({});
   const [showTemplates, setShowTemplates] = useState(false);
   const [showHealthPanel, setShowHealthPanel] = useState(false);
   const [healthPanelWidth, setHealthPanelWidth] = useState(380);
@@ -63,8 +71,10 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const [healthWeeklyFlag, setHealthWeeklyFlag] = useState<WeeklyFlag | null>(null);
   const [isLoadingHealthMetrics, setIsLoadingHealthMetrics] = useState(false);
   const [healthMetricsError, setHealthMetricsError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const desktopLayoutRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const composerResizeStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
   // Message templates
   const messageTemplates = [
@@ -75,10 +85,55 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
     }
   ];
 
+  const totalUnread = useMemo(() => {
+    return Object.values(unreadCounts).reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0);
+  }, [unreadCounts]);
+
+  const isInboxReadOnly = !isMentorActive;
+
   // Scroll to bottom of messages
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    // Important: scroll only inside the message list panel, not the whole page.
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, []);
+
+  useEffect(() => {
+    // If the mentor becomes active again, re-enable compose UI behavior.
+    // (No banner is shown for inactive mentors.)
+  }, [isInboxReadOnly]);
+
+  const clampComposerHeight = useCallback((h: number) => {
+    return Math.min(Math.max(h, 40), 180);
+  }, []);
+
+  const lastSeenKey = useCallback((participantId: string) => `mentorInbox.lastSeen.${participantId}`, []);
+
+  const getLastSeen = useCallback(
+    (participantId: string): string | null => {
+      if (typeof window === "undefined") return null;
+      try {
+        return window.localStorage.getItem(lastSeenKey(participantId));
+      } catch {
+        return null;
+      }
+    },
+    [lastSeenKey],
+  );
+
+  const setLastSeen = useCallback(
+    (participantId: string, iso: string) => {
+      lastSeenRef.current[participantId] = iso;
+      if (typeof window === "undefined") return;
+      try {
+        window.localStorage.setItem(lastSeenKey(participantId), iso);
+      } catch {
+        // ignore
+      }
+    },
+    [lastSeenKey],
+  );
 
   // Fetch assigned participants
   useEffect(() => {
@@ -124,6 +179,14 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
 
         setParticipants(participantList);
 
+        // Initialize last-seen cache and unread counts from localStorage.
+        const nextLastSeen: Record<string, string> = {};
+        for (const p of participantList) {
+          const v = getLastSeen(p.id);
+          if (v) nextLastSeen[p.id] = v;
+        }
+        lastSeenRef.current = nextLastSeen;
+
         // Auto-select first participant if available
         if (participantList.length > 0 && !selectedParticipant) {
           setSelectedParticipant(participantList[0]);
@@ -139,6 +202,75 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
     fetchParticipants();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const refreshUnreadCounts = useCallback(async () => {
+    if (participants.length === 0) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+    try {
+      const participantIds = participants.map((p) => p.id);
+      if (participantIds.length === 0) return;
+
+      // Choose a bounded query window so we don't pull the whole table.
+      const lastSeenValues = Object.values(lastSeenRef.current);
+      const since =
+        lastSeenValues.length > 0
+          ? new Date(Math.min(...lastSeenValues.map((v) => new Date(v).getTime()).filter((t) => Number.isFinite(t))))
+          : new Date(Date.now() - 7 * 86_400_000);
+
+      const { data, error } = await supabase
+        .from("sms_messages")
+        .select("participant_id, direction, created_at")
+        .in("participant_id", participantIds)
+        .eq("direction", "inbound")
+        .gte("created_at", since.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (error) {
+        // Don't surface in UI; it's only a best-effort badge.
+        console.warn("refreshUnreadCounts failed:", error.message);
+        return;
+      }
+
+      const selectedId = selectedParticipant?.id ?? null;
+      const counts: Record<string, number> = {};
+      for (const row of (data ?? []) as Array<{ participant_id: string; created_at: string }>) {
+        const pid = row.participant_id;
+        if (!pid) continue;
+        if (selectedId && pid === selectedId) continue; // viewing = read
+
+        const seen = lastSeenRef.current[pid] ?? getLastSeen(pid) ?? null;
+        if (seen && new Date(row.created_at).getTime() <= new Date(seen).getTime()) continue;
+        counts[pid] = (counts[pid] ?? 0) + 1;
+      }
+
+      setUnreadCounts((prev) => ({ ...prev, ...counts }));
+    } catch (e) {
+      console.warn("refreshUnreadCounts error:", e);
+    }
+  }, [participants, selectedParticipant?.id, getLastSeen]);
+
+  useEffect(() => {
+    void refreshUnreadCounts();
+  }, [refreshUnreadCounts]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void refreshUnreadCounts();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [refreshUnreadCounts]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        void refreshUnreadCounts();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [refreshUnreadCounts]);
 
   // Fetch messages when participant is selected
   // silent: true skips the loading state (used for background polling)
@@ -174,6 +306,15 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
         return at - bt;
       });
       setMessages(sorted);
+
+      // Mark thread as seen (local-only) when it's explicitly fetched (selected).
+      setUnreadCounts((prev) => {
+        if (!prev[participantId]) return prev;
+        const next = { ...prev };
+        delete next[participantId];
+        return next;
+      });
+      setLastSeen(participantId, new Date().toISOString());
     } catch (err) {
       console.error("Fetch messages error:", err);
       setMessages([]);
@@ -286,6 +427,48 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   }, [selectedParticipant, fetchMessages]);
 
   useEffect(() => {
+    // Keep the composer height in sync with input content.
+    const el = composerRef.current;
+    if (!el) return;
+    if (composerManualHeight != null) {
+      el.style.height = `${clampComposerHeight(composerManualHeight)}px`;
+      return;
+    }
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+  }, [messageInput, composerManualHeight, clampComposerHeight]);
+
+  useEffect(() => {
+    if (!isComposerResizing) return;
+
+    const onMove = (event: PointerEvent) => {
+      const start = composerResizeStartRef.current;
+      if (!start) return;
+      // Dragging up should expand; dragging down should shrink.
+      const delta = start.startY - event.clientY;
+      const next = clampComposerHeight(start.startHeight + delta);
+      setComposerManualHeight(next);
+    };
+
+    const onUp = () => {
+      setIsComposerResizing(false);
+      composerResizeStartRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [isComposerResizing, clampComposerHeight]);
+
+  useEffect(() => {
     if (!enableHealthPanel || !showHealthPanel || !selectedParticipant) return;
     fetchHealthMetrics(selectedParticipant.id);
   }, [enableHealthPanel, showHealthPanel, selectedParticipant, fetchHealthMetrics]);
@@ -354,12 +537,16 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
               });
               return next;
             });
-          } else if (newMessage.direction === 'inbound') {
-            // Only count inbound messages as unread
-            setUnreadCounts(prev => ({
-              ...prev,
-              [newMessage.participant_id]: (prev[newMessage.participant_id] || 0) + 1
-            }));
+          } else if (newMessage.direction === "inbound") {
+            // If the thread is open, treat as read; otherwise mark unread.
+            if (newMessage.participant_id === selectedParticipant?.id) {
+              setLastSeen(newMessage.participant_id, new Date().toISOString());
+            } else {
+              setUnreadCounts((prev) => ({
+                ...prev,
+                [newMessage.participant_id]: (prev[newMessage.participant_id] || 0) + 1,
+              }));
+            }
           }
         }
       )
@@ -416,6 +603,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
 
   // Send message
   const handleSendMessage = async () => {
+    if (isInboxReadOnly) return;
     if (!messageInput.trim() || !selectedParticipant || isSending) return;
 
     const currentInput = messageInput.trim();
@@ -501,6 +689,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      if (isInboxReadOnly) return;
       handleSendMessage();
     }
   };
@@ -641,8 +830,19 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
       {/* Sidebar - Participant List */}
       <div className="w-full md:w-72 md:border-r-2 border-slate-100 flex flex-col shrink-0 min-h-0">
         <div className="p-4 border-b-2 border-slate-100">
-          <h2 className="font-bold text-slate-900">Participants</h2>
-          <p className="text-xs text-slate-500 mt-0.5">{participants.length} assigned</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-slate-900">Participants</h2>
+              <p className="text-xs text-slate-500 mt-0.5">{participants.length} assigned</p>
+            </div>
+            {totalUnread > 0 ? (
+              <div className="shrink-0">
+                <span className="inline-flex min-w-8 h-7 px-2 bg-red-500 text-white text-sm font-bold rounded-full items-center justify-center">
+                  {totalUnread > 99 ? "99+" : totalUnread}
+                </span>
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
           {participants.map((participant) => {
@@ -738,7 +938,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div ref={messagesScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
               {messagesError ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center max-w-sm">
@@ -806,7 +1006,6 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       </div>
                     </div>
                   ))}
-                  <div ref={messagesEndRef} />
                 </>
               )}
             </div>
@@ -842,6 +1041,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       <button
                         key={template.id}
                         onClick={() => {
+                          if (isInboxReadOnly) return;
                           setMessageInput(template.message);
                           setShowTemplates(false);
                         }}
@@ -855,28 +1055,75 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                 )}
                 
                 {/* Input and buttons */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <button
-                    onClick={() => setShowTemplates(!showTemplates)}
-                    className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer"
+                    onClick={() => {
+                      if (isInboxReadOnly) return;
+                      setShowTemplates(!showTemplates);
+                    }}
+                    disabled={isInboxReadOnly}
+                    className="h-10 w-10 shrink-0 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                     title="Message templates"
                   >
                     <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </button>
-                  <Input
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? "Conversation is read-only" : "Type a message..."}
-                    disabled={!!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
-                    className="flex-1"
-                  />
+                  <div className="flex-1 relative min-h-10">
+                    <textarea
+                      ref={composerRef}
+                      value={messageInput}
+                      onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={
+                        isInboxReadOnly
+                          ? "Inbox is read-only"
+                          : (selectedParticipant.unassigned_at || selectedParticipant.is_active === false)
+                            ? "Conversation is read-only"
+                            : "Type a message..."
+                      }
+                      disabled={isInboxReadOnly || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
+                      rows={1}
+                      className="block w-full min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2 text-base font-medium leading-5 transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto resize-none"
+                    />
+                    {/* Center-top resize handle (drag to resize; double-click to reset to auto). */}
+                    <button
+                      type="button"
+                      aria-label="Resize message composer"
+                      title="Drag to resize (double-click to reset)"
+                      onDoubleClick={() => setComposerManualHeight(null)}
+                      onPointerDown={(e) => {
+                        if (isInboxReadOnly) return;
+                        if (selectedParticipant.unassigned_at || selectedParticipant.is_active === false) return;
+                        const el = composerRef.current;
+                        if (!el) return;
+                        composerResizeStartRef.current = {
+                          startY: e.clientY,
+                          startHeight: el.getBoundingClientRect().height,
+                        };
+                        setIsComposerResizing(true);
+                        (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
+                      }}
+                      className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-8 h-3 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center cursor-ns-resize hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isInboxReadOnly || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
+                    >
+                      <span className="flex items-center gap-0.5">
+                        <span className="block w-1 h-1 rounded-full bg-slate-400" />
+                        <span className="block w-1 h-1 rounded-full bg-slate-400" />
+                        <span className="block w-1 h-1 rounded-full bg-slate-400" />
+                      </span>
+                    </button>
+                  </div>
                   <Button
                     onClick={handleSendMessage}
-                    disabled={!messageInput.trim() || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
-                    className="bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={
+                      isInboxReadOnly ||
+                      !messageInput.trim() ||
+                      !!selectedParticipant.unassigned_at ||
+                      selectedParticipant.is_active === false
+                    }
+                    size="sm"
+                    className="h-10 bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -884,11 +1131,15 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                     Send
                   </Button>
                 </div>
-                {(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) && (
-                   <p className="text-xs text-center text-slate-400 mt-2">
-                     This conversation is read-only because the participant is unassigned.
-                   </p>
-                )}
+                {isInboxReadOnly ? (
+                  <p className="text-xs text-center text-slate-500 mt-2">
+                    Your mentor account is inactive. Messaging is disabled.
+                  </p>
+                ) : (selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? (
+                  <p className="text-xs text-center text-slate-400 mt-2">
+                    This conversation is read-only because the participant is unassigned.
+                  </p>
+                ) : null}
               </div>
             </div>
           </>
