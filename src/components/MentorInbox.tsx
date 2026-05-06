@@ -56,6 +56,7 @@ export function MentorInbox({
   const [messageInput, setMessageInput] = useState("");
   const [composerManualHeight, setComposerManualHeight] = useState<number | null>(null);
   const [isComposerResizing, setIsComposerResizing] = useState(false);
+  const [dismissedInactiveBanner, setDismissedInactiveBanner] = useState(false);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -95,6 +96,11 @@ export function MentorInbox({
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
+
+  useEffect(() => {
+    // If the mentor becomes active again, allow banner to show again.
+    if (!isInboxReadOnly) setDismissedInactiveBanner(false);
+  }, [isInboxReadOnly]);
 
   const clampComposerHeight = useCallback((h: number) => {
     return Math.min(Math.max(h, 40), 180);
@@ -812,12 +818,24 @@ export function MentorInbox({
 
   return (
     <>
-    {isInboxReadOnly && (
-      <div className="mb-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
-        <p className="text-sm font-semibold text-amber-800">Mentor account is inactive</p>
-        <p className="text-sm text-amber-700 mt-0.5">
-          This inbox is read-only. Please contact your admin to reactivate your account.
-        </p>
+    {isInboxReadOnly && !dismissedInactiveBanner && (
+      <div className="mb-3 p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-amber-800">Mentor account is inactive</p>
+          <p className="text-sm text-amber-700 mt-0.5">
+            This inbox is read-only. Please contact your admin to reactivate your account.
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label="Dismiss inactive account reminder"
+          onClick={() => setDismissedInactiveBanner(true)}
+          className="shrink-0 rounded-md p-1 text-amber-700 hover:bg-amber-100 hover:text-amber-800 transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
     )}
     {/* Fill the available dashboard content height; scroll only inside panels. */}
