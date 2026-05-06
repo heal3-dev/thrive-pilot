@@ -785,17 +785,6 @@ export function ParticipantManagement({
                           >
                             Resend Invite
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteUnverified(p);
-                            }}
-                            className="text-red-600 hover:text-red-700 w-full justify-center px-2"
-                          >
-                            Delete
-                          </Button>
                         </div>
                       ) : mode === "mentor-trends" ? (
                         <span
@@ -904,7 +893,16 @@ export function ParticipantManagement({
                         }
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {p.is_unverified ? null : mode === "trends" || mode === "mentor-trends" ? (
+                        {p.is_unverified ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteUnverified(p)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </Button>
+                        ) : mode === "trends" || mode === "mentor-trends" ? (
                           <Button
                              variant="outline"
                              size="sm"
