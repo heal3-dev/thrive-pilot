@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 import type { Participant, SMSMessage } from "@/types";
 import type { WeeklyFlag } from "@/lib/flags/rules";
@@ -55,6 +54,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const [error, setError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const lastSeenRef = useRef<Record<string, string>>({});
   const [showTemplates, setShowTemplates] = useState(false);
   const [showHealthPanel, setShowHealthPanel] = useState(false);
   const [healthPanelWidth, setHealthPanelWidth] = useState(380);
@@ -65,6 +65,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const [healthMetricsError, setHealthMetricsError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const desktopLayoutRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   // Message templates
   const messageTemplates = [
@@ -79,6 +80,33 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
+
+  const lastSeenKey = useCallback((participantId: string) => `mentorInbox.lastSeen.${participantId}`, []);
+
+  const getLastSeen = useCallback(
+    (participantId: string): string | null => {
+      if (typeof window === "undefined") return null;
+      try {
+        return window.localStorage.getItem(lastSeenKey(participantId));
+      } catch {
+        return null;
+      }
+    },
+    [lastSeenKey],
+  );
+
+  const setLastSeen = useCallback(
+    (participantId: string, iso: string) => {
+      lastSeenRef.current[participantId] = iso;
+      if (typeof window === "undefined") return;
+      try {
+        window.localStorage.setItem(lastSeenKey(participantId), iso);
+      } catch {
+        // ignore
+      }
+    },
+    [lastSeenKey],
+  );
 
   // Fetch assigned participants
   useEffect(() => {
@@ -124,6 +152,14 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
 
         setParticipants(participantList);
 
+        // Initialize last-seen cache and unread counts from localStorage.
+        const nextLastSeen: Record<string, string> = {};
+        for (const p of participantList) {
+          const v = getLastSeen(p.id);
+          if (v) nextLastSeen[p.id] = v;
+        }
+        lastSeenRef.current = nextLastSeen;
+
         // Auto-select first participant if available
         if (participantList.length > 0 && !selectedParticipant) {
           setSelectedParticipant(participantList[0]);
@@ -139,6 +175,75 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
     fetchParticipants();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const refreshUnreadCounts = useCallback(async () => {
+    if (participants.length === 0) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+    try {
+      const participantIds = participants.map((p) => p.id);
+      if (participantIds.length === 0) return;
+
+      // Choose a bounded query window so we don't pull the whole table.
+      const lastSeenValues = Object.values(lastSeenRef.current);
+      const since =
+        lastSeenValues.length > 0
+          ? new Date(Math.min(...lastSeenValues.map((v) => new Date(v).getTime()).filter((t) => Number.isFinite(t))))
+          : new Date(Date.now() - 7 * 86_400_000);
+
+      const { data, error } = await supabase
+        .from("sms_messages")
+        .select("participant_id, direction, created_at")
+        .in("participant_id", participantIds)
+        .eq("direction", "inbound")
+        .gte("created_at", since.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (error) {
+        // Don't surface in UI; it's only a best-effort badge.
+        console.warn("refreshUnreadCounts failed:", error.message);
+        return;
+      }
+
+      const selectedId = selectedParticipant?.id ?? null;
+      const counts: Record<string, number> = {};
+      for (const row of (data ?? []) as Array<{ participant_id: string; created_at: string }>) {
+        const pid = row.participant_id;
+        if (!pid) continue;
+        if (selectedId && pid === selectedId) continue; // viewing = read
+
+        const seen = lastSeenRef.current[pid] ?? getLastSeen(pid) ?? null;
+        if (seen && new Date(row.created_at).getTime() <= new Date(seen).getTime()) continue;
+        counts[pid] = (counts[pid] ?? 0) + 1;
+      }
+
+      setUnreadCounts((prev) => ({ ...prev, ...counts }));
+    } catch (e) {
+      console.warn("refreshUnreadCounts error:", e);
+    }
+  }, [participants, selectedParticipant?.id, getLastSeen]);
+
+  useEffect(() => {
+    void refreshUnreadCounts();
+  }, [refreshUnreadCounts]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void refreshUnreadCounts();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [refreshUnreadCounts]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        void refreshUnreadCounts();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [refreshUnreadCounts]);
 
   // Fetch messages when participant is selected
   // silent: true skips the loading state (used for background polling)
@@ -174,6 +279,15 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
         return at - bt;
       });
       setMessages(sorted);
+
+      // Mark thread as seen (local-only) when it's explicitly fetched (selected).
+      setUnreadCounts((prev) => {
+        if (!prev[participantId]) return prev;
+        const next = { ...prev };
+        delete next[participantId];
+        return next;
+      });
+      setLastSeen(participantId, new Date().toISOString());
     } catch (err) {
       console.error("Fetch messages error:", err);
       setMessages([]);
@@ -286,6 +400,14 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
   }, [selectedParticipant, fetchMessages]);
 
   useEffect(() => {
+    // Keep the composer height in sync with input content.
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+  }, [messageInput]);
+
+  useEffect(() => {
     if (!enableHealthPanel || !showHealthPanel || !selectedParticipant) return;
     fetchHealthMetrics(selectedParticipant.id);
   }, [enableHealthPanel, showHealthPanel, selectedParticipant, fetchHealthMetrics]);
@@ -354,12 +476,16 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
               });
               return next;
             });
-          } else if (newMessage.direction === 'inbound') {
-            // Only count inbound messages as unread
-            setUnreadCounts(prev => ({
-              ...prev,
-              [newMessage.participant_id]: (prev[newMessage.participant_id] || 0) + 1
-            }));
+          } else if (newMessage.direction === "inbound") {
+            // If the thread is open, treat as read; otherwise mark unread.
+            if (newMessage.participant_id === selectedParticipant?.id) {
+              setLastSeen(newMessage.participant_id, new Date().toISOString());
+            } else {
+              setUnreadCounts((prev) => ({
+                ...prev,
+                [newMessage.participant_id]: (prev[newMessage.participant_id] || 0) + 1,
+              }));
+            }
           }
         }
       )
@@ -855,7 +981,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                 )}
                 
                 {/* Input and buttons */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-end">
                   <button
                     onClick={() => setShowTemplates(!showTemplates)}
                     className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer"
@@ -865,13 +991,15 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </button>
-                  <Input
+                  <textarea
+                    ref={composerRef}
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={(selectedParticipant.unassigned_at || selectedParticipant.is_active === false) ? "Conversation is read-only" : "Type a message..."}
                     disabled={!!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
-                    className="flex-1"
+                    rows={1}
+                    className="flex-1 min-h-[40px] max-h-[180px] resize-y rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-base font-medium shadow-sm transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto"
                   />
                   <Button
                     onClick={handleSendMessage}
