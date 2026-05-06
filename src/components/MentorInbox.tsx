@@ -618,6 +618,21 @@ export function MentorInbox({
 
           // If it's for the currently selected participant, append immediately (avoid refetch)
           if (newMessage.participant_id === selectedParticipant?.id) {
+            // If an inbound message arrives while the thread is open, treat it as read.
+            // Use the DB timestamp to avoid client/server clock skew.
+            if (newMessage.direction === "inbound") {
+              if (typeof newMessage.created_at === "string") {
+                setLastSeen(newMessage.participant_id, newMessage.created_at);
+              } else {
+                setLastSeen(newMessage.participant_id, new Date().toISOString());
+              }
+              setUnreadCounts((prev) => {
+                if (!prev[newMessage.participant_id]) return prev;
+                const next = { ...prev };
+                delete next[newMessage.participant_id];
+                return next;
+              });
+            }
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMessage.id)) return prev;
               // Reconcile optimistic outbound message (temp id) with the real DB row.
