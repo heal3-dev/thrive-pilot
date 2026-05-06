@@ -837,7 +837,7 @@ export function MentorInbox({
             </div>
             {totalUnread > 0 ? (
               <div className="shrink-0">
-                <span className="inline-flex min-w-8 h-7 px-2 bg-red-500 text-white text-sm font-bold rounded-full items-center justify-center">
+                <span className="inline-flex h-7 w-7 aspect-square items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold leading-none shrink-0">
                   {totalUnread > 99 ? "99+" : totalUnread}
                 </span>
               </div>
