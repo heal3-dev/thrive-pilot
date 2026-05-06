@@ -56,6 +56,7 @@ export function MentorInbox({
   const [messageInput, setMessageInput] = useState("");
   const [composerManualHeight, setComposerManualHeight] = useState<number | null>(null);
   const [isComposerResizing, setIsComposerResizing] = useState(false);
+  const INACTIVE_BANNER_DISMISSED_KEY = "mentorInbox.inactiveBannerDismissed";
   const [dismissedInactiveBanner, setDismissedInactiveBanner] = useState(false);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -99,7 +100,26 @@ export function MentorInbox({
 
   useEffect(() => {
     // If the mentor becomes active again, allow banner to show again.
-    if (!isInboxReadOnly) setDismissedInactiveBanner(false);
+    if (!isInboxReadOnly) {
+      setDismissedInactiveBanner(false);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem(INACTIVE_BANNER_DISMISSED_KEY);
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
+    // Restore dismissal across remounts while inactive.
+    if (typeof window === "undefined") return;
+    try {
+      const v = window.localStorage.getItem(INACTIVE_BANNER_DISMISSED_KEY);
+      if (v === "1") setDismissedInactiveBanner(true);
+    } catch {
+      // ignore
+    }
   }, [isInboxReadOnly]);
 
   const clampComposerHeight = useCallback((h: number) => {
@@ -829,7 +849,16 @@ export function MentorInbox({
         <button
           type="button"
           aria-label="Dismiss inactive account reminder"
-          onClick={() => setDismissedInactiveBanner(true)}
+          onClick={() => {
+            setDismissedInactiveBanner(true);
+            if (typeof window !== "undefined") {
+              try {
+                window.localStorage.setItem(INACTIVE_BANNER_DISMISSED_KEY, "1");
+              } catch {
+                // ignore
+              }
+            }
+          }}
           className="shrink-0 rounded-md p-1 text-amber-700 hover:bg-amber-100 hover:text-amber-800 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
