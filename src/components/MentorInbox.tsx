@@ -817,8 +817,8 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
               <h2 className="font-bold text-slate-900">Participants</h2>
               <p className="text-xs text-slate-500 mt-0.5">{participants.length} assigned</p>
             </div>
-            <div className="text-xs font-semibold text-slate-600 whitespace-nowrap">
-              Total new messages: {totalUnread}
+            <div className="font-bold text-slate-900 whitespace-nowrap">
+              Unread: {totalUnread}
             </div>
           </div>
         </div>
