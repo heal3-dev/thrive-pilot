@@ -772,7 +772,32 @@ export function ParticipantManagement({
                       </div>
                     </td>
                     <td className="px-2 py-4 text-center">
-                      {!p.is_unverified && mode === "mentor-trends" && (
+                      {p.is_unverified ? (
+                        <div className="w-full flex flex-col items-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleResendInvite(p);
+                            }}
+                            className="text-teal-600 hover:text-teal-700 w-full justify-center px-2"
+                          >
+                            Resend Invite
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteUnverified(p);
+                            }}
+                            className="text-red-600 hover:text-red-700 w-full justify-center px-2"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      ) : mode === "mentor-trends" ? (
                         <span
                           className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
                             isSyncStale
@@ -784,119 +809,102 @@ export function ParticipantManagement({
                         >
                           {isSyncStale ? "Sync Stale" : isConnected ? "Connected" : "Disconnected"}
                         </span>
-                      )}
-                      {!p.is_unverified && mode !== "mentor-trends" && (
-                        isConnected ? (
-                          <div className="w-full flex flex-col items-center gap-1">
-                            <span
-                              className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
-                                isSyncStale
-                                  ? "bg-amber-100 text-amber-800 border border-amber-200"
-                                  : "bg-teal-100 text-teal-700"
-                              }`}
-                            >
-                              {isSyncStale ? "Sync Stale" : "Connected"}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => { e.stopPropagation(); handleBackfill(p); }}
-                              disabled={backfillLoadingId === p.id}
-                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
-                            >
-                              {backfillLoadingId === p.id ? (
-                                <span className="flex items-center gap-1">
-                                  <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                  </svg>
-                                  Syncing
-                                </span>
-                              ) : (
-                                "Sync last 7 days"
-                              )}
-                            </Button>
+                      ) : isConnected ? (
+                        <div className="w-full flex flex-col items-center gap-1">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
+                              isSyncStale
+                                ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                : "bg-teal-100 text-teal-700"
+                            }`}
+                          >
+                            {isSyncStale ? "Sync Stale" : "Connected"}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleBackfill(p);
+                            }}
+                            disabled={backfillLoadingId === p.id}
+                            className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
+                          >
+                            {backfillLoadingId === p.id ? (
+                              <span className="flex items-center gap-1">
+                                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                  />
+                                </svg>
+                                Syncing
+                              </span>
+                            ) : (
+                              "Sync last 7 days"
+                            )}
+                          </Button>
 
-                            {p.garmin_sync_stale ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void handleConnectGarmin(p, { force: true });
-                                }}
-                                disabled={garminInviteLoadingId === p.id}
-                                className="text-teal-700 hover:text-teal-800 hover:bg-teal-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
-                              >
-                                {garminInviteLoadingId === p.id ? (
-                                  <span className="flex items-center gap-1">
-                                    <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                      <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                      />
-                                    </svg>
-                                    Sending…
-                                  </span>
-                                ) : (
-                                  "Refresh Garmin"
-                                )}
-                              </Button>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <div className="w-full flex flex-col items-center gap-1">
-                            <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600">
-                              Disconnected
-                            </span>
+                          {p.garmin_sync_stale ? (
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleConnectGarmin(p);
+                                void handleConnectGarmin(p, { force: true });
                               }}
-                              className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
+                              disabled={garminInviteLoadingId === p.id}
+                              className="text-teal-700 hover:text-teal-800 hover:bg-teal-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
                             >
-                              Connect Garmin
+                              {garminInviteLoadingId === p.id ? (
+                                <span className="flex items-center gap-1">
+                                  <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    />
+                                  </svg>
+                                  Sending…
+                                </span>
+                              ) : (
+                                "Refresh Garmin"
+                              )}
                             </Button>
-                          </div>
-                        )
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="w-full flex flex-col items-center gap-1">
+                          <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600">
+                            Disconnected
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleConnectGarmin(p);
+                            }}
+                            className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center px-2 text-sm whitespace-normal leading-tight py-2"
+                          >
+                            Connect Garmin
+                          </Button>
+                        </div>
                       )}
                     </td>
                     <td className="px-2 py-4">
                       <div
                         className={
-                          p.is_unverified
-                            ? "flex flex-col items-center gap-0.5"
-                            : mode === "trends" || mode === "mentor-trends"
-                              ? "flex items-center justify-end gap-1"
-                              : "flex flex-col items-end gap-0.5"
+                          mode === "trends" || mode === "mentor-trends"
+                            ? "flex items-center justify-end gap-1"
+                            : "flex flex-col items-end gap-0.5"
                         }
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {p.is_unverified ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleResendInvite(p)}
-                              className="text-teal-600 hover:text-teal-700 w-full justify-center px-2"
-                            >
-                              Resend Invite
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteUnverified(p)}
-                              className="text-red-600 hover:text-red-700 w-full justify-center px-2"
-                            >
-                              Delete
-                            </Button>
-                          </>
-                        ) : mode === "trends" || mode === "mentor-trends" ? (
+                        {p.is_unverified ? null : mode === "trends" || mode === "mentor-trends" ? (
                           <Button
                              variant="outline"
                              size="sm"
