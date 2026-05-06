@@ -253,11 +253,13 @@ export function ParticipantManagement({
         (mentorFilter !== "unassigned" && mentorFilter !== "all" && isActiveAssignment && assignedMentor?.mentor_id === mentorFilter);
 
       const isConnected = p.garmin_connected === true || Boolean(p.garmin_user_id);
+      const isSyncStale = p.garmin_sync_stale === true;
+      const isConnectedFresh = isConnected && !isSyncStale;
       const matchesGarmin =
         garminFilter === "all" ||
-        (garminFilter === "connected" && isConnected) ||
-    (garminFilter === "disconnected" && !isConnected) ||
-    (garminFilter === "sync_stale" && p.garmin_sync_stale === true);
+        (garminFilter === "connected" && isConnectedFresh) ||
+        (garminFilter === "sync_stale" && isSyncStale) ||
+        (garminFilter === "disconnected" && !isConnected);
 
       const weeklyColor = p.weekly_flag?.finalColor ?? null;
       const matchesFlags =
@@ -690,6 +692,7 @@ export function ParticipantManagement({
               ) : (
                 filteredParticipants.map((p) => {
                    const isConnected = p.garmin_connected === true || Boolean(p.garmin_user_id);
+                   const isSyncStale = p.garmin_sync_stale === true;
                    return (
                   <tr
                     key={p.id}
@@ -774,15 +777,30 @@ export function ParticipantManagement({
                     </td>
                     <td className="px-2 py-4 text-center">
                       {!p.is_unverified && mode === "mentor-trends" && (
-                        <span className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
-                          isConnected ? "bg-teal-100 text-teal-700" : "bg-slate-100 text-slate-600"
-                        }`}>
-                          {isConnected ? "Connected" : "Not Connected"}
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
+                            isSyncStale
+                              ? "bg-amber-100 text-amber-800 border border-amber-200"
+                              : isConnected
+                              ? "bg-teal-100 text-teal-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {isSyncStale ? "Sync Stale" : isConnected ? "Connected" : "Disconnected"}
                         </span>
                       )}
                       {!p.is_unverified && mode !== "mentor-trends" && (
                         isConnected ? (
                           <div className="w-full flex flex-col items-center gap-1">
+                            <span
+                              className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold ${
+                                isSyncStale
+                                  ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                  : "bg-teal-100 text-teal-700"
+                              }`}
+                            >
+                              {isSyncStale ? "Sync Stale" : "Connected"}
+                            </span>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -833,14 +851,22 @@ export function ParticipantManagement({
                             ) : null}
                           </div>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); handleConnectGarmin(p); }}
-                            className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center px-2"
-                          >
-                            Connect Garmin
-                          </Button>
+                          <div className="w-full flex flex-col items-center gap-1">
+                            <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600">
+                              Disconnected
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleConnectGarmin(p);
+                              }}
+                              className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 w-full justify-center px-2"
+                            >
+                              Connect Garmin
+                            </Button>
+                          </div>
                         )
                       )}
                     </td>
