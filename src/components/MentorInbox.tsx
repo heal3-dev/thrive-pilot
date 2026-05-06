@@ -56,8 +56,6 @@ export function MentorInbox({
   const [messageInput, setMessageInput] = useState("");
   const [composerManualHeight, setComposerManualHeight] = useState<number | null>(null);
   const [isComposerResizing, setIsComposerResizing] = useState(false);
-  const INACTIVE_BANNER_DISMISSED_KEY = "mentorInbox.inactiveBannerDismissed";
-  const [dismissedInactiveBanner, setDismissedInactiveBanner] = useState(false);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -102,27 +100,8 @@ export function MentorInbox({
   }, []);
 
   useEffect(() => {
-    // If the mentor becomes active again, allow banner to show again.
-    if (!isInboxReadOnly) {
-      setDismissedInactiveBanner(false);
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.removeItem(INACTIVE_BANNER_DISMISSED_KEY);
-        } catch {
-          // ignore
-        }
-      }
-      return;
-    }
-
-    // Restore dismissal across remounts while inactive.
-    if (typeof window === "undefined") return;
-    try {
-      const v = window.localStorage.getItem(INACTIVE_BANNER_DISMISSED_KEY);
-      if (v === "1") setDismissedInactiveBanner(true);
-    } catch {
-      // ignore
-    }
+    // If the mentor becomes active again, re-enable compose UI behavior.
+    // (No banner is shown for inactive mentors.)
   }, [isInboxReadOnly]);
 
   const clampComposerHeight = useCallback((h: number) => {
@@ -841,33 +820,6 @@ export function MentorInbox({
 
   return (
     <>
-    {isInboxReadOnly && !dismissedInactiveBanner && (
-      <div className="mb-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between gap-3">
-        <p className="text-sm text-amber-800 leading-5">
-          <span className="font-semibold">Mentor account is inactive.</span>{" "}
-          This inbox is read-only. Please contact your admin to reactivate your account.
-        </p>
-        <button
-          type="button"
-          aria-label="Dismiss inactive account reminder"
-          onClick={() => {
-            setDismissedInactiveBanner(true);
-            if (typeof window !== "undefined") {
-              try {
-                window.localStorage.setItem(INACTIVE_BANNER_DISMISSED_KEY, "1");
-              } catch {
-                // ignore
-              }
-            }
-          }}
-          className="shrink-0 rounded-md p-1 text-amber-700 hover:bg-amber-100 hover:text-amber-800 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    )}
     {/* Fill the available dashboard content height; scroll only inside panels. */}
     <div
       ref={desktopLayoutRef}
