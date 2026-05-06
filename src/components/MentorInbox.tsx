@@ -645,7 +645,7 @@ export function MentorInbox({ enableHealthPanel = false }: { enableHealthPanel?:
             <h2 className="font-bold text-slate-900">Participants</h2>
             {Object.keys(unreadCounts).length > 0 && (
               <span
-                className="inline-flex h-9 w-9 aspect-square items-center justify-center rounded-full bg-red-500 text-white text-sm font-bold leading-none shrink-0"
+                className="inline-flex h-7 w-7 aspect-square items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold leading-none shrink-0"
                 aria-label={`Total unread messages: ${Object.values(unreadCounts).reduce((sum, n) => sum + (n || 0), 0)}`}
                 title={`${Object.values(unreadCounts).reduce((sum, n) => sum + (n || 0), 0)} unread`}
               >
