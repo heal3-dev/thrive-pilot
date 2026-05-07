@@ -220,7 +220,7 @@ export async function POST(request: Request) {
 
           await sendEmail({
             to: mentorRow.email,
-            subject: `New message from ${participantLabel}`,
+            subject: `Thrive Pilot: New message from ${participantLabel}`,
             html,
           });
 
