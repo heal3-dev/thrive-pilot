@@ -11,7 +11,7 @@ This app uses a **DB-backed email queue** for reliable delivery and provider fai
 ## Env vars
 
 ### Required
-- `CRON_SECRET`: shared secret for Vercel Cron routes (Authorization: `Bearer <secret>`)
+- `CRON_SECRET`: shared secret for queue worker route auth.\n+  - Header auth: `Authorization: Bearer <secret>`\n+  - Query auth (for schedulers without custom headers): `/api/cron/process-email-queue?secret=<secret>`
 - `RESEND_API_KEY`
 - `NEXT_PUBLIC_SITE_URL` (used in alert email links)
 
