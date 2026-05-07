@@ -60,8 +60,12 @@ async function sendWithProvider(
 }
 
 export async function GET(request: NextRequest) {
+  const secret = process.env.CRON_SECRET ?? "";
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const querySecret = request.nextUrl.searchParams.get("secret");
+
+  const isAuthorized = authHeader === `Bearer ${secret}` || (querySecret && querySecret === secret);
+  if (!isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
