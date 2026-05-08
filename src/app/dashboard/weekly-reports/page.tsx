@@ -66,6 +66,8 @@ export default function WeeklyReportsPage() {
   const [chatByParticipant, setChatByParticipant] = useState<Record<string, ChatMessage[]>>({});
   const chat = selectedParticipant ? chatByParticipant[selectedParticipant.id] ?? [] : [];
   const [feedbackInput, setFeedbackInput] = useState("");
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin) router.replace("/dashboard");
@@ -264,11 +266,11 @@ export default function WeeklyReportsPage() {
                 </Button>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-slate-900">
-                <div className="max-w-2xl mx-auto rounded-2xl bg-slate-800/60 border border-slate-700 p-6">
+                <div className="max-w-2xl mx-auto rounded-2xl bg-white border border-slate-200 p-6 shadow-sm">
                   {markdown.trim().length === 0 ? (
-                    <p className="text-sm text-slate-400">No draft yet.</p>
+                    <p className="text-sm text-slate-500">No draft yet.</p>
                   ) : (
-                    <div className="prose prose-invert prose-sm max-w-none">
+                    <div className="prose prose-slate prose-sm max-w-none">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
                     </div>
                   )}
@@ -305,6 +307,11 @@ export default function WeeklyReportsPage() {
 
                 {/* Chat */}
                 <div className="p-4 min-h-0 flex flex-col">
+                  {feedbackError && (
+                    <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200">
+                      <p className="text-sm text-red-700 font-semibold">{feedbackError}</p>
+                    </div>
+                  )}
                   <div className="flex-1 min-h-0 overflow-y-auto space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     {chat.length === 0 ? (
                       <p className="text-sm text-slate-500">
@@ -332,32 +339,75 @@ export default function WeeklyReportsPage() {
                       value={feedbackInput}
                       onChange={(e) => setFeedbackInput(e.target.value)}
                       placeholder="Add feedback for the AI…"
-                      disabled={!selectedParticipant}
+                      disabled={!selectedParticipant || isSendingFeedback}
                       className="flex-1 h-10 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300 disabled:opacity-50"
                     />
                     <Button
-                      onClick={() => {
+                      onClick={async () => {
                         if (!selectedParticipant) return;
                         const text = feedbackInput.trim();
                         if (!text) return;
+                        setFeedbackError(null);
+                        setIsSendingFeedback(true);
                         setFeedbackInput("");
+
+                        const userMsg: ChatMessage = { id: createId("user"), role: "user", content: text };
                         setChatByParticipant((prev) => ({
                           ...prev,
-                          [selectedParticipant.id]: [
-                            ...(prev[selectedParticipant.id] ?? []),
-                            { id: createId("user"), role: "user", content: text },
-                            {
-                              id: createId("ai"),
-                              role: "assistant",
-                              content: "Got it. Click Regenerate to apply this feedback (mock).",
-                            },
-                          ],
+                          [selectedParticipant.id]: [...(prev[selectedParticipant.id] ?? []), userMsg],
                         }));
+
+                        try {
+                          const { data: sessionData } = await supabase.auth.getSession();
+                          const token = sessionData?.session?.access_token;
+                          if (!token) throw new Error("Authentication required");
+
+                          const participantLabel = formatParticipantLabel(selectedParticipant);
+                          const res = await fetch("/api/admin/weekly-reports/chat", {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({
+                              participantLabel,
+                              currentMarkdown: markdownByParticipant[selectedParticipant.id] ?? "",
+                              feedback: text,
+                            }),
+                          });
+
+                          if (!res.ok) {
+                            const j = await res.json().catch(() => ({} as any));
+                            throw new Error(j?.error || "Failed to generate update");
+                          }
+
+                          const j = (await res.json()) as { assistantMessage: string; updatedMarkdown: string };
+                          const assistantMsg: ChatMessage = {
+                            id: createId("ai"),
+                            role: "assistant",
+                            content: j.assistantMessage || "Updated the draft based on your feedback.",
+                          };
+
+                          setChatByParticipant((prev) => ({
+                            ...prev,
+                            [selectedParticipant.id]: [...(prev[selectedParticipant.id] ?? []), assistantMsg],
+                          }));
+
+                          setMarkdownByParticipant((prev) => ({
+                            ...prev,
+                            [selectedParticipant.id]: j.updatedMarkdown ?? prev[selectedParticipant.id] ?? "",
+                          }));
+                          setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+                        } catch (e) {
+                          setFeedbackError(e instanceof Error ? e.message : "Failed to send feedback");
+                        } finally {
+                          setIsSendingFeedback(false);
+                        }
                       }}
-                      disabled={!selectedParticipant || feedbackInput.trim().length === 0}
+                      disabled={!selectedParticipant || isSendingFeedback || feedbackInput.trim().length === 0}
                       className="bg-teal-500 hover:bg-teal-600 text-white"
                     >
-                      Send
+                      {isSendingFeedback ? "Sending…" : "Send"}
                     </Button>
                   </div>
                 </div>
