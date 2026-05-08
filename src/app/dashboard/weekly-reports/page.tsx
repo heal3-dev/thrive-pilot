@@ -259,13 +259,13 @@ export default function WeeklyReportsPage() {
                     }));
                   }}
                   disabled={!selectedParticipant}
-                  className="bg-slate-900 hover:bg-slate-800 text-white"
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
                   size="sm"
                 >
                   Regenerate (mock)
                 </Button>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-slate-900">
+              <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-white">
                 <div className="max-w-2xl mx-auto rounded-2xl bg-white border border-slate-200 p-6 shadow-sm">
                   {markdown.trim().length === 0 ? (
                     <p className="text-sm text-slate-500">No draft yet.</p>
@@ -285,7 +285,7 @@ export default function WeeklyReportsPage() {
                 <span className="text-xs text-slate-500">{markdown.length} chars</span>
               </div>
 
-              <div className="flex-1 min-h-0 grid grid-rows-[0.9fr_1.1fr]">
+              <div className="flex-1 min-h-0 grid grid-rows-2">
                 {/* Markdown editor */}
                 <div className="p-4 border-b-2 border-slate-100 min-h-0 flex flex-col">
                   <textarea
@@ -313,24 +313,25 @@ export default function WeeklyReportsPage() {
                     </div>
                   )}
                   <div className="flex-1 min-h-0 overflow-y-auto space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    {chat.map((m) => (
-                      <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                        <div
-                          className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                            m.role === "user"
-                              ? "bg-teal-500 text-white rounded-br-md"
-                              : "bg-white border border-slate-200 text-slate-900 rounded-bl-md"
-                          }`}
-                        >
-                          {m.content}
-                        </div>
-                      </div>
-                    ))}
                     {chat.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-6">
-                        Tip: send feedback like “make it more encouraging” to update the draft.
+                      <p className="text-sm text-slate-500">
+                        Add feedback like “make it more encouraging” and regenerate.
                       </p>
-                    ) : null}
+                    ) : (
+                      chat.map((m) => (
+                        <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                          <div
+                            className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                              m.role === "user"
+                                ? "bg-teal-500 text-white rounded-br-md"
+                                : "bg-white border border-slate-200 text-slate-900 rounded-bl-md"
+                            }`}
+                          >
+                            {m.content}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
 
                   <div className="mt-3 flex gap-2 items-center">
