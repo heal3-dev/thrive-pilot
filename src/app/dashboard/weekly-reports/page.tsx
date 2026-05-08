@@ -285,7 +285,7 @@ export default function WeeklyReportsPage() {
                 <span className="text-xs text-slate-500">{markdown.length} chars</span>
               </div>
 
-              <div className="flex-1 min-h-0 grid grid-rows-2">
+              <div className="flex-1 min-h-0 grid grid-rows-[0.9fr_1.1fr]">
                 {/* Markdown editor */}
                 <div className="p-4 border-b-2 border-slate-100 min-h-0 flex flex-col">
                   <textarea
@@ -313,25 +313,24 @@ export default function WeeklyReportsPage() {
                     </div>
                   )}
                   <div className="flex-1 min-h-0 overflow-y-auto space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    {chat.length === 0 ? (
-                      <p className="text-sm text-slate-500">
-                        Add feedback like “make it more encouraging” and regenerate.
-                      </p>
-                    ) : (
-                      chat.map((m) => (
-                        <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                          <div
-                            className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                              m.role === "user"
-                                ? "bg-teal-500 text-white rounded-br-md"
-                                : "bg-white border border-slate-200 text-slate-900 rounded-bl-md"
-                            }`}
-                          >
-                            {m.content}
-                          </div>
+                    {chat.map((m) => (
+                      <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                            m.role === "user"
+                              ? "bg-teal-500 text-white rounded-br-md"
+                              : "bg-white border border-slate-200 text-slate-900 rounded-bl-md"
+                          }`}
+                        >
+                          {m.content}
                         </div>
-                      ))
-                    )}
+                      </div>
+                    ))}
+                    {chat.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-6">
+                        Tip: send feedback like “make it more encouraging” to update the draft.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="mt-3 flex gap-2 items-center">
