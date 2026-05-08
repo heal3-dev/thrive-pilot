@@ -249,7 +249,7 @@ export default function WeeklyReportsPage() {
             {/* Draft preview */}
             <div className="min-h-0 border-b-2 lg:border-b-0 lg:border-r-2 border-slate-100 flex flex-col">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                <p className="text-sm font-bold text-slate-900">Current AI draft</p>
+                <p className="text-sm font-bold text-slate-900">Current draft</p>
                 <Button
                   onClick={() => {
                     if (!selectedParticipant) return;
@@ -281,7 +281,7 @@ export default function WeeklyReportsPage() {
             {/* Editor + chat */}
             <div className="min-h-0 flex flex-col">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                <p className="text-sm font-bold text-slate-900">Editor & AI chat</p>
+                <p className="text-sm font-bold text-slate-900">Editor & chat</p>
                 <span className="text-xs text-slate-500">{markdown.length} chars</span>
               </div>
 
