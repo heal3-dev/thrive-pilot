@@ -446,6 +446,7 @@ export function AdminPanel() {
                 setActiveModal(action);
               }
             }}
+            onWeeklyReports={() => router.push("/dashboard/weekly-reports")}
           />
         )}
         {activeTab === "mentors" && (
@@ -524,6 +525,7 @@ function DashboardTab({
   onNavigate,
   onDbUsage,
   onQuickAction,
+  onWeeklyReports,
 }: {
   stats: Stats | null;
   dbUsage: DbUsageMini | null;
@@ -532,6 +534,7 @@ function DashboardTab({
   onNavigate: (tab: AdminTab) => void;
   onDbUsage: () => void;
   onQuickAction: (action: "add-mentor" | "add-participant" | "invite-participant" | "create-assignment" | "view-messages") => void;
+  onWeeklyReports: () => void;
 }) {
   if (error) {
     return (
@@ -660,7 +663,7 @@ function DashboardTab({
         </div>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
           <QuickAction
             title="Add Mentor"
             description="Create a new mentor account"
@@ -715,6 +718,17 @@ function DashboardTab({
             }
             color="purple"
             onClick={() => onQuickAction("view-messages")}
+          />
+          <QuickAction
+            title="Weekly Reports"
+            description="Generate & review weekly emails"
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            }
+            color="teal"
+            onClick={onWeeklyReports}
           />
         </div>
       </div>
