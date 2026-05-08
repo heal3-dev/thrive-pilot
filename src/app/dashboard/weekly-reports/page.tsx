@@ -16,12 +16,24 @@ type ParticipantMini = {
   phone_number: string | null;
 };
 
+type ParticipantStatus = "pending" | "approved";
+
+type ChatMessage = {
+  id: string;
+  role: "assistant" | "user";
+  content: string;
+};
+
 function formatParticipantLabel(p: ParticipantMini): string {
   return p.name?.trim() || p.email?.trim() || p.phone_number?.trim() || "Unnamed participant";
 }
 
 function defaultMarkdown(name: string) {
   return `## Weekly check-in\n\nHi ${name},\n\nHere’s your weekly check-in based on the last 7 days.\n\n### Highlights\n- **Sleep**: ...\n- **Stress**: ...\n- **Body Battery**: ...\n- **HRV**: ...\n\n### One thing to try this week\n- ...\n\nIf you'd like to talk through anything, just reply to this message.\n`;
+}
+
+function createId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 export default function WeeklyReportsPage() {
@@ -39,12 +51,24 @@ export default function WeeklyReportsPage() {
     [participants, selectedParticipantId]
   );
 
-  const [markdown, setMarkdown] = useState("");
+  const [markdownByParticipant, setMarkdownByParticipant] = useState<Record<string, string>>({});
+  const markdown = selectedParticipant ? markdownByParticipant[selectedParticipant.id] ?? "" : "";
+
+  const [statusByParticipant, setStatusByParticipant] = useState<Record<string, ParticipantStatus>>({});
+  const selectedStatus: ParticipantStatus =
+    (selectedParticipant ? statusByParticipant[selectedParticipant.id] : undefined) ?? "pending";
+
+  const approvedCount = useMemo(
+    () => Object.values(statusByParticipant).filter((s) => s === "approved").length,
+    [statusByParticipant]
+  );
+
+  const [chatByParticipant, setChatByParticipant] = useState<Record<string, ChatMessage[]>>({});
+  const chat = selectedParticipant ? chatByParticipant[selectedParticipant.id] ?? [] : [];
+  const [feedbackInput, setFeedbackInput] = useState("");
 
   useEffect(() => {
-    if (!isAdmin) {
-      router.replace("/dashboard");
-    }
+    if (!isAdmin) router.replace("/dashboard");
   }, [isAdmin, router]);
 
   useEffect(() => {
@@ -62,8 +86,7 @@ export default function WeeklyReportsPage() {
         if (cancelled) return;
         const rows = (data ?? []) as ParticipantMini[];
         setParticipants(rows);
-        const firstId = rows[0]?.id ?? "";
-        setSelectedParticipantId((prev) => prev || firstId);
+        setSelectedParticipantId((prev) => prev || rows[0]?.id || "");
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load participants";
         if (!cancelled) setLoadError(msg);
@@ -79,8 +102,14 @@ export default function WeeklyReportsPage() {
 
   useEffect(() => {
     if (!selectedParticipant) return;
-    // Initialize markdown on first selection only.
-    setMarkdown((prev) => prev || defaultMarkdown(selectedParticipant.name?.trim() || "there"));
+    // Initialize selected participant draft once.
+    setMarkdownByParticipant((prev) => {
+      if (prev[selectedParticipant.id]) return prev;
+      return {
+        ...prev,
+        [selectedParticipant.id]: defaultMarkdown(selectedParticipant.name?.trim() || "there"),
+      };
+    });
   }, [selectedParticipant]);
 
   if (!isAdmin) return null;
@@ -90,13 +119,27 @@ export default function WeeklyReportsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-clash text-2xl font-bold text-slate-900">Weekly Reports</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Draft in Markdown, preview the final email body, and iterate.
-          </p>
+          <p className="text-sm text-slate-500 mt-1">Draft in Markdown, preview, and approve.</p>
         </div>
-        <Button variant="outline" onClick={() => router.push("/dashboard")}>
-          Back to Dashboard
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/dashboard")}
+            className="border-slate-300"
+          >
+            Back
+          </Button>
+          <Button
+            onClick={() => {
+              // UI-only placeholder for now.
+              alert("Batch send (mock). Next step: enqueue weekly reports to email_jobs.");
+            }}
+            disabled={approvedCount === 0}
+            className="bg-teal-500 hover:bg-teal-600 text-white"
+          >
+            Send approved ({approvedCount})
+          </Button>
+        </div>
       </div>
 
       {loadError && (
@@ -105,91 +148,221 @@ export default function WeeklyReportsPage() {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Controls */}
-        <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 flex flex-col gap-4 min-h-0">
-          <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase">Participant</label>
-            <select
-              value={selectedParticipantId}
-              onChange={(e) => {
-                setSelectedParticipantId(e.target.value);
-                setMarkdown("");
-              }}
-              disabled={isLoading || participants.length === 0}
-              className="mt-2 w-full h-10 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300 disabled:opacity-50"
-            >
-              {participants.length === 0 ? (
-                <option value="">No participants</option>
-              ) : (
-                participants.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {formatParticipantLabel(p)}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-            <p className="text-xs font-semibold text-slate-700">Workflow (preview)</p>
-            <p className="text-xs text-slate-600 mt-1">
-              Generate → edit Markdown → preview → approve → enqueue email.
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              onClick={() =>
-                setMarkdown(defaultMarkdown(selectedParticipant?.name?.trim() || "there"))
-              }
-              disabled={!selectedParticipant}
-              className="bg-teal-500 hover:bg-teal-600 text-white"
-            >
-              Generate Draft (mock)
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setMarkdown("")}
-              disabled={!markdown}
-            >
-              Clear
-            </Button>
-          </div>
-
-          <div className="text-xs text-slate-500 leading-5">
-            This is a UI preview only. Next step will wire generation + approvals to `email_jobs`.
-          </div>
-        </div>
-
-        {/* Editor */}
-        <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 flex flex-col min-h-0 lg:col-span-1">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-bold text-slate-900">Markdown</h2>
-            <span className="text-xs text-slate-500">{markdown.length} chars</span>
-          </div>
-          <textarea
-            value={markdown}
-            onChange={(e) => setMarkdown(e.target.value)}
-            placeholder="Write report content in Markdown..."
-            className="flex-1 min-h-0 w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
-          />
-        </div>
-
-        {/* Preview */}
-        <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 flex flex-col min-h-0 lg:col-span-1">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-bold text-slate-900">Preview</h2>
-            <span className="text-xs text-slate-500">Email body</span>
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
-            {markdown.trim().length === 0 ? (
-              <p className="text-sm text-slate-400">Nothing to preview yet.</p>
-            ) : (
-              <div className="text-sm text-slate-900 leading-6">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+      <div className="flex-1 min-h-0 bg-white rounded-2xl border-2 border-slate-100 overflow-hidden flex">
+        {/* Left: participants */}
+        <div className="w-72 border-r-2 border-slate-100 flex flex-col min-h-0">
+          <div className="p-4 border-b-2 border-slate-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-slate-900">Participants</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{participants.length} total</p>
               </div>
+              {approvedCount > 0 ? (
+                <span className="inline-flex min-w-8 h-7 px-2 bg-teal-500 text-white text-sm font-bold rounded-full items-center justify-center">
+                  {approvedCount}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {isLoading ? (
+              <div className="p-4 text-sm text-slate-500">Loading…</div>
+            ) : participants.length === 0 ? (
+              <div className="p-4 text-sm text-slate-500">No participants.</div>
+            ) : (
+              participants.map((p) => {
+                const status = statusByParticipant[p.id] ?? "pending";
+                const selected = p.id === selectedParticipantId;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedParticipantId(p.id)}
+                    className={`w-full px-4 py-3 text-left border-b border-slate-50 transition-colors ${
+                      selected ? "bg-teal-50 border-l-4 border-l-teal-500" : "hover:bg-slate-50 border-l-4 border-l-transparent"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 truncate">
+                          {formatParticipantLabel(p)}
+                        </p>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide mt-1">
+                          <span
+                            className={
+                              status === "approved"
+                                ? "text-emerald-600"
+                                : "text-amber-600"
+                            }
+                          >
+                            {status}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
             )}
+          </div>
+        </div>
+
+        {/* Right: main */}
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          {/* Top summary bar */}
+          <div className="p-4 border-b-2 border-slate-100 bg-slate-50/50">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900 truncate">
+                  {selectedParticipant ? formatParticipantLabel(selectedParticipant) : "Select a participant"}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Status:{" "}
+                  <span className={selectedStatus === "approved" ? "text-emerald-700 font-semibold" : "text-amber-700 font-semibold"}>
+                    {selectedStatus === "approved" ? "Approved" : "Awaiting approval"}
+                  </span>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!selectedParticipant) return;
+                    setStatusByParticipant((prev) => ({
+                      ...prev,
+                      [selectedParticipant.id]: (prev[selectedParticipant.id] ?? "pending") === "approved" ? "pending" : "approved",
+                    }));
+                  }}
+                  disabled={!selectedParticipant}
+                  className="border-slate-300"
+                >
+                  {selectedStatus === "approved" ? "Mark Pending" : "Approve"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Content columns */}
+          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-0">
+            {/* Draft preview */}
+            <div className="min-h-0 border-b-2 lg:border-b-0 lg:border-r-2 border-slate-100 flex flex-col">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                <p className="text-sm font-bold text-slate-900">Current AI draft</p>
+                <Button
+                  onClick={() => {
+                    if (!selectedParticipant) return;
+                    setMarkdownByParticipant((prev) => ({
+                      ...prev,
+                      [selectedParticipant.id]: defaultMarkdown(selectedParticipant.name?.trim() || "there"),
+                    }));
+                  }}
+                  disabled={!selectedParticipant}
+                  className="bg-slate-900 hover:bg-slate-800 text-white"
+                  size="sm"
+                >
+                  Regenerate (mock)
+                </Button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-slate-900">
+                <div className="max-w-2xl mx-auto rounded-2xl bg-slate-800/60 border border-slate-700 p-6">
+                  {markdown.trim().length === 0 ? (
+                    <p className="text-sm text-slate-400">No draft yet.</p>
+                  ) : (
+                    <div className="prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Editor + chat */}
+            <div className="min-h-0 flex flex-col">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                <p className="text-sm font-bold text-slate-900">Editor & AI chat</p>
+                <span className="text-xs text-slate-500">{markdown.length} chars</span>
+              </div>
+
+              <div className="flex-1 min-h-0 grid grid-rows-2">
+                {/* Markdown editor */}
+                <div className="p-4 border-b-2 border-slate-100 min-h-0 flex flex-col">
+                  <textarea
+                    value={markdown}
+                    onChange={(e) => {
+                      if (!selectedParticipant) return;
+                      const v = e.target.value;
+                      setMarkdownByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: v }));
+                      setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+                    }}
+                    placeholder="Edit the draft in Markdown..."
+                    disabled={!selectedParticipant}
+                    className="flex-1 min-h-0 w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300 resize-none disabled:opacity-50"
+                  />
+                  <p className="text-xs text-slate-500 mt-2">
+                    Editing marks the report as pending.
+                  </p>
+                </div>
+
+                {/* Chat */}
+                <div className="p-4 min-h-0 flex flex-col">
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    {chat.length === 0 ? (
+                      <p className="text-sm text-slate-500">
+                        Add feedback like “make it more encouraging” and regenerate.
+                      </p>
+                    ) : (
+                      chat.map((m) => (
+                        <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                          <div
+                            className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                              m.role === "user"
+                                ? "bg-teal-500 text-white rounded-br-md"
+                                : "bg-white border border-slate-200 text-slate-900 rounded-bl-md"
+                            }`}
+                          >
+                            {m.content}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex gap-2 items-center">
+                    <input
+                      value={feedbackInput}
+                      onChange={(e) => setFeedbackInput(e.target.value)}
+                      placeholder="Add feedback for the AI…"
+                      disabled={!selectedParticipant}
+                      className="flex-1 h-10 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300 disabled:opacity-50"
+                    />
+                    <Button
+                      onClick={() => {
+                        if (!selectedParticipant) return;
+                        const text = feedbackInput.trim();
+                        if (!text) return;
+                        setFeedbackInput("");
+                        setChatByParticipant((prev) => ({
+                          ...prev,
+                          [selectedParticipant.id]: [
+                            ...(prev[selectedParticipant.id] ?? []),
+                            { id: createId("user"), role: "user", content: text },
+                            {
+                              id: createId("ai"),
+                              role: "assistant",
+                              content: "Got it. Click Regenerate to apply this feedback (mock).",
+                            },
+                          ],
+                        }));
+                      }}
+                      disabled={!selectedParticipant || feedbackInput.trim().length === 0}
+                      className="bg-teal-500 hover:bg-teal-600 text-white"
+                    >
+                      Send
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
