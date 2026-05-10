@@ -124,6 +124,25 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
     return response.json();
   }, []);
 
+  const computeLocalPresetRange = useCallback(
+    (preset: DateRangePreset): { from?: string; to?: string } => {
+      if (preset === "all") return {};
+      const now = new Date();
+      const startOfTodayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const startOfTomorrowLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+
+      if (preset === "today") {
+        return { from: startOfTodayLocal.toISOString(), to: startOfTomorrowLocal.toISOString() };
+      }
+
+      const days = preset === "7d" ? 7 : 30;
+      const start = new Date(startOfTodayLocal);
+      start.setDate(start.getDate() - (days - 1));
+      return { from: start.toISOString(), to: startOfTomorrowLocal.toISOString() };
+    },
+    []
+  );
+
   // Fetch conversation list
   const fetchList = useCallback(async () => {
     setIsLoadingList(true);
@@ -132,30 +151,6 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
     try {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
-
-      const computeLocalPresetRange = (preset: DateRangePreset): { from?: string; to?: string } => {
-        if (preset === "all") return {};
-        const now = new Date();
-        const startOfTodayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-        const startOfTomorrowLocal = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() + 1,
-          0,
-          0,
-          0,
-          0
-        );
-
-        if (preset === "today") {
-          return { from: startOfTodayLocal.toISOString(), to: startOfTomorrowLocal.toISOString() };
-        }
-
-        const days = preset === "7d" ? 7 : 30;
-        const start = new Date(startOfTodayLocal);
-        start.setDate(start.getDate() - (days - 1));
-        return { from: start.toISOString(), to: startOfTomorrowLocal.toISOString() };
-      };
 
       const { from, to } = computeLocalPresetRange(dateRange);
       if (from) params.set("dateFrom", from);
@@ -174,7 +169,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
     } finally {
       setIsLoadingList(false);
     }
-  }, [adminFetch, debouncedSearch, dateRange]);
+  }, [adminFetch, debouncedSearch, dateRange, computeLocalPresetRange]);
 
   // Fetch thread for selected participant
   const fetchThread = useCallback(async (participantId: string) => {
@@ -182,20 +177,10 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
 
     try {
       const params = new URLSearchParams();
-      const now = new Date();
-      const startOfTodayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-      const startOfTomorrowLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
       if (dateRange !== "all") {
-        if (dateRange === "today") {
-          params.set("dateFrom", startOfTodayLocal.toISOString());
-          params.set("dateTo", startOfTomorrowLocal.toISOString());
-        } else {
-          const days = dateRange === "7d" ? 7 : 30;
-          const start = new Date(startOfTodayLocal);
-          start.setDate(start.getDate() - (days - 1));
-          params.set("dateFrom", start.toISOString());
-          params.set("dateTo", startOfTomorrowLocal.toISOString());
-        }
+        const { from, to } = computeLocalPresetRange(dateRange);
+        if (from) params.set("dateFrom", from);
+        if (to) params.set("dateTo", to);
       }
 
       const qs = params.toString();
@@ -207,7 +192,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
     } finally {
       setIsLoadingThread(false);
     }
-  }, [adminFetch, dateRange]);
+  }, [adminFetch, dateRange, computeLocalPresetRange]);
 
   // Initial fetch
   useEffect(() => {
@@ -445,6 +430,22 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
               By Participant
             </Button>
           </div>
+
+          {/* Date range (desktop) */}
+          <div className="hidden sm:block">
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as DateRangePreset)}
+              className="h-9 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              aria-label="Date range"
+            >
+              <option value="today">Today</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="all">All time</option>
+            </select>
+          </div>
+
           {/* Mobile sidebar toggle */}
           <Button
             variant="outline"
@@ -477,17 +478,17 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
               className="text-sm shadow-none"
             />
 
-            {/* Date range */}
+            {/* Date range (mobile) */}
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value as DateRangePreset)}
-              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full"
+              className="sm:hidden h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full"
               aria-label="Date range"
             >
-              <option value="all">All time</option>
               <option value="today">Today</option>
               <option value="7d">Last 7 days</option>
               <option value="30d">Last 30 days</option>
+              <option value="all">All time</option>
             </select>
 
             {/* Mobile view mode toggle */}
