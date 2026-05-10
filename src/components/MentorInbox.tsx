@@ -586,6 +586,8 @@ export function MentorInbox({
         },
         (payload) => {
           const newMessage = payload.new as SMSMessage;
+          const commitTsRaw = (payload as unknown as { commit_timestamp?: unknown }).commit_timestamp;
+          const commitTs = typeof commitTsRaw === "string" ? commitTsRaw : null;
 
           // Hide noisy Twilio auto-replies in the UI
           if (newMessage.message_type === "system_auto_reply") {
@@ -594,7 +596,10 @@ export function MentorInbox({
 
           // Update last-message cache (drives sidebar ordering).
           const pid = newMessage.participant_id;
-          const createdAt = newMessage.created_at;
+          const createdAt =
+            typeof newMessage.created_at === "string"
+              ? newMessage.created_at
+              : (commitTs ?? null);
           if (pid && createdAt) {
             setLastMessageByParticipantId((prev) => {
               const current = prev[pid];
@@ -621,11 +626,11 @@ export function MentorInbox({
             // If an inbound message arrives while the thread is open, treat it as read.
             // Use the DB timestamp to avoid client/server clock skew.
             if (newMessage.direction === "inbound") {
-              if (typeof newMessage.created_at === "string") {
-                setLastSeen(newMessage.participant_id, newMessage.created_at);
-              } else {
-                setLastSeen(newMessage.participant_id, new Date().toISOString());
-              }
+              const seenAt =
+                (typeof newMessage.created_at === "string" ? newMessage.created_at : null) ??
+                commitTs ??
+                new Date().toISOString();
+              setLastSeen(newMessage.participant_id, seenAt);
               setUnreadCounts((prev) => {
                 if (!prev[newMessage.participant_id]) return prev;
                 const next = { ...prev };
@@ -667,11 +672,11 @@ export function MentorInbox({
             // If the thread is open, treat as read; otherwise mark unread.
             if (newMessage.participant_id === selectedParticipant?.id) {
               // Use the DB timestamp to avoid client/server clock skew.
-              if (typeof newMessage.created_at === "string") {
-                setLastSeen(newMessage.participant_id, newMessage.created_at);
-              } else {
-                setLastSeen(newMessage.participant_id, new Date().toISOString());
-              }
+              const seenAt =
+                (typeof newMessage.created_at === "string" ? newMessage.created_at : null) ??
+                commitTs ??
+                new Date().toISOString();
+              setLastSeen(newMessage.participant_id, seenAt);
             } else {
               setUnreadCounts((prev) => ({
                 ...prev,
