@@ -65,6 +65,7 @@ type ThreadData = {
 };
 
 type ViewMode = "mentor" | "participant";
+type DateRangePreset = "today" | "7d" | "30d" | "all";
 
 /**
  * MessageViewer - Admin view for browsing all SMS conversations
@@ -85,6 +86,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateRange, setDateRange] = useState<DateRangePreset>("all");
 
   // Loading state
   const [isLoadingList, setIsLoadingList] = useState(true);
@@ -131,6 +133,34 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
 
+      const computeLocalPresetRange = (preset: DateRangePreset): { from?: string; to?: string } => {
+        if (preset === "all") return {};
+        const now = new Date();
+        const startOfTodayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const startOfTomorrowLocal = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() + 1,
+          0,
+          0,
+          0,
+          0
+        );
+
+        if (preset === "today") {
+          return { from: startOfTodayLocal.toISOString(), to: startOfTomorrowLocal.toISOString() };
+        }
+
+        const days = preset === "7d" ? 7 : 30;
+        const start = new Date(startOfTodayLocal);
+        start.setDate(start.getDate() - (days - 1));
+        return { from: start.toISOString(), to: startOfTomorrowLocal.toISOString() };
+      };
+
+      const { from, to } = computeLocalPresetRange(dateRange);
+      if (from) params.set("dateFrom", from);
+      if (to) params.set("dateTo", to);
+
       const queryString = params.toString();
       const url = `/api/admin/messages${queryString ? `?${queryString}` : ""}`;
 
@@ -144,14 +174,32 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
     } finally {
       setIsLoadingList(false);
     }
-  }, [adminFetch, debouncedSearch]);
+  }, [adminFetch, debouncedSearch, dateRange]);
 
   // Fetch thread for selected participant
   const fetchThread = useCallback(async (participantId: string) => {
     setIsLoadingThread(true);
 
     try {
-      const data = await adminFetch(`/api/admin/messages/${participantId}`);
+      const params = new URLSearchParams();
+      const now = new Date();
+      const startOfTodayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const startOfTomorrowLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+      if (dateRange !== "all") {
+        if (dateRange === "today") {
+          params.set("dateFrom", startOfTodayLocal.toISOString());
+          params.set("dateTo", startOfTomorrowLocal.toISOString());
+        } else {
+          const days = dateRange === "7d" ? 7 : 30;
+          const start = new Date(startOfTodayLocal);
+          start.setDate(start.getDate() - (days - 1));
+          params.set("dateFrom", start.toISOString());
+          params.set("dateTo", startOfTomorrowLocal.toISOString());
+        }
+      }
+
+      const qs = params.toString();
+      const data = await adminFetch(`/api/admin/messages/${participantId}${qs ? `?${qs}` : ""}`);
       setThreadData(data);
     } catch (err) {
       console.error("Error fetching thread:", err);
@@ -159,7 +207,7 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
     } finally {
       setIsLoadingThread(false);
     }
-  }, [adminFetch]);
+  }, [adminFetch, dateRange]);
 
   // Initial fetch
   useEffect(() => {
@@ -428,6 +476,19 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="text-sm shadow-none"
             />
+
+            {/* Date range */}
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as DateRangePreset)}
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full"
+              aria-label="Date range"
+            >
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+            </select>
 
             {/* Mobile view mode toggle */}
             <div className="sm:hidden flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">

@@ -82,10 +82,8 @@ export async function GET(request: Request) {
       messageQuery = messageQuery.gte("created_at", dateFrom);
     }
     if (dateTo) {
-      // Add end of day
-      const endDate = new Date(dateTo);
-      endDate.setHours(23, 59, 59, 999);
-      messageQuery = messageQuery.lte("created_at", endDate.toISOString());
+      // Treat dateTo as an exclusive upper bound (ISO timestamp).
+      messageQuery = messageQuery.lt("created_at", dateTo);
     }
 
     const { data: messages, error: messagesError } = await messageQuery;
