@@ -15,6 +15,9 @@ export async function GET(request: Request, { params }: RouteParams) {
   if (!guard.ok) return guard.response;
 
   const admin = guard.admin;
+  const url = new URL(request.url);
+  const dateFrom = url.searchParams.get("dateFrom");
+  const dateTo = url.searchParams.get("dateTo");
   const { participantId } = await params;
 
   if (!participantId) {
@@ -68,11 +71,23 @@ export async function GET(request: Request, { params }: RouteParams) {
     }
 
     // Fetch all messages for this participant
-    const { data: messages, error: messagesError } = await admin
+    let messagesQuery = admin
       .from("sms_messages")
-      .select("id, participant_id, mentor_id, direction, message_type, message_body, phone_number, twilio_status, failure_reason, created_at")
+      .select(
+        "id, participant_id, mentor_id, direction, message_type, message_body, phone_number, twilio_status, failure_reason, created_at"
+      )
       .eq("participant_id", participantId)
       .order("created_at", { ascending: true });
+
+    if (dateFrom) {
+      messagesQuery = messagesQuery.gte("created_at", dateFrom);
+    }
+    if (dateTo) {
+      // Treat dateTo as an exclusive upper bound (ISO timestamp).
+      messagesQuery = messagesQuery.lt("created_at", dateTo);
+    }
+
+    const { data: messages, error: messagesError } = await messagesQuery;
 
     if (messagesError) {
       console.error("Error fetching messages:", messagesError);

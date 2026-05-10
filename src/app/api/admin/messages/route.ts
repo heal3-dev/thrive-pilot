@@ -20,6 +20,7 @@ export async function GET(request: Request) {
   const search = url.searchParams.get("search")?.trim().toLowerCase();
   const dateFrom = url.searchParams.get("dateFrom");
   const dateTo = url.searchParams.get("dateTo");
+  const hasDateFilter = Boolean(dateFrom || dateTo);
 
   try {
     // Fetch all mentors (non-admin) for grouping
@@ -82,10 +83,8 @@ export async function GET(request: Request) {
       messageQuery = messageQuery.gte("created_at", dateFrom);
     }
     if (dateTo) {
-      // Add end of day
-      const endDate = new Date(dateTo);
-      endDate.setHours(23, 59, 59, 999);
-      messageQuery = messageQuery.lte("created_at", endDate.toISOString());
+      // Treat dateTo as an exclusive upper bound (ISO timestamp).
+      messageQuery = messageQuery.lt("created_at", dateTo);
     }
 
     const { data: messages, error: messagesError } = await messageQuery;
@@ -139,37 +138,38 @@ export async function GET(request: Request) {
       });
     }
 
-    // Group participants by mentor and filter mentors by search
+    // If date filtering is active, only keep threads with at least one message in the period.
+    const threadsInPeriod = hasDateFilter
+      ? filteredParticipants.filter((p) => (p.messageCount ?? 0) > 0)
+      : filteredParticipants;
+
+    // Group participants by mentor. Only include mentors with at least one participant thread.
     const mentorGroups = (mentors || [])
-      .filter((mentor) => {
-        // If no search, show all mentors
-        if (!search) return true;
-        // Filter mentors by name/email matching search
-        const mentorName = mentor.name?.toLowerCase() || "";
-        const mentorEmail = mentor.email?.toLowerCase() || "";
-        return mentorName.includes(search) || mentorEmail.includes(search);
-      })
       .map((mentor) => {
-        const mentorParticipants = filteredParticipants.filter((p) => p.currentMentorId === mentor.id);
+        const mentorParticipants = threadsInPeriod.filter((p) => p.currentMentorId === mentor.id);
         return {
           mentor,
           participants: mentorParticipants,
-          totalMessages: mentorParticipants.reduce((sum, p) => sum + p.messageCount, 0),
+          totalMessages: mentorParticipants.reduce((sum, p) => sum + (p.messageCount ?? 0), 0),
         };
-      });
+      })
+      .filter((g) => g.participants.length > 0);
 
     // Add unassigned participants group
-    const unassignedParticipants = filteredParticipants.filter((p) => !p.currentMentorId);
-    const unassignedGroup = {
-      mentor: null,
-      participants: unassignedParticipants,
-      totalMessages: unassignedParticipants.reduce((sum, p) => sum + p.messageCount, 0),
-    };
+    const unassignedParticipants = threadsInPeriod.filter((p) => !p.currentMentorId);
+    const unassignedGroup =
+      unassignedParticipants.length > 0
+        ? {
+            mentor: null,
+            participants: unassignedParticipants,
+            totalMessages: unassignedParticipants.reduce((sum, p) => sum + (p.messageCount ?? 0), 0),
+          }
+        : null;
 
     return NextResponse.json({
       mentorGroups,
       unassignedGroup,
-      allParticipants: filteredParticipants,
+      allParticipants: threadsInPeriod,
       allMentors: mentors || [],
     });
   } catch (err) {
