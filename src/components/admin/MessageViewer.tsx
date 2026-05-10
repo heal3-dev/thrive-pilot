@@ -411,6 +411,21 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
           <BackButton onClick={onBack} />
         </div>
         <div className="flex items-center gap-2">
+          {/* Date range (desktop) */}
+          <div className="hidden sm:block">
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as DateRangePreset)}
+              className="h-9 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              aria-label="Date range"
+            >
+              <option value="today">Today</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="all">All time</option>
+            </select>
+          </div>
+
           {/* View mode toggle */}
           <div className="hidden sm:flex gap-2">
             <Button
@@ -429,21 +444,6 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
             >
               By Participant
             </Button>
-          </div>
-
-          {/* Date range (desktop) */}
-          <div className="hidden sm:block">
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value as DateRangePreset)}
-              className="h-9 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
-              aria-label="Date range"
-            >
-              <option value="today">Today</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="all">All time</option>
-            </select>
           </div>
 
           {/* Mobile sidebar toggle */}
