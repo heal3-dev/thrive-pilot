@@ -35,9 +35,11 @@
     "twilio": "^5.11.2",
     "zod": "^4.3.5"
   },
-  "overrides": {
-    "svix": "1.92.2",
-    "postcss": "8.5.13"
+  "pnpm": {
+    "overrides": {
+      "svix": "1.92.2",
+      "postcss": "8.5.13"
+    }
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
