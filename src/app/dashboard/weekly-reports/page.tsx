@@ -99,6 +99,7 @@ export default function WeeklyReportsPage() {
     Record<string, { canGenerate: boolean; reason: string | null }>
   >({});
   const selectedDataStatus = selectedParticipant ? dataStatusByParticipant[selectedParticipant.id] : null;
+  const hasSelectedDraft = Boolean(selectedParticipant && (htmlByParticipant[selectedParticipant.id] ?? "").trim().length > 0);
 
   const [statusByParticipant, setStatusByParticipant] = useState<Record<string, ParticipantStatus>>({});
   const selectedStatus: ParticipantStatus =
@@ -768,7 +769,7 @@ export default function WeeklyReportsPage() {
                     className="bg-teal-500 hover:bg-teal-600 text-white"
                     size="sm"
                   >
-                    {isGenerating ? "Generating…" : "Generate from data"}
+                    {isGenerating ? "Generating…" : hasSelectedDraft ? "Regenerate" : "Generate from data"}
                   </Button>
                 </div>
               </div>
