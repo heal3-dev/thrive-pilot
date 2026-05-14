@@ -18,6 +18,24 @@ type OpenAIChatResponse = {
   }>;
 };
 
+type CardContent = {
+  state: string;
+  body: string;
+  support1Label: string;
+  support1Text: string;
+  support2Label: string;
+  support2Text: string;
+};
+
+type GeneratedContent = {
+  badgeText: string;
+  stress: CardContent;
+  sleep: CardContent;
+  recovery: CardContent;
+  meaningParagraph: string;
+  assistantMessage?: string;
+};
+
 function escapeHtml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -50,6 +68,84 @@ function badgeFromFinalColor(color: WeeklyFlag["finalColor"]): { label: string; 
     case "red":
       return { label: "High Strain", icon: "🔴" };
   }
+}
+
+function replaceFirst(html: string, re: RegExp, inner: string): string {
+  return html.replace(re, (_m, p1, _p2, p3) => `${p1}${inner}${p3}`);
+}
+
+function replaceAllNth(html: string, re: RegExp, replacements: string[]): string {
+  let i = 0;
+  return html.replace(re, (m) => {
+    const next = i < replacements.length ? replacements[i] : m;
+    i += 1;
+    return next;
+  });
+}
+
+function fillOlgaTemplate(params: {
+  baseHtml: string;
+  participantName: string;
+  weekRange: string;
+  badgeLabel: string;
+  badgeIcon: string;
+  content: GeneratedContent;
+}): string {
+  const safeName = escapeHtml(params.participantName);
+  const safeRange = escapeHtml(params.weekRange);
+
+  let html = params.baseHtml;
+
+  // Top section
+  html = replaceFirst(html, /(<h1[^>]*>)([\s\S]*?)(<\/h1>)/i, safeName);
+  html = replaceFirst(html, /(<p\s+class="sub"[^>]*>)([\s\S]*?)(<\/p>)/i, safeRange);
+  html = replaceFirst(html, /(<div\s+class="icon"[^>]*>)([\s\S]*?)(<\/div>)/i, escapeHtml(params.badgeIcon));
+  html = replaceFirst(html, /(<p\s+class="badge-title"[^>]*>)([\s\S]*?)(<\/p>)/i, escapeHtml(params.badgeLabel));
+  html = replaceFirst(html, /(<p\s+class="badge-text"[^>]*>)([\s\S]*?)(<\/p>)/i, escapeHtml(params.content.badgeText));
+
+  // Cards (exactly 3, in order: Stress, Sleep, Recovery)
+  const cards = params.content;
+  const cardContents: Array<{ c: CardContent }> = [{ c: cards.stress }, { c: cards.sleep }, { c: cards.recovery }];
+
+  const sectionRe = /<section\s+class="card"[^>]*>[\s\S]*?<\/section>/gi;
+  const sections = html.match(sectionRe) ?? [];
+  if (sections.length >= 3) {
+    const updatedSections = sections.map((section, idx) => {
+      if (idx >= 3) return section;
+      const cc = cardContents[idx]!.c;
+      let s = section;
+      s = replaceFirst(s, /(<div\s+class="state"[^>]*>)([\s\S]*?)(<\/div>)/i, escapeHtml(cc.state));
+      s = replaceFirst(s, /(<p\s+class="body"[^>]*>)([\s\S]*?)(<\/p>)/i, escapeHtml(cc.body));
+
+      // Two support boxes: label + text each, in order
+      const labels: string[] = [cc.support1Label, cc.support2Label].map((x) => `${escapeHtml(x)}`);
+      const texts: string[] = [cc.support1Text, cc.support2Text].map((x) => `${escapeHtml(x)}`);
+
+      s = replaceAllNth(
+        s,
+        /<p\s+class="support-label"[^>]*>[\s\S]*?<\/p>/gi,
+        labels.map((x) => `<p class="support-label">${x}</p>`)
+      );
+      s = replaceAllNth(
+        s,
+        /<p\s+class="support-text"[^>]*>[\s\S]*?<\/p>/gi,
+        texts.map((x) => `<p class="support-text">${x}</p>`)
+      );
+      return s;
+    });
+    html = replaceAllNth(html, sectionRe, updatedSections);
+  }
+
+  // Meaning section: replace the first paragraph only; keep the fixed closing line intact.
+  html = html.replace(/(<section\s+class="meaning"[\s\S]*?<h2[^>]*>[\s\S]*?<\/h2>)([\s\S]*?)(<\/section>)/i, (m) => {
+    // Replace the first <p> after the <h2>.
+    const replaced = m.replace(/(<h2[^>]*>[\s\S]*?<\/h2>\s*<p[^>]*>)([\s\S]*?)(<\/p>)/i, (_m2, p1, _p2, p3) => {
+      return `${p1}${escapeHtml(params.content.meaningParagraph)}${p3}`;
+    });
+    return replaced;
+  });
+
+  return html;
 }
 
 export async function POST(request: Request) {
@@ -172,12 +268,20 @@ export async function POST(request: Request) {
     // fall back below
   }
 
+  if (!baseHtml || baseHtml.trim().length === 0) {
+    return NextResponse.json(
+      { error: "Missing html_base_template. Set it in Weekly Reports → Templates first." },
+      { status: 400 }
+    );
+  }
+
   const defaultGenerateWrapper = [
-    "You generate a Thrive Weekly Report as a complete HTML document.",
-    "Return JSON only with keys: assistantMessage (string), updatedHtml (string).",
-    "Use the provided BASE_HTML as the layout. Do not add scripts.",
-    "You MUST keep the fixed structure rules from MASTER_RULES.",
-    "Never mention points, thresholds, or internal scoring; translate into supportive language.",
+    "You generate content for a Thrive Weekly Report.",
+    "Return JSON only with keys: assistantMessage (string, optional), badgeText (string), stress (object), sleep (object), recovery (object), meaningParagraph (string).",
+    "Each card object must have: state, body, support1Label, support1Text, support2Label, support2Text (all strings).",
+    "Use MASTER_RULES for tone and structure. Never mention points, thresholds, or internal scoring.",
+    "The HTML layout is fixed and will be filled separately; do not output HTML.",
+    "The closing line must remain exactly: Reach out to your peer mentor if you have questions or need support.",
   ].join(" ");
 
   const system = [
@@ -196,8 +300,9 @@ export async function POST(request: Request) {
     "WEEKLY_FLAG_JSON:",
     JSON.stringify(weeklyFlag, null, 2),
     "",
-    "BASE_HTML (edit text content to match this participant + week):",
-    baseHtml.trim() ? baseHtml : "(missing html_base_template template)",
+    "IMPORTANT:",
+    "- Use the weekly_flag metrics colors to drive your narrative.",
+    "- Stress card should reflect stress metric; Sleep card should reflect sleep duration/score/WASO; Recovery card should reflect body battery + HRV + HRV stability + RHR where relevant.",
   ].join("\n");
 
   const model = process.env.OPENAI_WEEKLY_REPORT_MODEL ?? "gpt-4o-mini";
@@ -232,7 +337,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "OpenAI returned empty response" }, { status: 502 });
   }
 
-  let parsed: { assistantMessage?: unknown; updatedHtml?: unknown };
+  let parsed: GeneratedContent & { [k: string]: unknown };
   try {
     parsed = JSON.parse(content);
   } catch {
@@ -242,9 +347,30 @@ export async function POST(request: Request) {
     );
   }
 
-  const assistantMessage =
-    typeof parsed.assistantMessage === "string" ? parsed.assistantMessage : "Generated the weekly report draft.";
-  const updatedHtml = typeof parsed.updatedHtml === "string" ? parsed.updatedHtml : baseHtml;
+  // Minimal shape validation (server-side) to avoid injecting undefined.
+  const isCard = (v: unknown): v is CardContent =>
+    typeof v === "object" &&
+    v !== null &&
+    ["state", "body", "support1Label", "support1Text", "support2Label", "support2Text"].every(
+      (k) => typeof (v as Record<string, unknown>)[k] === "string"
+    );
+
+  if (typeof parsed.badgeText !== "string" || !isCard(parsed.stress) || !isCard(parsed.sleep) || !isCard(parsed.recovery) || typeof parsed.meaningParagraph !== "string") {
+    return NextResponse.json(
+      { error: "OpenAI returned invalid JSON shape (missing required fields)" },
+      { status: 502 }
+    );
+  }
+
+  const assistantMessage = typeof parsed.assistantMessage === "string" ? parsed.assistantMessage : "Generated the weekly report draft.";
+  const updatedHtml = fillOlgaTemplate({
+    baseHtml,
+    participantName: participant.name?.trim() || participantLabel,
+    weekRange,
+    badgeLabel: badge.label,
+    badgeIcon: badge.icon,
+    content: parsed,
+  });
 
   return NextResponse.json({
     participantLabel,
