@@ -46,22 +46,30 @@ export async function POST(request: Request) {
   ].join("\n\n");
 
   // Use Chat Completions for broad compatibility.
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.4,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  });
+  async function callWithModel(modelName: string) {
+    return fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelName,
+        temperature: 0.4,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+  }
+
+  let res = await callWithModel(model);
+  if (!res.ok && res.status === 404 && model !== "gpt-4o-mini") {
+    // Graceful fallback if the configured model slug is invalid/unavailable.
+    res = await callWithModel("gpt-4o-mini");
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
