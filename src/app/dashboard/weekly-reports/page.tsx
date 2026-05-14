@@ -804,7 +804,7 @@ export default function WeeklyReportsPage() {
 
       <div className="flex-1 min-h-0 bg-white rounded-2xl border-2 border-slate-100 overflow-hidden flex">
         {/* Left: participants */}
-        <div className="w-72 border-r-2 border-slate-100 flex flex-col min-h-0">
+        <div className="w-60 border-r-2 border-slate-100 flex flex-col min-h-0">
           <div className="p-4 border-b-2 border-slate-100">
             <div className="flex items-center justify-between">
               <div>
@@ -897,7 +897,7 @@ export default function WeeklyReportsPage() {
           </div>
 
           {/* Content columns */}
-          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-0">
+          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-0">
             {/* HTML preview */}
             <div className="min-h-0 border-b-2 lg:border-b-0 lg:border-r-2 border-slate-100 flex flex-col">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
