@@ -795,20 +795,11 @@ export default function WeeklyReportsPage() {
                   }}
                   disabled={isSavingTemplate}
                   className="border-slate-300"
+                  size="sm"
                 >
                   Seed default
                 </Button>
               ) : null}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setTemplateDraftByKey((prev) => ({ ...prev, [templateKey]: DEFAULT_TEMPLATES[templateKey] }));
-                }}
-                disabled={isSavingTemplate}
-                className="border-slate-300"
-              >
-                Reset to default
-              </Button>
               <Button
                 onClick={async () => {
                   const content = (templateDraftByKey[templateKey] ?? "").trimEnd();
@@ -853,6 +844,7 @@ export default function WeeklyReportsPage() {
                 }}
                 disabled={isSavingTemplate}
                 className="bg-teal-500 hover:bg-teal-600 text-white"
+                size="sm"
               >
                 {isSavingTemplate ? "Saving…" : "Save"}
               </Button>
