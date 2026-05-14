@@ -25,6 +25,14 @@ type ChatMessage = {
   content: string;
 };
 
+type WeeklyReportMeta = {
+  participantLabel: string;
+  weekEnding: string;
+  weekRange: string;
+  badgeLabel: string;
+  badgeIcon: string;
+};
+
 function formatParticipantLabel(p: ParticipantMini): string {
   return p.name?.trim() || p.email?.trim() || p.phone_number?.trim() || "Unnamed participant";
 }
@@ -92,6 +100,8 @@ export default function WeeklyReportsPage() {
 
   const [htmlByParticipant, setHtmlByParticipant] = useState<Record<string, string>>({});
   const html = selectedParticipant ? htmlByParticipant[selectedParticipant.id] ?? "" : "";
+  const [metaByParticipant, setMetaByParticipant] = useState<Record<string, WeeklyReportMeta>>({});
+  const selectedMeta = selectedParticipant ? metaByParticipant[selectedParticipant.id] ?? null : null;
   const [completenessByParticipant, setCompletenessByParticipant] = useState<
     Record<string, { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number }>
   >({});
@@ -117,6 +127,7 @@ export default function WeeklyReportsPage() {
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [outreachCopied, setOutreachCopied] = useState(false);
 
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
@@ -157,6 +168,18 @@ export default function WeeklyReportsPage() {
 
   const currentTemplateDraft = templateDraftByKey[templateKey] ?? "";
   const currentTemplateRow = templatesByKey[templateKey];
+
+  const formatReportTitleLine = useCallback((meta: WeeklyReportMeta) => {
+    return `Thrive Weekly Report ${meta.participantLabel} ${meta.weekRange} ${meta.badgeLabel} ${meta.badgeIcon}.`;
+  }, []);
+
+  const buildOutreachText = useCallback((meta: WeeklyReportMeta) => {
+    const first = meta.participantLabel.trim().split(/\s+/)[0] || meta.participantLabel.trim();
+    return [
+      `Hi ${first}, here’s your Thrive Weekly Report for ${meta.weekRange} — ${meta.badgeLabel} ${meta.badgeIcon}.`,
+      "Reply here if you’d like to talk through anything or want help choosing one thing to focus on this week.",
+    ].join(" ");
+  }, []);
 
   useEffect(() => {
     try {
@@ -453,20 +476,50 @@ export default function WeeklyReportsPage() {
         const j = (await res.json()) as {
           updatedHtml: string;
           assistantMessage?: string;
+          participantLabel?: string;
+          weekEnding?: string;
+          weekRange?: string;
+          badgeLabel?: string;
+          badgeIcon?: string;
           completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
         };
         if (cancelled) return;
 
         setHtmlByParticipant((prev) => ({ ...prev, [p.id]: j.updatedHtml ?? "" }));
         setStatusByParticipant((prev) => ({ ...prev, [p.id]: "pending" }));
+        if (j.weekRange && j.badgeLabel && j.badgeIcon) {
+          const weekRange = j.weekRange;
+          const badgeLabel = j.badgeLabel;
+          const badgeIcon = j.badgeIcon;
+          setMetaByParticipant((prev) => ({
+            ...prev,
+            [p.id]: {
+              participantLabel: j.participantLabel || formatParticipantLabel(p),
+              weekEnding: j.weekEnding || "",
+              weekRange,
+              badgeLabel,
+              badgeIcon,
+            },
+          }));
+        }
         if (j.completeness) {
           setCompletenessByParticipant((prev) => ({ ...prev, [p.id]: j.completeness! }));
         }
 
+        const nextMeta = j.weekRange && j.badgeLabel && j.badgeIcon
+          ? ({
+              participantLabel: j.participantLabel || formatParticipantLabel(p),
+              weekEnding: j.weekEnding || "",
+              weekRange: j.weekRange,
+              badgeLabel: j.badgeLabel,
+              badgeIcon: j.badgeIcon,
+            } as WeeklyReportMeta)
+          : null;
+
         const assistantMsg: ChatMessage = {
           id: createId("gen"),
           role: "assistant",
-          content: j.assistantMessage || "Generated the weekly report draft from this week’s data.",
+          content: nextMeta ? formatReportTitleLine(nextMeta) : "Generated the weekly report draft.",
         };
         setChatByParticipant((prev) => ({
           ...prev,
@@ -491,6 +544,7 @@ export default function WeeklyReportsPage() {
     templateDraftByKey.html_base_template,
     templatesByKey.html_base_template?.content,
     htmlByParticipant,
+    formatReportTitleLine,
   ]);
 
   useEffect(() => {
@@ -847,6 +901,8 @@ export default function WeeklyReportsPage() {
                         const token = sessionData?.session?.access_token;
                         if (!token) throw new Error("Authentication required");
 
+                        const participantLabel = formatParticipantLabel(selectedParticipant);
+
                         // Cheap status check first; avoid calling OpenAI for unconnected/no-data participants.
                         const statusRes = await fetch(
                           `/api/admin/weekly-reports/data-status?participantId=${encodeURIComponent(selectedParticipant.id)}`,
@@ -888,20 +944,50 @@ export default function WeeklyReportsPage() {
                         const j = (await res.json()) as {
                           updatedHtml: string;
                           assistantMessage?: string;
+                          participantLabel?: string;
+                          weekEnding?: string;
+                          weekRange?: string;
+                          badgeLabel?: string;
+                          badgeIcon?: string;
                           completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
                         };
                         const updatedHtml = j.updatedHtml ?? "";
 
                         setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: updatedHtml }));
                         setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+                        if (j.weekRange && j.badgeLabel && j.badgeIcon) {
+                          const weekRange = j.weekRange;
+                          const badgeLabel = j.badgeLabel;
+                          const badgeIcon = j.badgeIcon;
+                          setMetaByParticipant((prev) => ({
+                            ...prev,
+                            [selectedParticipant.id]: {
+                              participantLabel: j.participantLabel || participantLabel,
+                              weekEnding: j.weekEnding || "",
+                              weekRange,
+                              badgeLabel,
+                              badgeIcon,
+                            },
+                          }));
+                        }
                         if (j.completeness) {
                           setCompletenessByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: j.completeness! }));
                         }
 
+                        const nextMeta = j.weekRange && j.badgeLabel && j.badgeIcon
+                          ? ({
+                              participantLabel: j.participantLabel || participantLabel,
+                              weekEnding: j.weekEnding || "",
+                              weekRange: j.weekRange,
+                              badgeLabel: j.badgeLabel,
+                              badgeIcon: j.badgeIcon,
+                            } as WeeklyReportMeta)
+                          : null;
+
                         const assistantMsg: ChatMessage = {
                           id: createId("gen"),
                           role: "assistant",
-                          content: j.assistantMessage || "Generated the weekly report draft from this week’s data.",
+                          content: nextMeta ? formatReportTitleLine(nextMeta) : "Generated the weekly report draft.",
                         };
                         setChatByParticipant((prev) => ({
                           ...prev,
@@ -922,6 +1008,40 @@ export default function WeeklyReportsPage() {
                 </div>
               </div>
               <div ref={previewContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 bg-white">
+                {selectedMeta ? (
+                  <div className="mb-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900">Outreach text (copy/paste)</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Participant-facing SMS text you can send alongside the report.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-slate-300 shrink-0"
+                        onClick={async () => {
+                          try {
+                            const text = buildOutreachText(selectedMeta);
+                            await navigator.clipboard.writeText(text);
+                            setOutreachCopied(true);
+                            window.setTimeout(() => setOutreachCopied(false), 1200);
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                      >
+                        {outreachCopied ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    <textarea
+                      readOnly
+                      value={buildOutreachText(selectedMeta)}
+                      className="mt-3 w-full min-h-[88px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 resize-none"
+                    />
+                  </div>
+                ) : null}
                 {selectedCompleteness &&
                 (selectedCompleteness.calendarDaysPresent < selectedCompleteness.calendarDaysExpected ||
                   selectedCompleteness.sleepNightsPresent < selectedCompleteness.sleepNightsExpected) ? (
@@ -1109,7 +1229,7 @@ export default function WeeklyReportsPage() {
                           const assistantMsg: ChatMessage = {
                             id: createId("ai"),
                             role: "assistant",
-                            content: j.assistantMessage || "Updated the draft based on your feedback.",
+                            content: selectedMeta ? formatReportTitleLine(selectedMeta) : "Updated the weekly report draft.",
                           };
 
                           setChatByParticipant((prev) => ({

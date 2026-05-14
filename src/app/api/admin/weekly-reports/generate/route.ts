@@ -516,6 +516,8 @@ export async function POST(request: Request) {
     participantLabel,
     weekEnding,
     weekRange,
+    badgeLabel: badge.label,
+    badgeIcon: badge.icon,
     weeklyFlag,
     completeness,
     assistantMessage,
