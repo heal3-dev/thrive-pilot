@@ -7,6 +7,7 @@ import { useDashboard } from "@/app/dashboard/layout";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { BackButton } from "@/components/ui/back-button";
 import { DEFAULT_GENERATE_WRAPPER, DEFAULT_MASTER_RULES, DEFAULT_OLGA_HTML_BASE_TEMPLATE, DEFAULT_REVISE_WRAPPER } from "@/lib/weekly-reports/template-defaults";
 
 type ParticipantMini = {
@@ -376,26 +377,19 @@ export default function WeeklyReportsPage() {
   return (
     <div className="h-full min-h-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-clash text-2xl font-bold text-slate-900">Weekly Reports</h1>
-          <p className="text-sm text-slate-500 mt-1">Draft in HTML, preview, and approve.</p>
-        </div>
+        <BackButton onClick={() => router.push("/dashboard")} className="border-slate-300" />
+
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => setIsTemplatesOpen(true)}
             className="border-slate-300"
           >
             Templates
           </Button>
           <Button
-            variant="outline"
-            onClick={() => router.push("/dashboard")}
-            className="border-slate-300"
-          >
-            Back
-          </Button>
-          <Button
+            size="sm"
             onClick={() => {
               // UI-only placeholder for now.
               alert("Batch send (mock). Next step: enqueue weekly reports to email_jobs.");
