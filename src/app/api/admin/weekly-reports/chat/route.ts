@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const model = process.env.OPENAI_WEEKLY_REPORT_MODEL ?? "gpt-4o-mini";
+  const model = process.env.OPENAI_WEEKLY_REPORT_MODEL ?? "gpt-5.4-nano-2026-03-17";
 
   const system = [
     "You are an assistant helping an admin refine a weekly wellbeing report for a participant.",
