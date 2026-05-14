@@ -13,6 +13,34 @@ function escapeHtml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function normalizeCardStateLabel(input: string): string | null {
+  const s = input.trim();
+  if (!s) return null;
+  const m = /^(green|yellow|orange|red)\b[^\w]*$/i.exec(s);
+  if (!m) return null;
+  switch (m[1]!.toLowerCase()) {
+    case "green":
+      return "Mostly Stable 🟢";
+    case "yellow":
+      return "Mild Strain 🟡";
+    case "orange":
+      return "Strain Emerging 🟠";
+    case "red":
+      return "High Strain 🔴";
+    default:
+      return null;
+  }
+}
+
+function normalizeHtmlStateLabels(html: string): string {
+  return html.replace(/(<div\s+class="state"[^>]*>)([\s\S]*?)(<\/div>)/gi, (_m, p1: string, inner: string, p3: string) => {
+    const stripped = inner.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+    const normalized = normalizeCardStateLabel(stripped);
+    if (!normalized) return `${p1}${inner}${p3}`;
+    return `${p1}${escapeHtml(normalized)}${p3}`;
+  });
+}
+
 type TemplateRow = { key: string; content: string };
 type OpenAIChatResponse = {
   choices?: Array<{
@@ -138,6 +166,6 @@ export async function POST(request: Request) {
         ? parsed.updatedMarkdown
         : payload.currentHtml;
 
-  return NextResponse.json({ assistantMessage, updatedHtml });
+  return NextResponse.json({ assistantMessage, updatedHtml: normalizeHtmlStateLabels(updatedHtml) });
 }
 

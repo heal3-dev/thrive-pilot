@@ -175,6 +175,27 @@ function titleCaseStateLabel(input: string): string {
     .join(" ");
 }
 
+function normalizeCardStateLabel(input: string): string {
+  const s = input.trim();
+  if (!s) return s;
+  // Some model outputs use raw severity color words for card state (e.g. "Green").
+  // Olga's framework prefers interpretive labels; map color-only states to approved badge labels.
+  const m = /^(green|yellow|orange|red)\b[^\w]*$/i.exec(s);
+  if (!m) return s;
+  switch (m[1]!.toLowerCase()) {
+    case "green":
+      return "Mostly Stable 🟢";
+    case "yellow":
+      return "Mild Strain 🟡";
+    case "orange":
+      return "Strain Emerging 🟠";
+    case "red":
+      return "High Strain 🔴";
+    default:
+      return s;
+  }
+}
+
 function fillOlgaTemplate(params: {
   baseHtml: string;
   participantName: string;
@@ -209,7 +230,7 @@ function fillOlgaTemplate(params: {
       s = replaceFirst(
         s,
         /(<div\s+class="state"[^>]*>)([\s\S]*?)(<\/div>)/i,
-        escapeHtml(titleCaseStateLabel(cc.state))
+        escapeHtml(titleCaseStateLabel(normalizeCardStateLabel(cc.state)))
       );
       s = replaceFirst(s, /(<p\s+class="body"[^>]*>)([\s\S]*?)(<\/p>)/i, escapeHtml(cc.body));
 

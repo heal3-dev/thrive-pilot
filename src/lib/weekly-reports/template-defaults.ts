@@ -435,6 +435,7 @@ export const DEFAULT_GENERATE_WRAPPER = [
   "You generate content for a Thrive Weekly Report.",
   "Return JSON only with keys: assistantMessage (string, optional), badgeText (string), stress (object), sleep (object), recovery (object), meaningParagraph (string).",
   "Each card object must have: state, body, support1Label, support1Text, support2Label, support2Text (all strings).",
+  "For each card, state must be an interpretive label (NOT a raw color word like Green/Yellow/Orange/Red). If you must encode severity, use approved badge labels (Mostly Stable, Mild Strain, Strain Emerging, High Strain) optionally with the matching emoji.",
   "Use MASTER_RULES for tone and structure. Never mention points, thresholds, or internal scoring.",
   "The HTML layout is fixed and will be filled separately; do not output HTML.",
   "The closing line must remain exactly: Reach out to your peer mentor if you have questions or need support.",
