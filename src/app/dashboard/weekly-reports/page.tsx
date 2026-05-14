@@ -868,7 +868,7 @@ export default function WeeklyReportsPage() {
                   }}
                   disabled={!selectedParticipant}
                   size="sm"
-                  className="bg-teal-500 hover:bg-teal-600 text-white border-teal-500 hover:border-teal-600"
+                  className="border-slate-300"
                 >
                   {selectedStatus === "approved" ? "Mark Pending" : "Approve"}
                 </Button>
