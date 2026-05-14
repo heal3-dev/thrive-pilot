@@ -327,6 +327,19 @@ export async function POST(request: Request) {
   const badge = badgeFromFinalColor(weeklyFlag.finalColor);
   const completeness = computeCompleteness(typed, weekEnding);
 
+  const hasAnyRecent = completeness.calendarDaysPresent > 0 || completeness.sleepNightsPresent > 0;
+  if (!hasAnyRecent) {
+    return NextResponse.json(
+      {
+        error: "No recent health data in the last 7 days",
+        weekEnding,
+        weekRange,
+        completeness,
+      },
+      { status: 422 }
+    );
+  }
+
   // Load templates
   let masterRules = "";
   let generateWrapper = "";
@@ -384,22 +397,30 @@ export async function POST(request: Request) {
   ].join("\n");
 
   const model = process.env.OPENAI_WEEKLY_REPORT_MODEL ?? "gpt-5.4-nano-2026-03-17";
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.4,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  });
+  async function callWithModel(modelName: string) {
+    return fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelName,
+        temperature: 0.4,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+  }
+
+  let res = await callWithModel(model);
+  if (!res.ok && res.status === 404 && model !== "gpt-4o-mini") {
+    // Graceful fallback if the configured model slug is invalid/unavailable.
+    res = await callWithModel("gpt-4o-mini");
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
