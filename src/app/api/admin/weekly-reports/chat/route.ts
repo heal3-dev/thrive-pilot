@@ -5,13 +5,22 @@ import { requireAdmin } from "@/app/api/admin/_utils";
 
 const requestSchema = z.object({
   participantLabel: z.string().min(1).max(200),
-  currentMarkdown: z.string().min(1).max(20_000),
+  currentHtml: z.string().min(1).max(200_000),
   feedback: z.string().min(1).max(2000),
 });
 
 function escapeHtml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+type TemplateRow = { key: string; content: string };
+type OpenAIChatResponse = {
+  choices?: Array<{
+    message?: {
+      content?: unknown;
+    };
+  }>;
+};
 
 export async function POST(request: Request) {
   const guard = await requireAdmin(request);
@@ -33,8 +42,8 @@ export async function POST(request: Request) {
 
   const defaultReviseWrapper = [
     "You are an assistant helping an admin refine a weekly wellbeing report for a participant.",
-    "Return JSON only with keys: assistantMessage (string), updatedMarkdown (string).",
-    "Keep updatedMarkdown in Markdown format. Preserve structure and avoid adding any unsafe HTML.",
+    "Return JSON only with keys: assistantMessage (string), updatedHtml (string).",
+    "Keep updatedHtml as a complete HTML document. Preserve the overall structure and avoid adding any scripts.",
     "Apply the admin feedback to improve tone/clarity while staying concise and supportive.",
   ].join(" ");
 
@@ -47,7 +56,7 @@ export async function POST(request: Request) {
       .eq("is_active", true)
       .in("key", ["master_rules", "revise_wrapper"]);
     if (!error && data) {
-      for (const row of data as any[]) {
+      for (const row of data as unknown as TemplateRow[]) {
         if (row?.key === "master_rules" && typeof row?.content === "string") masterRules = row.content;
         if (row?.key === "revise_wrapper" && typeof row?.content === "string") reviseWrapper = row.content;
       }
@@ -66,8 +75,8 @@ export async function POST(request: Request) {
   const user = [
     `Participant: ${payload.participantLabel}`,
     `Admin feedback: ${payload.feedback}`,
-    "Current markdown:",
-    payload.currentMarkdown,
+    "Current HTML:",
+    payload.currentHtml,
   ].join("\n\n");
 
   // Use Chat Completions for broad compatibility.
@@ -96,13 +105,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const json = (await res.json().catch(() => null)) as any;
+  const json = (await res.json().catch(() => null)) as OpenAIChatResponse | null;
   const content = json?.choices?.[0]?.message?.content ?? "";
   if (typeof content !== "string" || content.trim().length === 0) {
     return NextResponse.json({ error: "OpenAI returned empty response" }, { status: 502 });
   }
 
-  let parsed: { assistantMessage?: unknown; updatedMarkdown?: unknown };
+  let parsed: { assistantMessage?: unknown; updatedHtml?: unknown; updatedMarkdown?: unknown };
   try {
     parsed = JSON.parse(content);
   } catch {
@@ -114,9 +123,13 @@ export async function POST(request: Request) {
 
   const assistantMessage =
     typeof parsed.assistantMessage === "string" ? parsed.assistantMessage : "Updated the draft based on your feedback.";
-  const updatedMarkdown =
-    typeof parsed.updatedMarkdown === "string" ? parsed.updatedMarkdown : payload.currentMarkdown;
+  const updatedHtml =
+    typeof parsed.updatedHtml === "string"
+      ? parsed.updatedHtml
+      : typeof parsed.updatedMarkdown === "string"
+        ? parsed.updatedMarkdown
+        : payload.currentHtml;
 
-  return NextResponse.json({ assistantMessage, updatedMarkdown });
+  return NextResponse.json({ assistantMessage, updatedHtml });
 }
 

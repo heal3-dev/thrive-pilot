@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 import { useDashboard } from "@/app/dashboard/layout";
 import { supabase } from "@/lib/supabase";
@@ -27,10 +25,6 @@ type ChatMessage = {
 
 function formatParticipantLabel(p: ParticipantMini): string {
   return p.name?.trim() || p.email?.trim() || p.phone_number?.trim() || "Unnamed participant";
-}
-
-function defaultMarkdown(name: string) {
-  return `## Weekly check-in\n\nHi ${name},\n\nHere’s your weekly check-in based on the last 7 days.\n\n### Highlights\n- **Sleep**: ...\n- **Stress**: ...\n- **Body Battery**: ...\n- **HRV**: ...\n\n### One thing to try this week\n- ...\n\nIf you'd like to talk through anything, just reply to this message.\n`;
 }
 
 function createId(prefix: string) {
@@ -68,7 +62,7 @@ const TEMPLATE_LABELS: Record<TemplateKey, { title: string; hint: string }> = {
   },
   html_base_template: {
     title: "HTML base template",
-    hint: "Branded HTML template (full document). Not wired yet in the Markdown flow, but will be used once we switch to HTML-first drafts.",
+    hint: "Branded HTML template (full document). This is used as the starting point for new drafts and preview rendering.",
   },
 };
 
@@ -76,13 +70,311 @@ const DEFAULT_TEMPLATES: Record<TemplateKey, string> = {
   master_rules: "",
   revise_wrapper: [
     "You are an assistant helping an admin refine a weekly wellbeing report for a participant.",
-    "Return JSON only with keys: assistantMessage (string), updatedMarkdown (string).",
-    "Keep updatedMarkdown in Markdown format. Preserve structure and avoid adding any unsafe HTML.",
+    "Return JSON only with keys: assistantMessage (string), updatedHtml (string).",
+    "Keep updatedHtml as a complete HTML document. Preserve the overall structure and avoid adding any scripts.",
     "Apply the admin feedback to improve tone/clarity while staying concise and supportive.",
   ].join(" "),
   generate_wrapper: "TODO: Add generation instructions when we wire /generate.",
-  html_base_template: "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n  <title>Thrive Weekly Report</title>\n</head>\n<body>\n  <!-- Paste the branded weekly report HTML template here -->\n</body>\n</html>\n",
+  html_base_template: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thrive Weekly Report - Deanna</title>
+  <style>
+    :root{
+      --page:#fffdf7;
+      --text:#0f172a;
+      --muted:#64748b;
+      --card:#fff4cc;
+      --card-border:#f2e2a1;
+      --card-icon:#ffeaa3;
+      --panel:#ffffff;
+      --panel-border:#e2e8f0;
+      --badge-bg:#ffedd5;
+      --badge-border:#fdba74;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background:var(--page);
+      color:var(--text);
+      padding:32px 24px;
+    }
+    .wrap{max-width:980px;margin:0 auto}
+    .eyebrow{
+      font-size:12px;
+      letter-spacing:.28em;
+      text-transform:uppercase;
+      color:#64748b;
+      font-weight:700;
+      margin-bottom:14px;
+    }
+    h1{
+      font-size:48px;
+      line-height:1.05;
+      margin:0 0 8px;
+      font-weight:650;
+    }
+    .sub{
+      font-size:20px;
+      color:#475569;
+      margin:0 0 20px;
+    }
+    .badge{
+      display:inline-flex;
+      gap:14px;
+      align-items:flex-start;
+      background:#fef3c7;
+      border:1px solid #fcd34d;
+      border-radius:18px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(15,23,42,.06);
+      max-width:760px;
+    }
+    .badge .icon{font-size:28px;line-height:1}
+    .badge-title{font-size:24px;font-weight:650;margin:0 0 6px}
+    .badge-text{font-size:15px;color:#475569;margin:0;line-height:1.6}
+    .section-title{
+      font-size:36px;
+      line-height:1.15;
+      margin:42px 0 18px;
+      font-weight:650;
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--card-border);
+      border-radius:30px;
+      box-shadow:0 12px 30px rgba(0,0,0,.05);
+      padding:28px 30px;
+      margin:0 0 24px;
+    }
+    .card-grid{
+      display:grid;
+      grid-template-columns:110px 1fr;
+      gap:24px;
+      align-items:start;
+    }
+    .icon-circle{
+      width:96px;height:96px;border-radius:999px;
+      display:flex;align-items:center;justify-content:center;
+      background:var(--card-icon);
+      font-size:56px;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,.06);
+      margin-top:4px;
+    }
+    .card h3{
+      font-size:32px;
+      margin:0 0 8px;
+      line-height:1.1;
+      font-weight:650;
+    }
+    .card-sub{
+      font-size:19px;
+      color:#475569;
+      margin:0 0 14px;
+    }
+    .state{
+      display:inline-block;
+      background:rgba(255,255,255,.6);
+      border:1px solid rgba(255,255,255,.8);
+      border-radius:16px;
+      padding:10px 16px;
+      font-size:22px;
+      font-weight:650;
+      margin-bottom:18px;
+    }
+    .body{
+      font-size:18px;
+      line-height:1.8;
+      margin:0 0 18px;
+      color:#1f2937;
+      max-width:760px;
+    }
+    .support{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:18px;
+      margin-top:8px;
+    }
+    .support-box{
+      background:rgba(255,255,255,.45);
+      border:1px solid rgba(255,255,255,.55);
+      border-radius:18px;
+      padding:18px;
+    }
+    .support-label{
+      font-size:12px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color:#64748b;
+      font-weight:700;
+      margin:0 0 8px;
+    }
+    .support-text{
+      font-size:17px;
+      line-height:1.7;
+      margin:0;
+      color:#1f2937;
+    }
+    .meaning{
+      background:var(--panel);
+      border:1px solid var(--panel-border);
+      border-radius:28px;
+      box-shadow:0 6px 18px rgba(15,23,42,.04);
+      padding:28px 30px;
+      margin-top:8px;
+    }
+    .meaning h2{
+      font-size:34px;
+      line-height:1.15;
+      margin:0 0 14px;
+      font-weight:650;
+    }
+    .meaning p{
+      font-size:18px;
+      line-height:1.8;
+      color:#334155;
+      margin:0;
+      max-width:820px;
+    }
+    .footer-line{
+      margin-top:18px !important;
+      font-weight:600;
+      color:#0f172a !important;
+    }
+    @media print{
+      body{padding:18px}
+      .card,.meaning,.badge{break-inside:avoid}
+    }
+    @media (max-width: 720px){
+      body{padding:20px 14px}
+      h1{font-size:38px}
+      .sub{font-size:18px}
+      .section-title{font-size:30px}
+      .card-grid{grid-template-columns:1fr}
+      .icon-circle{margin:0 auto}
+      .support{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">Thrive Weekly Report</div>
+    <h1>Deanna</h1>
+    <p class="sub">April 25 – May 1, 2025</p>
+
+    <div class="badge">
+      <div class="icon">🟡</div>
+      <div>
+        <p class="badge-title">Mild Strain</p>
+        <p class="badge-text">Your dashboard shows a yellow weekly score, with some mild strain showing up mainly through uneven sleep and less steady recovery.</p>
+      </div>
+    </div>
+
+    <h2 class="section-title">How your week looked</h2>
+
+    <section class="card">
+      <div class="card-grid">
+        <div class="icon-circle">❤️</div>
+        <div>
+          <h3>STRESS</h3>
+          <p class="card-sub">How steady your system looked this week</p>
+          <div class="state">Low to Moderate</div>
+          <p class="body">Your week looked fairly steady overall. Daily stress stayed mostly in a manageable range, with no strong sign that stress was the main issue this week.</p>
+          <div class="support">
+            <div class="support-box">
+              <p class="support-label">Daily pattern</p>
+              <p class="support-text">Most days looked moderate, with a calmer finish to the week.</p>
+            </div>
+            <div class="support-box">
+              <p class="support-label">What stood out</p>
+              <p class="support-text">Stress did not appear to be the biggest concern compared with the rest of the week.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-grid">
+        <div class="icon-circle">🌙</div>
+        <div>
+          <h3>SLEEP</h3>
+          <p class="card-sub">How much and how well your body rested overnight</p>
+          <div class="state">Mixed</div>
+          <p class="body">Sleep looked uneven this week. Several nights were solid, but one clearly short night and a low sleep score in the middle of the week stood out and likely made it harder to feel fully settled.</p>
+          <div class="support">
+            <div class="support-box">
+              <p class="support-label">Sleep amount</p>
+              <p class="support-text">Most nights were around a workable range, but one much shorter night interrupted the pattern.</p>
+            </div>
+            <div class="support-box">
+              <p class="support-label">Sleep quality</p>
+              <p class="support-text">Sleep quality improved again by the end of the week after a rougher stretch midweek.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-grid">
+        <div class="icon-circle">🔋</div>
+        <div>
+          <h3>RECOVERY</h3>
+          <p class="card-sub">How well your body recharged across the week</p>
+          <div class="state">Partial</div>
+          <p class="body">Recovery looked only partly consistent this week. While some days showed decent recharge, your system did not stay as settled across the full week, which is the main area to watch.</p>
+          <div class="support">
+            <div class="support-box">
+              <p class="support-label">Recharge pattern</p>
+              <p class="support-text">You had some stronger recovery days, especially near the end of the week.</p>
+            </div>
+            <div class="support-box">
+              <p class="support-label">Main watch area</p>
+              <p class="support-text">Recovery steadiness looked less consistent across the week, suggesting your body had to work harder to stay balanced.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="meaning">
+      <h2>What this may mean</h2>
+      <p>This week does not look like a full-system downturn, but it does suggest your body was not fully settled from start to finish. The biggest theme is uneven sleep paired with less consistent recovery steadiness, which can show up as feeling more tired, off-rhythm, or slower to bounce back on some days.</p>
+      <p class="footer-line">Reach out to your peer mentor if you have questions or need support.</p>
+    </section>
+  </div>
+</body>
+</html>
+`,
 };
+
+function formatWeekRangeFromNow(): string {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 6);
+  const fmt = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" });
+  const fmtYear = new Intl.DateTimeFormat(undefined, { year: "numeric" });
+  const startText = fmt.format(start);
+  const endText = fmt.format(end);
+  const yearText = fmtYear.format(end);
+  return `${startText} – ${endText}, ${yearText}`;
+}
+
+function injectNameAndRange(html: string, params: { name: string; weekRange: string }) {
+  const safeName = params.name.trim() || "Participant";
+  const safeRange = params.weekRange.trim() || "";
+  let next = html;
+  next = next.replace(/<title>\s*Thrive Weekly Report\s*-\s*.*?<\/title>/i, `<title>Thrive Weekly Report - ${safeName}</title>`);
+  next = next.replace(/<h1>\s*.*?<\/h1>/i, `<h1>${safeName}</h1>`);
+  if (safeRange) {
+    next = next.replace(/<p class="sub">\s*.*?<\/p>/i, `<p class="sub">${safeRange}</p>`);
+  }
+  return next;
+}
 
 export default function WeeklyReportsPage() {
   const router = useRouter();
@@ -99,8 +391,8 @@ export default function WeeklyReportsPage() {
     [participants, selectedParticipantId]
   );
 
-  const [markdownByParticipant, setMarkdownByParticipant] = useState<Record<string, string>>({});
-  const markdown = selectedParticipant ? markdownByParticipant[selectedParticipant.id] ?? "" : "";
+  const [htmlByParticipant, setHtmlByParticipant] = useState<Record<string, string>>({});
+  const html = selectedParticipant ? htmlByParticipant[selectedParticipant.id] ?? "" : "";
 
   const [statusByParticipant, setStatusByParticipant] = useState<Record<string, ParticipantStatus>>({});
   const selectedStatus: ParticipantStatus =
@@ -123,6 +415,7 @@ export default function WeeklyReportsPage() {
   const [templateDraftByKey, setTemplateDraftByKey] = useState<Partial<Record<TemplateKey, string>>>({});
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [hasLoadedTemplates, setHasLoadedTemplates] = useState(false);
 
   const currentTemplateDraft = templateDraftByKey[templateKey] ?? "";
   const currentTemplateRow = templatesByKey[templateKey];
@@ -130,6 +423,56 @@ export default function WeeklyReportsPage() {
   useEffect(() => {
     if (!isAdmin) router.replace("/dashboard");
   }, [isAdmin, router]);
+
+  const loadTemplates = useCallback(
+    async (force: boolean) => {
+      if (!isAdmin) return;
+      if (hasLoadedTemplates && !force) return;
+      setTemplatesError(null);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) throw new Error("Authentication required");
+
+        const res = await fetch(`/api/admin/weekly-reports/templates?keys=${encodeURIComponent(TEMPLATE_KEYS.join(","))}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          const j = (await res.json().catch(() => null)) as unknown;
+          const msg =
+            typeof j === "object" &&
+            j !== null &&
+            "error" in j &&
+            typeof (j as { error?: unknown }).error === "string"
+              ? (j as { error: string }).error
+              : null;
+          throw new Error(msg || "Failed to load templates");
+        }
+
+        const j = (await res.json()) as { templates: TemplateRow[] };
+
+        const nextByKey: Partial<Record<TemplateKey, TemplateRow>> = {};
+        for (const t of j.templates ?? []) {
+          nextByKey[t.key] = t;
+        }
+        setTemplatesByKey(nextByKey);
+
+        setTemplateDraftByKey((prev) => {
+          const next = { ...prev };
+          for (const k of TEMPLATE_KEYS) {
+            const fromDb = nextByKey[k]?.content;
+            next[k] = typeof fromDb === "string" ? fromDb : (next[k] ?? DEFAULT_TEMPLATES[k]);
+          }
+          return next;
+        });
+
+        setHasLoadedTemplates(true);
+      } catch (e) {
+        setTemplatesError(e instanceof Error ? e.message : "Failed to load templates");
+      }
+    },
+    [hasLoadedTemplates, isAdmin]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -161,63 +504,42 @@ export default function WeeklyReportsPage() {
   }, []);
 
   useEffect(() => {
+    void loadTemplates(false);
+  }, [isAdmin, loadTemplates]);
+
+  useEffect(() => {
     if (!selectedParticipant) return;
     // Initialize selected participant draft once.
-    setMarkdownByParticipant((prev) => {
+    setHtmlByParticipant((prev) => {
       if (prev[selectedParticipant.id]) return prev;
-      return {
-        ...prev,
-        [selectedParticipant.id]: defaultMarkdown(selectedParticipant.name?.trim() || "there"),
-      };
+      const base =
+        templatesByKey.html_base_template?.content ??
+        templateDraftByKey.html_base_template ??
+        DEFAULT_TEMPLATES.html_base_template;
+      const injected = injectNameAndRange(base, {
+        name: selectedParticipant.name?.trim() || "there",
+        weekRange: formatWeekRangeFromNow(),
+      });
+      return { ...prev, [selectedParticipant.id]: injected };
     });
-  }, [selectedParticipant]);
+  }, [
+    selectedParticipant,
+    templateDraftByKey.html_base_template,
+    templatesByKey.html_base_template?.content,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
-    async function loadTemplates() {
+    async function refreshOnOpen() {
       if (!isTemplatesOpen) return;
-      setTemplatesError(null);
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        if (!token) throw new Error("Authentication required");
-
-        const res = await fetch(`/api/admin/weekly-reports/templates?keys=${encodeURIComponent(TEMPLATE_KEYS.join(","))}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({} as any));
-          throw new Error(j?.error || "Failed to load templates");
-        }
-
-        const j = (await res.json()) as { templates: TemplateRow[] };
-        if (cancelled) return;
-
-        const nextByKey: Partial<Record<TemplateKey, TemplateRow>> = {};
-        for (const t of j.templates ?? []) {
-          nextByKey[t.key] = t;
-        }
-        setTemplatesByKey(nextByKey);
-
-        // Seed drafts with either DB content or defaults.
-        setTemplateDraftByKey((prev) => {
-          const next = { ...prev };
-          for (const k of TEMPLATE_KEYS) {
-            if (typeof next[k] === "string" && next[k]!.trim().length > 0) continue;
-            const fromDb = nextByKey[k]?.content;
-            next[k] = typeof fromDb === "string" ? fromDb : DEFAULT_TEMPLATES[k];
-          }
-          return next;
-        });
-      } catch (e) {
-        if (!cancelled) setTemplatesError(e instanceof Error ? e.message : "Failed to load templates");
-      }
+      await loadTemplates(true);
+      if (!cancelled) setHasLoadedTemplates(true);
     }
-    void loadTemplates();
+    void refreshOnOpen();
     return () => {
       cancelled = true;
     };
-  }, [isTemplatesOpen]);
+  }, [isTemplatesOpen, loadTemplates]);
 
   if (!isAdmin) return null;
 
@@ -226,7 +548,7 @@ export default function WeeklyReportsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-clash text-2xl font-bold text-slate-900">Weekly Reports</h1>
-          <p className="text-sm text-slate-500 mt-1">Draft in Markdown, preview, and approve.</p>
+          <p className="text-sm text-slate-500 mt-1">Draft in HTML, preview, and approve.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -357,8 +679,15 @@ export default function WeeklyReportsPage() {
                       body: JSON.stringify({ key: templateKey, content }),
                     });
                     if (!res.ok) {
-                      const j = await res.json().catch(() => ({} as any));
-                      throw new Error(j?.error || "Failed to save template");
+                      const j = (await res.json().catch(() => null)) as unknown;
+                      const msg =
+                        typeof j === "object" &&
+                        j !== null &&
+                        "error" in j &&
+                        typeof (j as { error?: unknown }).error === "string"
+                          ? (j as { error: string }).error
+                          : null;
+                      throw new Error(msg || "Failed to save template");
                     }
                     const j = (await res.json()) as { template: TemplateRow };
                     setTemplatesByKey((prev) => ({ ...prev, [templateKey]: j.template }));
@@ -481,59 +810,70 @@ export default function WeeklyReportsPage() {
 
           {/* Content columns */}
           <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-0">
-            {/* Draft preview */}
+            {/* HTML preview */}
             <div className="min-h-0 border-b-2 lg:border-b-0 lg:border-r-2 border-slate-100 flex flex-col">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                <p className="text-sm font-bold text-slate-900">Current draft</p>
+                <p className="text-sm font-bold text-slate-900">Preview</p>
                 <Button
                   onClick={() => {
                     if (!selectedParticipant) return;
-                    setMarkdownByParticipant((prev) => ({
-                      ...prev,
-                      [selectedParticipant.id]: defaultMarkdown(selectedParticipant.name?.trim() || "there"),
-                    }));
+                    const base =
+                      templatesByKey.html_base_template?.content ??
+                      templateDraftByKey.html_base_template ??
+                      DEFAULT_TEMPLATES.html_base_template;
+                    const injected = injectNameAndRange(base, {
+                      name: selectedParticipant.name?.trim() || "there",
+                      weekRange: formatWeekRangeFromNow(),
+                    });
+                    setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: injected }));
+                    setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
                   }}
                   disabled={!selectedParticipant}
                   className="bg-teal-500 hover:bg-teal-600 text-white"
                   size="sm"
                 >
-                  Regenerate (mock)
+                  Reset to template
                 </Button>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-white">
-                <div className="max-w-2xl mx-auto rounded-2xl bg-white border border-slate-200 p-6 shadow-sm">
-                  {markdown.trim().length === 0 ? (
-                    <p className="text-sm text-slate-500">No draft yet.</p>
-                  ) : (
-                    <div className="prose prose-slate prose-sm max-w-none">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
-                    </div>
-                  )}
-                </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-white">
+                {html.trim().length === 0 ? (
+                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-600">
+                    No HTML draft yet.
+                  </div>
+                ) : (
+                  <div className="w-full rounded-2xl border border-slate-200 shadow-sm overflow-hidden bg-white">
+                    <iframe
+                      title="Weekly report preview"
+                      sandbox=""
+                      className="w-full h-[calc(100vh-280px)] min-h-[520px] bg-white"
+                      srcDoc={html}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Editor + chat */}
             <div className="min-h-0 flex flex-col">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                <p className="text-sm font-bold text-slate-900">Editor & chat</p>
-                <span className="text-xs text-slate-500">{markdown.length} chars</span>
+                <p className="text-sm font-bold text-slate-900">HTML editor & chat</p>
+                <span className="text-xs text-slate-500">{html.length} chars</span>
               </div>
 
               <div className="flex-1 min-h-0 grid grid-rows-2">
-                {/* Markdown editor */}
+                {/* HTML editor */}
                 <div className="p-4 border-b-2 border-slate-100 min-h-0 flex flex-col">
                   <textarea
-                    value={markdown}
+                    value={html}
                     onChange={(e) => {
                       if (!selectedParticipant) return;
                       const v = e.target.value;
-                      setMarkdownByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: v }));
+                      setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: v }));
                       setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
                     }}
-                    placeholder="Edit the draft in Markdown..."
+                    placeholder="Edit the report HTML..."
                     disabled={!selectedParticipant}
-                    className="flex-1 min-h-0 w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300 resize-none disabled:opacity-50"
+                    className="flex-1 min-h-0 w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-slate-300 resize-none disabled:opacity-50"
                   />
                   <p className="text-xs text-slate-500 mt-2">
                     Editing marks the report as pending.
@@ -550,7 +890,7 @@ export default function WeeklyReportsPage() {
                   <div className="flex-1 min-h-0 overflow-y-auto space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     {chat.length === 0 ? (
                       <p className="text-sm text-slate-500">
-                        Add feedback like “make it more encouraging” and regenerate.
+                        Add feedback like “make it more encouraging” to update the HTML draft.
                       </p>
                     ) : (
                       chat.map((m) => (
@@ -606,17 +946,24 @@ export default function WeeklyReportsPage() {
                             },
                             body: JSON.stringify({
                               participantLabel,
-                              currentMarkdown: markdownByParticipant[selectedParticipant.id] ?? "",
+                              currentHtml: htmlByParticipant[selectedParticipant.id] ?? "",
                               feedback: text,
                             }),
                           });
 
                           if (!res.ok) {
-                            const j = await res.json().catch(() => ({} as any));
-                            throw new Error(j?.error || "Failed to generate update");
+                            const j = (await res.json().catch(() => null)) as unknown;
+                            const msg =
+                              typeof j === "object" &&
+                              j !== null &&
+                              "error" in j &&
+                              typeof (j as { error?: unknown }).error === "string"
+                                ? (j as { error: string }).error
+                                : null;
+                            throw new Error(msg || "Failed to generate update");
                           }
 
-                          const j = (await res.json()) as { assistantMessage: string; updatedMarkdown: string };
+                          const j = (await res.json()) as { assistantMessage: string; updatedHtml: string };
                           const assistantMsg: ChatMessage = {
                             id: createId("ai"),
                             role: "assistant",
@@ -628,9 +975,9 @@ export default function WeeklyReportsPage() {
                             [selectedParticipant.id]: [...(prev[selectedParticipant.id] ?? []), assistantMsg],
                           }));
 
-                          setMarkdownByParticipant((prev) => ({
+                          setHtmlByParticipant((prev) => ({
                             ...prev,
-                            [selectedParticipant.id]: j.updatedMarkdown ?? prev[selectedParticipant.id] ?? "",
+                            [selectedParticipant.id]: j.updatedHtml ?? prev[selectedParticipant.id] ?? "",
                           }));
                           setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
                         } catch (e) {
