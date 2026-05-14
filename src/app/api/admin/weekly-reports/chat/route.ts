@@ -31,12 +31,37 @@ export async function POST(request: Request) {
 
   const model = process.env.OPENAI_WEEKLY_REPORT_MODEL ?? "gpt-5.4-nano-2026-03-17";
 
-  const system = [
+  const defaultReviseWrapper = [
     "You are an assistant helping an admin refine a weekly wellbeing report for a participant.",
     "Return JSON only with keys: assistantMessage (string), updatedMarkdown (string).",
     "Keep updatedMarkdown in Markdown format. Preserve structure and avoid adding any unsafe HTML.",
     "Apply the admin feedback to improve tone/clarity while staying concise and supportive.",
   ].join(" ");
+
+  let masterRules = "";
+  let reviseWrapper = "";
+  try {
+    const { data, error } = await guard.admin
+      .from("weekly_report_templates")
+      .select("key, content")
+      .eq("is_active", true)
+      .in("key", ["master_rules", "revise_wrapper"]);
+    if (!error && data) {
+      for (const row of data as any[]) {
+        if (row?.key === "master_rules" && typeof row?.content === "string") masterRules = row.content;
+        if (row?.key === "revise_wrapper" && typeof row?.content === "string") reviseWrapper = row.content;
+      }
+    }
+  } catch {
+    // Table may not exist yet in some environments; fall back to defaults.
+  }
+
+  const system = [
+    masterRules?.trim() ? `MASTER_RULES:\n${masterRules.trim()}` : "",
+    `REVISION_INSTRUCTIONS:\n${(reviseWrapper?.trim() || defaultReviseWrapper).trim()}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const user = [
     `Participant: ${payload.participantLabel}`,
