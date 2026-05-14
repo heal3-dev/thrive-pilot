@@ -428,6 +428,7 @@ export const DEFAULT_REVISE_WRAPPER = [
   "You are an assistant helping an admin refine a weekly wellbeing report for a participant.",
   "Return JSON only with keys: assistantMessage (string), updatedHtml (string).",
   "Keep updatedHtml as a complete HTML document. Preserve the overall structure and avoid adding any scripts.",
+  "assistantMessage is admin-facing: keep it short (1 sentence), natural, and never participant-facing (no greetings, no metrics dump, no quoting the whole report).",
   "Apply the admin feedback to improve tone/clarity while staying concise and supportive.",
 ].join(" ");
 

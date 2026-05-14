@@ -33,6 +33,22 @@ type WeeklyReportMeta = {
   badgeIcon: string;
 };
 
+type EditableCard = {
+  title: string;
+  state: string;
+  body: string;
+  support1Label: string;
+  support1Text: string;
+  support2Label: string;
+  support2Text: string;
+};
+
+type EditableReportContent = {
+  badgeText: string;
+  cards: [EditableCard, EditableCard, EditableCard];
+  meaningParagraph: string;
+};
+
 function formatParticipantLabel(p: ParticipantMini): string {
   return p.name?.trim() || p.email?.trim() || p.phone_number?.trim() || "Unnamed participant";
 }
@@ -128,6 +144,7 @@ export default function WeeklyReportsPage() {
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [outreachCopied, setOutreachCopied] = useState(false);
+  const feedbackTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
@@ -179,6 +196,86 @@ export default function WeeklyReportsPage() {
       `Hi ${first}, here’s your Thrive Weekly Report for ${meta.weekRange} — ${meta.badgeLabel} ${meta.badgeIcon}.`,
       "Reply here if you’d like to talk through anything or want help choosing one thing to focus on this week.",
     ].join(" ");
+  }, []);
+
+  const getEditableContent = useCallback((html: string): EditableReportContent | null => {
+    if (!html.trim()) return null;
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      const badgeText = (doc.querySelector(".badge-text")?.textContent ?? "").trim();
+
+      const sections = Array.from(doc.querySelectorAll("section.card")).slice(0, 3);
+      const defaultTitles = ["STRESS", "SLEEP", "RECOVERY"] as const;
+      const cards = sections.map((section, idx) => {
+        const title = (section.querySelector("h3")?.textContent ?? defaultTitles[idx] ?? `CARD ${idx + 1}`).trim();
+        const state = (section.querySelector(".state")?.textContent ?? "").trim();
+        const body = (section.querySelector(".body")?.textContent ?? "").trim();
+        const labels = Array.from(section.querySelectorAll(".support-label")).map((n) => (n.textContent ?? "").trim());
+        const texts = Array.from(section.querySelectorAll(".support-text")).map((n) => (n.textContent ?? "").trim());
+        return {
+          title,
+          state,
+          body,
+          support1Label: labels[0] ?? "",
+          support1Text: texts[0] ?? "",
+          support2Label: labels[1] ?? "",
+          support2Text: texts[1] ?? "",
+        };
+      });
+
+      const meaning = doc.querySelector("section.meaning");
+      const meaningParagraph =
+        Array.from(meaning?.querySelectorAll("p") ?? []).find((p) => !p.classList.contains("footer-line"))?.textContent?.trim() ?? "";
+
+      if (cards.length < 3) return null;
+
+      return {
+        badgeText,
+        cards: [cards[0]!, cards[1]!, cards[2]!] as [EditableCard, EditableCard, EditableCard],
+        meaningParagraph,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const mutateHtml = useCallback((html: string, mutator: (doc: Document) => void): string => {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      mutator(doc);
+      const serialized = doc.documentElement?.outerHTML ?? html;
+      const hasDoctype = /^\s*<!doctype/i.test(html);
+      return hasDoctype ? `<!DOCTYPE html>\n${serialized}` : serialized;
+    } catch {
+      return html;
+    }
+  }, []);
+
+  const updateSelectedHtml = useCallback(
+    (mutator: (doc: Document) => void) => {
+      if (!selectedParticipant) return;
+      const current = htmlByParticipant[selectedParticipant.id] ?? "";
+      if (!current.trim()) return;
+      const next = mutateHtml(current, mutator);
+      setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: next }));
+      setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+    },
+    [htmlByParticipant, mutateHtml, selectedParticipant]
+  );
+
+  const editable = useMemo(() => getEditableContent(html), [getEditableContent, html]);
+
+  const autosizeFeedback = useCallback(() => {
+    const el = feedbackTextareaRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    const max = 140;
+    const next = Math.min(max, el.scrollHeight);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }, []);
 
   useEffect(() => {
@@ -1107,7 +1204,7 @@ export default function WeeklyReportsPage() {
             {/* Editor + chat */}
             <div ref={editorChatRef} className="min-h-0 flex flex-col">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                <p className="text-sm font-bold text-slate-900">HTML editor & chat</p>
+                <p className="text-sm font-bold text-slate-900">Report content & chat</p>
                 <span className="text-xs text-slate-500">{html.length} chars</span>
               </div>
 
@@ -1115,23 +1212,154 @@ export default function WeeklyReportsPage() {
                 className="flex-1 min-h-0 grid"
                 style={{ gridTemplateRows: `${Math.round(editorHeightPx)}px 6px minmax(0, 1fr)` }}
               >
-                {/* HTML editor */}
+                {/* Content editor */}
                 <div className="p-4 border-b-0 border-slate-100 min-h-0 flex flex-col">
-                  <textarea
-                    value={html}
-                    onChange={(e) => {
-                      if (!selectedParticipant) return;
-                      const v = e.target.value;
-                      setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: v }));
-                      setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
-                    }}
-                    placeholder="Edit the report HTML..."
-                    disabled={!selectedParticipant}
-                    className="flex-1 min-h-0 w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-slate-300 resize-none disabled:opacity-50"
-                  />
-                  <p className="text-xs text-slate-500 mt-2">
-                    Editing marks the report as pending.
-                  </p>
+                  {!selectedParticipant ? (
+                    <div className="flex-1 min-h-0 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                      Select a participant to edit report content.
+                    </div>
+                  ) : !editable ? (
+                    <div className="flex-1 min-h-0 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                      Generate a report to edit its content.
+                    </div>
+                  ) : (
+                    <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">Badge summary sentence</p>
+                        <textarea
+                          value={editable.badgeText}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            updateSelectedHtml((doc) => {
+                              const el = doc.querySelector(".badge-text");
+                              if (el) el.textContent = v;
+                            });
+                          }}
+                          className="mt-2 w-full min-h-[64px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
+                        />
+                      </div>
+
+                      {editable.cards.map((card, idx) => (
+                        <div key={idx} className="rounded-xl border border-slate-200 bg-white p-3">
+                          <p className="text-xs font-bold text-slate-900">{card.title}</p>
+
+                          <div className="mt-3 grid grid-cols-1 gap-3">
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-600">State label</p>
+                              <input
+                                value={card.state}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  updateSelectedHtml((doc) => {
+                                    const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                    const el = section?.querySelector(".state");
+                                    if (el) el.textContent = v;
+                                  });
+                                }}
+                                className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
+                              />
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-600">Main paragraph</p>
+                              <textarea
+                                value={card.body}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  updateSelectedHtml((doc) => {
+                                    const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                    const el = section?.querySelector(".body");
+                                    if (el) el.textContent = v;
+                                  });
+                                }}
+                                className="mt-1 w-full min-h-[72px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3">
+                              <div>
+                                <p className="text-[11px] font-semibold text-slate-600">Support box 1 label</p>
+                                <input
+                                  value={card.support1Label}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    updateSelectedHtml((doc) => {
+                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                      const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
+                                      if (labels[0]) labels[0].textContent = v;
+                                    });
+                                  }}
+                                  className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
+                                />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-semibold text-slate-600">Support box 1 text</p>
+                                <textarea
+                                  value={card.support1Text}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    updateSelectedHtml((doc) => {
+                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                      const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
+                                      if (texts[0]) texts[0].textContent = v;
+                                    });
+                                  }}
+                                  className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
+                                />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-semibold text-slate-600">Support box 2 label</p>
+                                <input
+                                  value={card.support2Label}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    updateSelectedHtml((doc) => {
+                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                      const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
+                                      if (labels[1]) labels[1].textContent = v;
+                                    });
+                                  }}
+                                  className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
+                                />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-semibold text-slate-600">Support box 2 text</p>
+                                <textarea
+                                  value={card.support2Text}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    updateSelectedHtml((doc) => {
+                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                      const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
+                                      if (texts[1]) texts[1].textContent = v;
+                                    });
+                                  }}
+                                  className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">What this may mean</p>
+                        <textarea
+                          value={editable.meaningParagraph}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            updateSelectedHtml((doc) => {
+                              const meaning = doc.querySelector("section.meaning");
+                              const p = Array.from(meaning?.querySelectorAll("p") ?? []).find((pp) => !pp.classList.contains("footer-line"));
+                              if (p) p.textContent = v;
+                            });
+                          }}
+                          className="mt-2 w-full min-h-[96px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-slate-500 mt-2">Editing marks the report as pending.</p>
                 </div>
 
                 <div
@@ -1172,12 +1400,18 @@ export default function WeeklyReportsPage() {
                   </div>
 
                   <div className="mt-3 flex gap-2 items-center">
-                    <input
+                    <textarea
+                      ref={feedbackTextareaRef}
                       value={feedbackInput}
-                      onChange={(e) => setFeedbackInput(e.target.value)}
+                      onChange={(e) => {
+                        setFeedbackInput(e.target.value);
+                        // allow the DOM to update first
+                        window.requestAnimationFrame(() => autosizeFeedback());
+                      }}
                       placeholder="Add feedback for the AI…"
                       disabled={!selectedParticipant || isSendingFeedback}
-                      className="flex-1 h-10 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300 disabled:opacity-50"
+                      rows={1}
+                      className="flex-1 min-h-10 max-h-36 rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300 disabled:opacity-50 resize-none overflow-y-auto"
                     />
                     <Button
                       onClick={async () => {
@@ -1229,7 +1463,10 @@ export default function WeeklyReportsPage() {
                           const assistantMsg: ChatMessage = {
                             id: createId("ai"),
                             role: "assistant",
-                            content: selectedMeta ? formatReportTitleLine(selectedMeta) : "Updated the weekly report draft.",
+                            content:
+                              typeof j.assistantMessage === "string" && j.assistantMessage.trim().length > 0
+                                ? j.assistantMessage.trim().slice(0, 180)
+                                : "Got it — updated the report draft.",
                           };
 
                           setChatByParticipant((prev) => ({
