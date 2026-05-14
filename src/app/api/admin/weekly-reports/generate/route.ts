@@ -159,6 +159,22 @@ function replaceAllNth(html: string, re: RegExp, replacements: string[]): string
   });
 }
 
+function titleCaseStateLabel(input: string): string {
+  const s = input.trim();
+  if (!s) return s;
+  const cap = (w: string) => (w.length ? w[0]!.toUpperCase() + w.slice(1) : w);
+  if (s.includes("-") && !s.includes(" ")) {
+    return s
+      .split("-")
+      .map((p) => cap(p))
+      .join("-");
+  }
+  return s
+    .split(/\s+/)
+    .map((p) => cap(p))
+    .join(" ");
+}
+
 function fillOlgaTemplate(params: {
   baseHtml: string;
   participantName: string;
@@ -190,7 +206,11 @@ function fillOlgaTemplate(params: {
       if (idx >= 3) return section;
       const cc = cardContents[idx]!.c;
       let s = section;
-      s = replaceFirst(s, /(<div\s+class="state"[^>]*>)([\s\S]*?)(<\/div>)/i, escapeHtml(cc.state));
+      s = replaceFirst(
+        s,
+        /(<div\s+class="state"[^>]*>)([\s\S]*?)(<\/div>)/i,
+        escapeHtml(titleCaseStateLabel(cc.state))
+      );
       s = replaceFirst(s, /(<p\s+class="body"[^>]*>)([\s\S]*?)(<\/p>)/i, escapeHtml(cc.body));
 
       // Two support boxes: label + text each, in order
