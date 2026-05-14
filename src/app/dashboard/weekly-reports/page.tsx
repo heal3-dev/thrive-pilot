@@ -75,19 +75,19 @@ const TEMPLATE_KEYS: TemplateKey[] = [
 
 const TEMPLATE_LABELS: Record<TemplateKey, { title: string; hint: string }> = {
   master_rules: {
-    title: "Master rules",
-    hint: "Paste Olga’s comprehensive Thrive Weekly Report instructions here (tone, structure, badge labels, fixed closing line).",
+    title: "Master prompt",
+    hint: "Comprehensive Thrive Weekly Report instructions here (tone, structure, badge labels, fixed closing line).",
   },
   revise_wrapper: {
-    title: "Revise wrapper",
+    title: "Revise prompt",
     hint: "Instructions for revising an existing draft using admin feedback. This is applied together with Master rules.",
   },
   generate_wrapper: {
-    title: "Generate wrapper",
+    title: "Generate prompt",
     hint: "Instructions for generating a new draft from metrics. Applied together with Master rules. Should return JSON only (no HTML).",
   },
   html_base_template: {
-    title: "HTML template",
+    title: "HTML Template",
     hint: "Branded HTML template (full document). This is used as the starting point for new drafts and preview rendering.",
   },
 };
