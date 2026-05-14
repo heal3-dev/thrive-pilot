@@ -891,28 +891,6 @@ export default function WeeklyReportsPage() {
                   >
                     {isGenerating ? "Generating…" : "Generate from data"}
                   </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      if (!selectedParticipant) return;
-                      const base =
-                        templatesByKey.html_base_template?.content ??
-                        templateDraftByKey.html_base_template ??
-                        DEFAULT_TEMPLATES.html_base_template;
-                      const injected = injectNameAndRange(base, {
-                        name: selectedParticipant.name?.trim() || "there",
-                        weekRange: formatWeekRangeFromNow(),
-                      });
-                      setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: injected }));
-                      setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
-                    }}
-                    disabled={!selectedParticipant || isGenerating}
-                    className="border-slate-300"
-                    size="sm"
-                  >
-                    Reset
-                  </Button>
                 </div>
               </div>
               <div ref={previewContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 bg-white">
