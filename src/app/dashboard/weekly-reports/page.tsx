@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import { useDashboard } from "@/app/dashboard/layout";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 
 type ParticipantMini = {
   id: string;
@@ -35,6 +36,53 @@ function defaultMarkdown(name: string) {
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
+
+type TemplateKey = "master_rules" | "revise_wrapper" | "generate_wrapper" | "html_base_template";
+type TemplateRow = {
+  id: string;
+  key: TemplateKey;
+  content: string;
+  version: number;
+  updated_at: string;
+};
+
+const TEMPLATE_KEYS: TemplateKey[] = [
+  "master_rules",
+  "revise_wrapper",
+  "generate_wrapper",
+  "html_base_template",
+];
+
+const TEMPLATE_LABELS: Record<TemplateKey, { title: string; hint: string }> = {
+  master_rules: {
+    title: "Master rules",
+    hint: "Paste Olga’s comprehensive Thrive Weekly Report instructions here (tone, structure, badge labels, fixed closing line).",
+  },
+  revise_wrapper: {
+    title: "Revise wrapper",
+    hint: "Instructions for revising an existing draft using admin feedback. This is applied together with Master rules.",
+  },
+  generate_wrapper: {
+    title: "Generate wrapper",
+    hint: "Instructions for generating a new draft (not wired yet). Stored now so we can add generation later without reshaping the UI.",
+  },
+  html_base_template: {
+    title: "HTML base template",
+    hint: "Branded HTML template (full document). Not wired yet in the Markdown flow, but will be used once we switch to HTML-first drafts.",
+  },
+};
+
+const DEFAULT_TEMPLATES: Record<TemplateKey, string> = {
+  master_rules: "",
+  revise_wrapper: [
+    "You are an assistant helping an admin refine a weekly wellbeing report for a participant.",
+    "Return JSON only with keys: assistantMessage (string), updatedMarkdown (string).",
+    "Keep updatedMarkdown in Markdown format. Preserve structure and avoid adding any unsafe HTML.",
+    "Apply the admin feedback to improve tone/clarity while staying concise and supportive.",
+  ].join(" "),
+  generate_wrapper: "TODO: Add generation instructions when we wire /generate.",
+  html_base_template: "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n  <title>Thrive Weekly Report</title>\n</head>\n<body>\n  <!-- Paste the branded weekly report HTML template here -->\n</body>\n</html>\n",
+};
 
 export default function WeeklyReportsPage() {
   const router = useRouter();
@@ -68,6 +116,16 @@ export default function WeeklyReportsPage() {
   const [feedbackInput, setFeedbackInput] = useState("");
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
+  const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
+  const [templatesByKey, setTemplatesByKey] = useState<Partial<Record<TemplateKey, TemplateRow>>>({});
+  const [templateDraftByKey, setTemplateDraftByKey] = useState<Partial<Record<TemplateKey, string>>>({});
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+  const currentTemplateDraft = templateDraftByKey[templateKey] ?? "";
+  const currentTemplateRow = templatesByKey[templateKey];
 
   useEffect(() => {
     if (!isAdmin) router.replace("/dashboard");
@@ -114,6 +172,53 @@ export default function WeeklyReportsPage() {
     });
   }, [selectedParticipant]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTemplates() {
+      if (!isTemplatesOpen) return;
+      setTemplatesError(null);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) throw new Error("Authentication required");
+
+        const res = await fetch(`/api/admin/weekly-reports/templates?keys=${encodeURIComponent(TEMPLATE_KEYS.join(","))}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({} as any));
+          throw new Error(j?.error || "Failed to load templates");
+        }
+
+        const j = (await res.json()) as { templates: TemplateRow[] };
+        if (cancelled) return;
+
+        const nextByKey: Partial<Record<TemplateKey, TemplateRow>> = {};
+        for (const t of j.templates ?? []) {
+          nextByKey[t.key] = t;
+        }
+        setTemplatesByKey(nextByKey);
+
+        // Seed drafts with either DB content or defaults.
+        setTemplateDraftByKey((prev) => {
+          const next = { ...prev };
+          for (const k of TEMPLATE_KEYS) {
+            if (typeof next[k] === "string" && next[k]!.trim().length > 0) continue;
+            const fromDb = nextByKey[k]?.content;
+            next[k] = typeof fromDb === "string" ? fromDb : DEFAULT_TEMPLATES[k];
+          }
+          return next;
+        });
+      } catch (e) {
+        if (!cancelled) setTemplatesError(e instanceof Error ? e.message : "Failed to load templates");
+      }
+    }
+    void loadTemplates();
+    return () => {
+      cancelled = true;
+    };
+  }, [isTemplatesOpen]);
+
   if (!isAdmin) return null;
 
   return (
@@ -124,6 +229,13 @@ export default function WeeklyReportsPage() {
           <p className="text-sm text-slate-500 mt-1">Draft in Markdown, preview, and approve.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsTemplatesOpen(true)}
+            className="border-slate-300"
+          >
+            Templates
+          </Button>
           <Button
             variant="outline"
             onClick={() => router.push("/dashboard")}
@@ -143,6 +255,129 @@ export default function WeeklyReportsPage() {
           </Button>
         </div>
       </div>
+
+      <Modal
+        isOpen={isTemplatesOpen}
+        onClose={() => setIsTemplatesOpen(false)}
+        title="Weekly Report Templates"
+        subtitle="Edit the active prompt templates used by generation/revision. Changes apply immediately to new chat revisions."
+        size="2xl"
+      >
+        <div className="space-y-4">
+          {templatesError ? (
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+              <p className="text-sm font-semibold text-red-700">{templatesError}</p>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            {TEMPLATE_KEYS.map((k) => {
+              const selected = k === templateKey;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setTemplateKey(k)}
+                  className={`px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${
+                    selected
+                      ? "bg-teal-50 border-teal-200 text-teal-900"
+                      : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                  }`}
+                  type="button"
+                >
+                  {TEMPLATE_LABELS[k].title}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-slate-900">{TEMPLATE_LABELS[templateKey].title}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{TEMPLATE_LABELS[templateKey].hint}</p>
+              {currentTemplateRow ? (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Active version: v{currentTemplateRow.version} · Updated {new Date(currentTemplateRow.updated_at).toLocaleString()}
+                </p>
+              ) : (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Not saved yet — using local default until you save.
+                </p>
+              )}
+            </div>
+            <span className="text-xs text-slate-500 shrink-0">
+              {(currentTemplateDraft ?? "").length} chars
+            </span>
+          </div>
+
+          <textarea
+            value={currentTemplateDraft}
+            onChange={(e) => {
+              const v = e.target.value;
+              setTemplateDraftByKey((prev) => ({ ...prev, [templateKey]: v }));
+            }}
+            placeholder="Enter template content…"
+            className="w-full min-h-[360px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-slate-300 resize-y"
+          />
+
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-slate-500">
+              Saving creates a new active version for this template key.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setTemplateDraftByKey((prev) => ({ ...prev, [templateKey]: DEFAULT_TEMPLATES[templateKey] }));
+                }}
+                disabled={isSavingTemplate}
+                className="border-slate-300"
+              >
+                Reset to default
+              </Button>
+              <Button
+                onClick={async () => {
+                  const content = (templateDraftByKey[templateKey] ?? "").trimEnd();
+                  if (content.trim().length === 0) {
+                    setTemplatesError("Template content cannot be empty.");
+                    return;
+                  }
+                  setTemplatesError(null);
+                  setIsSavingTemplate(true);
+                  try {
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const token = sessionData?.session?.access_token;
+                    if (!token) throw new Error("Authentication required");
+
+                    const res = await fetch("/api/admin/weekly-reports/templates", {
+                      method: "PUT",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify({ key: templateKey, content }),
+                    });
+                    if (!res.ok) {
+                      const j = await res.json().catch(() => ({} as any));
+                      throw new Error(j?.error || "Failed to save template");
+                    }
+                    const j = (await res.json()) as { template: TemplateRow };
+                    setTemplatesByKey((prev) => ({ ...prev, [templateKey]: j.template }));
+                    setTemplateDraftByKey((prev) => ({ ...prev, [templateKey]: j.template.content }));
+                  } catch (e) {
+                    setTemplatesError(e instanceof Error ? e.message : "Failed to save template");
+                  } finally {
+                    setIsSavingTemplate(false);
+                  }
+                }}
+                disabled={isSavingTemplate}
+                className="bg-teal-500 hover:bg-teal-600 text-white"
+              >
+                {isSavingTemplate ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       {loadError && (
         <div className="p-4 rounded-xl bg-red-50 border border-red-200">
