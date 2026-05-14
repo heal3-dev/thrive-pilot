@@ -84,7 +84,7 @@ const TEMPLATE_LABELS: Record<TemplateKey, { title: string; hint: string }> = {
   },
   generate_wrapper: {
     title: "Generate wrapper",
-    hint: "Instructions for generating a new draft (not wired yet). Stored now so we can add generation later without reshaping the UI.",
+    hint: "Instructions for generating a new draft from metrics. Applied together with Master rules. Should return JSON only (no HTML).",
   },
   html_base_template: {
     title: "HTML base template",
