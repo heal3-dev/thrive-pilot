@@ -115,6 +115,10 @@ export default function WeeklyReportsPage() {
 
   const [htmlByParticipant, setHtmlByParticipant] = useState<Record<string, string>>({});
   const html = selectedParticipant ? htmlByParticipant[selectedParticipant.id] ?? "" : "";
+  const [completenessByParticipant, setCompletenessByParticipant] = useState<
+    Record<string, { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number }>
+  >({});
+  const selectedCompleteness = selectedParticipant ? completenessByParticipant[selectedParticipant.id] : null;
 
   const [statusByParticipant, setStatusByParticipant] = useState<Record<string, ParticipantStatus>>({});
   const selectedStatus: ParticipantStatus =
@@ -292,11 +296,18 @@ export default function WeeklyReportsPage() {
           throw new Error(msg || "Failed to generate weekly report");
         }
 
-        const j = (await res.json()) as { updatedHtml: string; assistantMessage?: string };
+        const j = (await res.json()) as {
+          updatedHtml: string;
+          assistantMessage?: string;
+          completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
+        };
         if (cancelled) return;
 
         setHtmlByParticipant((prev) => ({ ...prev, [p.id]: j.updatedHtml ?? "" }));
         setStatusByParticipant((prev) => ({ ...prev, [p.id]: "pending" }));
+        if (j.completeness) {
+          setCompletenessByParticipant((prev) => ({ ...prev, [p.id]: j.completeness! }));
+        }
 
         const assistantMsg: ChatMessage = {
           id: createId("gen"),
@@ -699,11 +710,18 @@ export default function WeeklyReportsPage() {
                           throw new Error(msg || "Failed to generate weekly report");
                         }
 
-                        const j = (await res.json()) as { updatedHtml: string; assistantMessage?: string };
+                        const j = (await res.json()) as {
+                          updatedHtml: string;
+                          assistantMessage?: string;
+                          completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
+                        };
                         const updatedHtml = j.updatedHtml ?? "";
 
                         setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: updatedHtml }));
                         setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+                        if (j.completeness) {
+                          setCompletenessByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: j.completeness! }));
+                        }
 
                         const assistantMsg: ChatMessage = {
                           id: createId("gen"),
@@ -729,6 +747,16 @@ export default function WeeklyReportsPage() {
                 </div>
               </div>
               <div ref={previewContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 bg-white">
+                {selectedCompleteness &&
+                (selectedCompleteness.calendarDaysPresent < selectedCompleteness.calendarDaysExpected ||
+                  selectedCompleteness.sleepNightsPresent < selectedCompleteness.sleepNightsExpected) ? (
+                  <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <p className="text-xs font-semibold text-amber-900">
+                      Incomplete data: {selectedCompleteness.calendarDaysPresent}/{selectedCompleteness.calendarDaysExpected} days,{" "}
+                      {selectedCompleteness.sleepNightsPresent}/{selectedCompleteness.sleepNightsExpected} nights available.
+                    </p>
+                  </div>
+                ) : null}
                 {html.trim().length === 0 ? (
                   <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-600">
                     No HTML draft yet.

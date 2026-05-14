@@ -37,6 +37,23 @@ type GeneratedContent = {
   assistantMessage?: string;
 };
 
+type DataCompleteness = {
+  weekEnding: string;
+  calendarDaysPresent: number;
+  calendarDaysExpected: number;
+  sleepNightsPresent: number;
+  sleepNightsExpected: number;
+  presentByMetric: {
+    body_battery_start_days: number;
+    stress_days: number;
+    rhr_days: number;
+    sleep_duration_nights: number;
+    sleep_score_nights: number;
+    waso_nights: number;
+    hrv_nights: number;
+  };
+};
+
 function escapeHtml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -45,6 +62,64 @@ function ymdAddDays(ymd: string, deltaDays: number): string {
   const d = new Date(`${ymd}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + deltaDays);
   return d.toISOString().slice(0, 10);
+}
+
+function minYmd(a: string, b: string): string {
+  return a <= b ? a : b;
+}
+
+function list7DaysEnding(weekEnding: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => ymdAddDays(weekEnding, -6 + i));
+}
+
+function computeCompleteness(metrics: Metric[], weekEnding: string): DataCompleteness {
+  const days = list7DaysEnding(weekEnding);
+  const byDate = new Map(metrics.map((m) => [m.metric_date, m]));
+
+  const presentBodyBattery = days.filter((d) => (byDate.get(d)?.body_battery_start ?? null) != null).length;
+  const presentStress = days.filter((d) => (byDate.get(d)?.average_stress_level ?? null) != null).length;
+  const presentRhr = days.filter((d) => (byDate.get(d)?.resting_heart_rate ?? null) != null).length;
+
+  const calPresentAny = days.filter((d) => {
+    const m = byDate.get(d);
+    return Boolean(m && (m.body_battery_start != null || m.average_stress_level != null || m.resting_heart_rate != null));
+  }).length;
+
+  const nights = metrics
+    .filter((m) => m.metric_date <= weekEnding)
+    .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1))
+    .slice(0, 7);
+
+  const presentSleepDur = nights.filter((m) => m.sleep_duration_seconds != null).length;
+  const presentSleepScore = nights.filter((m) => m.sleep_duration_seconds != null && m.sleep_score != null).length;
+  const presentWaso = nights.filter((m) => m.sleep_duration_seconds != null && m.awake_seconds != null).length;
+  const presentHrv = nights.filter((m) => m.hrv_last_night_average != null).length;
+
+  const nightsPresentAny = nights.filter((m) => {
+    return Boolean(
+      m.sleep_duration_seconds != null ||
+        m.sleep_score != null ||
+        m.awake_seconds != null ||
+        m.hrv_last_night_average != null
+    );
+  }).length;
+
+  return {
+    weekEnding,
+    calendarDaysPresent: calPresentAny,
+    calendarDaysExpected: 7,
+    sleepNightsPresent: nightsPresentAny,
+    sleepNightsExpected: 7,
+    presentByMetric: {
+      body_battery_start_days: presentBodyBattery,
+      stress_days: presentStress,
+      rhr_days: presentRhr,
+      sleep_duration_nights: presentSleepDur,
+      sleep_score_nights: presentSleepScore,
+      waso_nights: presentWaso,
+      hrv_nights: presentHrv,
+    },
+  };
 }
 
 function formatWeekRange(weekEnding: string): string {
@@ -218,7 +293,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No health data available for participant" }, { status: 400 });
   }
 
-  const weekEnding = (rows[0] as unknown as { metric_date?: string }).metric_date ?? todayYmd;
+  const latestMetricDate = (rows[0] as unknown as { metric_date?: string }).metric_date ?? todayYmd;
+  // Use a consistent window: end on "yesterday (UTC)" when possible, but never after the latest available metric date.
+  const defaultWeekEnding = ymdAddDays(todayYmd, -1);
+  const weekEnding = minYmd(latestMetricDate, defaultWeekEnding);
 
   const typed: Metric[] = (rows ?? []).map((m) => {
     const mm = m as unknown as {
@@ -247,6 +325,7 @@ export async function POST(request: Request) {
   const weeklyFlag = computeWeeklyFlagFromMetrics(typed, weekEnding);
   const weekRange = formatWeekRange(weekEnding);
   const badge = badgeFromFinalColor(weeklyFlag.finalColor);
+  const completeness = computeCompleteness(typed, weekEnding);
 
   // Load templates
   let masterRules = "";
@@ -289,6 +368,9 @@ export async function POST(request: Request) {
     `Week ending: ${weekEnding}`,
     `Week range (display): ${weekRange}`,
     `Badge (must use one of the approved labels): ${badge.label} ${badge.icon}`,
+    "",
+    "DATA_COMPLETENESS_JSON:",
+    JSON.stringify(completeness, null, 2),
     "",
     "WEEKLY_FLAG_JSON:",
     JSON.stringify(weeklyFlag, null, 2),
@@ -373,6 +455,7 @@ export async function POST(request: Request) {
     weekEnding,
     weekRange,
     weeklyFlag,
+    completeness,
     assistantMessage,
     updatedHtml,
   });
