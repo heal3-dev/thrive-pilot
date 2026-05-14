@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
       for (const job of jobs) {
         processed++;
 
-        let primaryResult: SendEmailOk | SendEmailErr = await sendWithProvider(resendProvider, job);
+        const primaryResult: SendEmailOk | SendEmailErr = await sendWithProvider(resendProvider, job);
         let finalResult: SendEmailOk | SendEmailErr = primaryResult;
 
         // Only fail over to SendPulse on explicit Resend quota exhaustion.
