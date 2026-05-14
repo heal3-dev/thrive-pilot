@@ -791,9 +791,9 @@ export default function WeeklyReportsPage() {
           <div className="p-4 border-b-2 border-slate-100 bg-slate-50/50">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-slate-900 truncate">
+                <h2 className="text-base font-bold text-slate-900 truncate leading-tight">
                   {selectedParticipant ? formatParticipantLabel(selectedParticipant) : "Select a participant"}
-                </p>
+                </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Status:{" "}
                   <span className={selectedStatus === "approved" ? "text-emerald-700 font-semibold" : "text-amber-700 font-semibold"}>
@@ -813,7 +813,8 @@ export default function WeeklyReportsPage() {
                     }));
                   }}
                   disabled={!selectedParticipant}
-                  className="border-slate-300"
+                  size="sm"
+                  className="bg-teal-500 hover:bg-teal-600 text-white border-teal-500 hover:border-teal-600"
                 >
                   {selectedStatus === "approved" ? "Mark Pending" : "Approve"}
                 </Button>
