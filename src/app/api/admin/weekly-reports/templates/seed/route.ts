@@ -4,20 +4,23 @@ import { z } from "zod";
 import { requireAdmin } from "@/app/api/admin/_utils";
 import {
   DEFAULT_GENERATE_WRAPPER,
+  DEFAULT_MASTER_RULES,
   DEFAULT_OLGA_HTML_BASE_TEMPLATE,
   DEFAULT_REVISE_WRAPPER,
   type WeeklyReportTemplateKey,
 } from "@/lib/weekly-reports/template-defaults";
 
 const requestSchema = z.object({
-  keys: z.array(z.enum(["html_base_template", "revise_wrapper", "generate_wrapper"])).min(1).max(3).optional(),
+  keys: z.array(z.enum(["master_rules", "html_base_template", "revise_wrapper", "generate_wrapper"])).min(1).max(4).optional(),
   force: z.boolean().optional(),
 });
 
-const DEFAULT_SEED_KEYS: WeeklyReportTemplateKey[] = ["html_base_template"];
+const DEFAULT_SEED_KEYS: WeeklyReportTemplateKey[] = ["master_rules", "html_base_template"];
 
 function getDefaultContent(key: WeeklyReportTemplateKey): string {
   switch (key) {
+    case "master_rules":
+      return DEFAULT_MASTER_RULES;
     case "html_base_template":
       return DEFAULT_OLGA_HTML_BASE_TEMPLATE;
     case "revise_wrapper":

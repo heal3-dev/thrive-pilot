@@ -7,7 +7,7 @@ import { useDashboard } from "@/app/dashboard/layout";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { DEFAULT_GENERATE_WRAPPER, DEFAULT_OLGA_HTML_BASE_TEMPLATE, DEFAULT_REVISE_WRAPPER } from "@/lib/weekly-reports/template-defaults";
+import { DEFAULT_GENERATE_WRAPPER, DEFAULT_MASTER_RULES, DEFAULT_OLGA_HTML_BASE_TEMPLATE, DEFAULT_REVISE_WRAPPER } from "@/lib/weekly-reports/template-defaults";
 
 type ParticipantMini = {
   id: string;
@@ -68,7 +68,7 @@ const TEMPLATE_LABELS: Record<TemplateKey, { title: string; hint: string }> = {
 };
 
 const DEFAULT_TEMPLATES: Record<TemplateKey, string> = {
-  master_rules: "",
+  master_rules: DEFAULT_MASTER_RULES,
   revise_wrapper: DEFAULT_REVISE_WRAPPER,
   generate_wrapper: DEFAULT_GENERATE_WRAPPER,
   html_base_template: DEFAULT_OLGA_HTML_BASE_TEMPLATE,
@@ -467,7 +467,7 @@ export default function WeeklyReportsPage() {
               Saving creates a new active version for this template key.
             </p>
             <div className="flex items-center gap-2">
-              {!currentTemplateRow && templateKey === "html_base_template" ? (
+              {!currentTemplateRow && (templateKey === "html_base_template" || templateKey === "master_rules") ? (
                 <Button
                   variant="outline"
                   onClick={async () => {
@@ -484,7 +484,7 @@ export default function WeeklyReportsPage() {
                           "Content-Type": "application/json",
                           Authorization: `Bearer ${token}`,
                         },
-                        body: JSON.stringify({ keys: ["html_base_template"] }),
+                        body: JSON.stringify({ keys: [templateKey] }),
                       });
                       if (!res.ok) {
                         const j = (await res.json().catch(() => null)) as unknown;
