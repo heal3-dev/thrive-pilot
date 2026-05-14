@@ -68,8 +68,8 @@ type TemplateRow = {
 
 const TEMPLATE_KEYS: TemplateKey[] = [
   "master_rules",
-  "revise_wrapper",
   "generate_wrapper",
+  "revise_wrapper",
   "html_base_template",
 ];
 
@@ -87,7 +87,7 @@ const TEMPLATE_LABELS: Record<TemplateKey, { title: string; hint: string }> = {
     hint: "Instructions for generating a new draft from metrics. Applied together with Master rules. Should return JSON only (no HTML).",
   },
   html_base_template: {
-    title: "HTML base template",
+    title: "HTML template",
     hint: "Branded HTML template (full document). This is used as the starting point for new drafts and preview rendering.",
   },
 };
