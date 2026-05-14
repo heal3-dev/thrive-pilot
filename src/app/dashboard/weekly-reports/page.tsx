@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useDashboard } from "@/app/dashboard/layout";
@@ -408,6 +408,7 @@ export default function WeeklyReportsPage() {
   const [feedbackInput, setFeedbackInput] = useState("");
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
@@ -416,6 +417,11 @@ export default function WeeklyReportsPage() {
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [hasLoadedTemplates, setHasLoadedTemplates] = useState(false);
+
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
+  const [previewScale, setPreviewScale] = useState(1);
+  const PREVIEW_BASE_WIDTH = 980;
+  const PREVIEW_BASE_HEIGHT = 1500;
 
   const currentTemplateDraft = templateDraftByKey[templateKey] ?? "";
   const currentTemplateRow = templatesByKey[templateKey];
@@ -473,6 +479,19 @@ export default function WeeklyReportsPage() {
     },
     [hasLoadedTemplates, isAdmin]
   );
+
+  useEffect(() => {
+    const el = previewContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width ?? 0;
+      if (!width) return;
+      const next = Math.min(1, Math.max(0.4, (width - 8) / PREVIEW_BASE_WIDTH));
+      setPreviewScale(Math.round(next * 1000) / 1000);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -814,40 +833,118 @@ export default function WeeklyReportsPage() {
             <div className="min-h-0 border-b-2 lg:border-b-0 lg:border-r-2 border-slate-100 flex flex-col">
               <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                 <p className="text-sm font-bold text-slate-900">Preview</p>
-                <Button
-                  onClick={() => {
-                    if (!selectedParticipant) return;
-                    const base =
-                      templatesByKey.html_base_template?.content ??
-                      templateDraftByKey.html_base_template ??
-                      DEFAULT_TEMPLATES.html_base_template;
-                    const injected = injectNameAndRange(base, {
-                      name: selectedParticipant.name?.trim() || "there",
-                      weekRange: formatWeekRangeFromNow(),
-                    });
-                    setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: injected }));
-                    setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
-                  }}
-                  disabled={!selectedParticipant}
-                  className="bg-teal-500 hover:bg-teal-600 text-white"
-                  size="sm"
-                >
-                  Reset to template
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={async () => {
+                      if (!selectedParticipant) return;
+                      setFeedbackError(null);
+                      setIsGenerating(true);
+                      try {
+                        const { data: sessionData } = await supabase.auth.getSession();
+                        const token = sessionData?.session?.access_token;
+                        if (!token) throw new Error("Authentication required");
+
+                        const res = await fetch("/api/admin/weekly-reports/generate", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({ participantId: selectedParticipant.id }),
+                        });
+                        if (!res.ok) {
+                          const j = (await res.json().catch(() => null)) as unknown;
+                          const msg =
+                            typeof j === "object" &&
+                            j !== null &&
+                            "error" in j &&
+                            typeof (j as { error?: unknown }).error === "string"
+                              ? (j as { error: string }).error
+                              : null;
+                          throw new Error(msg || "Failed to generate weekly report");
+                        }
+
+                        const j = (await res.json()) as { updatedHtml: string; assistantMessage?: string };
+                        const updatedHtml = j.updatedHtml ?? "";
+
+                        setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: updatedHtml }));
+                        setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+
+                        const assistantMsg: ChatMessage = {
+                          id: createId("gen"),
+                          role: "assistant",
+                          content: j.assistantMessage || "Generated the weekly report draft from this week’s data.",
+                        };
+                        setChatByParticipant((prev) => ({
+                          ...prev,
+                          [selectedParticipant.id]: [...(prev[selectedParticipant.id] ?? []), assistantMsg],
+                        }));
+                      } catch (e) {
+                        setFeedbackError(e instanceof Error ? e.message : "Failed to generate report");
+                      } finally {
+                        setIsGenerating(false);
+                      }
+                    }}
+                    disabled={!selectedParticipant || isGenerating}
+                    className="bg-teal-500 hover:bg-teal-600 text-white"
+                    size="sm"
+                  >
+                    {isGenerating ? "Generating…" : "Generate from data"}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!selectedParticipant) return;
+                      const base =
+                        templatesByKey.html_base_template?.content ??
+                        templateDraftByKey.html_base_template ??
+                        DEFAULT_TEMPLATES.html_base_template;
+                      const injected = injectNameAndRange(base, {
+                        name: selectedParticipant.name?.trim() || "there",
+                        weekRange: formatWeekRangeFromNow(),
+                      });
+                      setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: injected }));
+                      setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+                    }}
+                    disabled={!selectedParticipant || isGenerating}
+                    className="border-slate-300"
+                    size="sm"
+                  >
+                    Reset
+                  </Button>
+                </div>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-white">
+              <div ref={previewContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 bg-white">
                 {html.trim().length === 0 ? (
                   <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-600">
                     No HTML draft yet.
                   </div>
                 ) : (
                   <div className="w-full rounded-2xl border border-slate-200 shadow-sm overflow-hidden bg-white">
-                    <iframe
-                      title="Weekly report preview"
-                      sandbox=""
-                      className="w-full h-[calc(100vh-280px)] min-h-[520px] bg-white"
-                      srcDoc={html}
-                    />
+                    <div
+                      className="mx-auto"
+                      style={{
+                        width: Math.round(PREVIEW_BASE_WIDTH * previewScale),
+                        height: Math.round(PREVIEW_BASE_HEIGHT * previewScale),
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: PREVIEW_BASE_WIDTH,
+                          height: PREVIEW_BASE_HEIGHT,
+                          transform: `scale(${previewScale})`,
+                          transformOrigin: "top left",
+                        }}
+                      >
+                        <iframe
+                          title="Weekly report preview"
+                          sandbox=""
+                          style={{ width: PREVIEW_BASE_WIDTH, height: PREVIEW_BASE_HEIGHT, background: "white" }}
+                          srcDoc={html}
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
