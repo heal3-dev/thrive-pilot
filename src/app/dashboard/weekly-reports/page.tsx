@@ -148,7 +148,6 @@ export default function WeeklyReportsPage() {
   const [sendPreview, setSendPreview] = useState<null | {
     toEnqueue: Array<{ reportId: string; participantId: string; toEmail: string; participantName: string; weekRange: string }>;
     alreadyQueued: Array<{ reportId: string; participantId: string; weekRange: string }>;
-    noEmail: Array<{ reportId: string; participantId: string; participantName: string; weekRange: string }>;
   }>(null);
   const [selectedSendReportIds, setSelectedSendReportIds] = useState<Record<string, boolean>>({});
 
@@ -874,18 +873,16 @@ export default function WeeklyReportsPage() {
                       : "Failed to preview approved sends";
                   throw new Error(msg);
                 }
-                const getArray = (key: "toEnqueue" | "alreadyQueued" | "noEmail"): unknown[] => {
+                const getArray = (key: "toEnqueue" | "alreadyQueued"): unknown[] => {
                   if (!j || typeof j !== "object" || !(key in j)) return [];
                   const v = (j as Record<string, unknown>)[key];
                   return Array.isArray(v) ? v : [];
                 };
                 const toEnqueue = getArray("toEnqueue");
                 const alreadyQueued = getArray("alreadyQueued");
-                const noEmail = getArray("noEmail");
                 const preview = {
                   toEnqueue: toEnqueue as Array<{ reportId: string; participantId: string; toEmail: string; participantName: string; weekRange: string }>,
                   alreadyQueued: alreadyQueued as Array<{ reportId: string; participantId: string; weekRange: string }>,
-                  noEmail: noEmail as Array<{ reportId: string; participantId: string; participantName: string; weekRange: string }>,
                 };
                 setSendPreview(preview);
                 const initial: Record<string, boolean> = {};
@@ -924,7 +921,7 @@ export default function WeeklyReportsPage() {
                   {Object.values(selectedSendReportIds).filter(Boolean).length} / {sendPreview.toEnqueue.length}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
-                  Skipped (no email): {sendPreview.noEmail.length} · Already queued: {sendPreview.alreadyQueued.length}
+                  Skipped (already enqueued): {sendPreview.alreadyQueued.length}
                 </p>
               </div>
 
@@ -953,18 +950,11 @@ export default function WeeklyReportsPage() {
                 )}
               </div>
 
-              {(sendPreview.noEmail.length > 0 || sendPreview.alreadyQueued.length > 0) ? (
+              {sendPreview.alreadyQueued.length > 0 ? (
                 <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-600 space-y-2">
-                  {sendPreview.noEmail.length > 0 ? (
-                    <p>
-                      <span className="font-semibold">Skipped (no email):</span> {sendPreview.noEmail.length}
-                    </p>
-                  ) : null}
-                  {sendPreview.alreadyQueued.length > 0 ? (
-                    <p>
-                      <span className="font-semibold">Already queued:</span> {sendPreview.alreadyQueued.length}
-                    </p>
-                  ) : null}
+                  <p>
+                    <span className="font-semibold">Skipped (already enqueued):</span> {sendPreview.alreadyQueued.length}
+                  </p>
                 </div>
               ) : null}
 
