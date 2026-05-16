@@ -9,6 +9,10 @@ export const dynamic = "force-dynamic";
 const requestSchema = z.object({
   // If omitted, sends all approved reports.
   participantIds: z.array(z.string().uuid()).optional(),
+  // Prefer specifying reportIds when selecting a subset.
+  reportIds: z.array(z.string().uuid()).optional(),
+  // When true, returns a preview without enqueueing.
+  dryRun: z.boolean().optional(),
 });
 
 type WeeklyReportRow = {
@@ -83,7 +87,9 @@ export async function POST(request: Request) {
     .select("id, participant_id, week_ending, week_range, badge_label, badge_icon, html, status, email_job_id")
     .eq("status", "approved");
 
-  if (payload.participantIds && payload.participantIds.length > 0) {
+  if (payload.reportIds && payload.reportIds.length > 0) {
+    query = query.in("id", payload.reportIds);
+  } else if (payload.participantIds && payload.participantIds.length > 0) {
     query = query.in("participant_id", payload.participantIds);
   }
 
@@ -114,6 +120,9 @@ export async function POST(request: Request) {
   let skippedAlreadyQueued = 0;
   let failed = 0;
   const errors: Array<{ reportId: string; participantId: string; error: string }> = [];
+  const toEnqueue: Array<{ reportId: string; participantId: string; toEmail: string; participantName: string; weekRange: string }> = [];
+  const alreadyQueued: Array<{ reportId: string; participantId: string; weekRange: string }> = [];
+  const noEmail: Array<{ reportId: string; participantId: string; participantName: string; weekRange: string }> = [];
 
   for (const report of rows) {
     const participant = byId.get(report.participant_id);
@@ -126,6 +135,20 @@ export async function POST(request: Request) {
     // If already linked, treat as already queued (idempotent).
     if (report.email_job_id) {
       skippedAlreadyQueued++;
+      alreadyQueued.push({ reportId: report.id, participantId: report.participant_id, weekRange: report.week_range });
+      continue;
+    }
+
+    const toEmail = (participant.email ?? "").trim();
+    const participantName = participant.name?.trim() || participant.email?.trim() || "Participant";
+    if (!toEmail) {
+      skippedNoEmail++;
+      noEmail.push({ reportId: report.id, participantId: report.participant_id, participantName, weekRange: report.week_range });
+      continue;
+    }
+
+    if (payload.dryRun) {
+      toEnqueue.push({ reportId: report.id, participantId: report.participant_id, toEmail, participantName, weekRange: report.week_range });
       continue;
     }
 
@@ -163,6 +186,9 @@ export async function POST(request: Request) {
     skippedNoEmail,
     skippedAlreadyQueued,
     failed,
+    toEnqueue: payload.dryRun ? toEnqueue : undefined,
+    alreadyQueued: payload.dryRun ? alreadyQueued : undefined,
+    noEmail: payload.dryRun ? noEmail : undefined,
     errors: errors.length > 0 ? errors : undefined,
   });
 }

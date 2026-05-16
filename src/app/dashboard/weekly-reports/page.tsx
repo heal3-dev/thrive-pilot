@@ -144,6 +144,13 @@ export default function WeeklyReportsPage() {
   const feedbackTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [isSendingApproved, setIsSendingApproved] = useState(false);
   const lastSavedHtmlRef = useRef<Record<string, string>>({});
+  const [isSendApprovedOpen, setIsSendApprovedOpen] = useState(false);
+  const [sendPreview, setSendPreview] = useState<null | {
+    toEnqueue: Array<{ reportId: string; participantId: string; toEmail: string; participantName: string; weekRange: string }>;
+    alreadyQueued: Array<{ reportId: string; participantId: string; weekRange: string }>;
+    noEmail: Array<{ reportId: string; participantId: string; participantName: string; weekRange: string }>;
+  }>(null);
+  const [selectedSendReportIds, setSelectedSendReportIds] = useState<Record<string, boolean>>({});
 
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
@@ -503,9 +510,61 @@ export default function WeeklyReportsPage() {
     }
   }, []);
 
+  const refreshParticipantStatuses = useCallback(async () => {
+    try {
+      if (participants.length === 0) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+
+      const ids = participants.map((p) => p.id);
+      const chunkSize = 150;
+      const merged: Record<string, unknown> = {};
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const res = await fetch("/api/admin/weekly-reports/list", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ participantIds: chunk }),
+        });
+        if (!res.ok) continue;
+        const j = (await res.json().catch(() => null)) as unknown;
+        const map =
+          j && typeof j === "object" && "latestByParticipant" in j
+            ? (j as { latestByParticipant?: unknown }).latestByParticipant
+            : null;
+        if (map && typeof map === "object") Object.assign(merged, map as Record<string, unknown>);
+      }
+
+      setStatusByParticipant((prev) => {
+        const next = { ...prev };
+        for (const [pid, row] of Object.entries(merged)) {
+          if (!row || typeof row !== "object") continue;
+          const s = (row as Record<string, unknown>).status;
+          const status: ParticipantStatus =
+            s === "approved" || s === "queued" || s === "sent" || s === "failed" || s === "draft" ? s : "draft";
+          next[pid] = status;
+        }
+        return next;
+      });
+
+      // Also refresh approvedCount to stay in sync.
+      await refreshApprovedCount();
+    } catch {
+      // ignore
+    }
+  }, [participants, refreshApprovedCount]);
+
   useEffect(() => {
     void refreshApprovedCount();
   }, [refreshApprovedCount]);
+
+  useEffect(() => {
+    void refreshParticipantStatuses();
+  }, [refreshParticipantStatuses]);
 
   useEffect(() => {
     if (!selectedParticipant || !selectedMeta) return;
@@ -791,6 +850,9 @@ export default function WeeklyReportsPage() {
           <Button
             size="sm"
             onClick={async () => {
+              setIsSendApprovedOpen(true);
+              setSendPreview(null);
+              setSelectedSendReportIds({});
               setIsSendingApproved(true);
               try {
                 const { data: sessionData } = await supabase.auth.getSession();
@@ -802,28 +864,36 @@ export default function WeeklyReportsPage() {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                   },
-                  body: JSON.stringify({}),
+                  body: JSON.stringify({ dryRun: true }),
                 });
                 const j = (await res.json().catch(() => null)) as unknown;
                 if (!res.ok) {
                   const msg =
                     j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
                       ? (j as { error: string }).error
-                      : "Failed to send approved reports";
+                      : "Failed to preview approved sends";
                   throw new Error(msg);
                 }
-                const getNum = (key: "enqueued" | "skippedNoEmail" | "skippedAlreadyQueued" | "failed") => {
-                  if (!j || typeof j !== "object" || !(key in j)) return 0;
+                const getArray = (key: "toEnqueue" | "alreadyQueued" | "noEmail"): unknown[] => {
+                  if (!j || typeof j !== "object" || !(key in j)) return [];
                   const v = (j as Record<string, unknown>)[key];
-                  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+                  return Array.isArray(v) ? v : [];
                 };
-                const summary = `Enqueued: ${getNum("enqueued")}\nSkipped (no email): ${getNum("skippedNoEmail")}\nAlready queued: ${getNum(
-                  "skippedAlreadyQueued"
-                )}\nFailed: ${getNum("failed")}`;
-                alert(summary);
-                await refreshApprovedCount();
+                const toEnqueue = getArray("toEnqueue");
+                const alreadyQueued = getArray("alreadyQueued");
+                const noEmail = getArray("noEmail");
+                const preview = {
+                  toEnqueue: toEnqueue as Array<{ reportId: string; participantId: string; toEmail: string; participantName: string; weekRange: string }>,
+                  alreadyQueued: alreadyQueued as Array<{ reportId: string; participantId: string; weekRange: string }>,
+                  noEmail: noEmail as Array<{ reportId: string; participantId: string; participantName: string; weekRange: string }>,
+                };
+                setSendPreview(preview);
+                const initial: Record<string, boolean> = {};
+                for (const it of preview.toEnqueue) initial[it.reportId] = true;
+                setSelectedSendReportIds(initial);
               } catch (e) {
-                alert(e instanceof Error ? e.message : "Failed to send approved reports");
+                alert(e instanceof Error ? e.message : "Failed to preview approved sends");
+                setIsSendApprovedOpen(false);
               } finally {
                 setIsSendingApproved(false);
               }
@@ -835,6 +905,123 @@ export default function WeeklyReportsPage() {
           </Button>
         </div>
       </div>
+
+      <Modal
+        isOpen={isSendApprovedOpen}
+        onClose={() => setIsSendApprovedOpen(false)}
+        title="Send approved reports"
+        subtitle="Confirm who will be queued for sending."
+        size="lg"
+      >
+        <div className="space-y-4">
+          {!sendPreview ? (
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-600">Loading preview…</div>
+          ) : (
+            <>
+              <div className="p-3 rounded-xl border border-slate-200 bg-white">
+                <p className="text-sm font-semibold text-slate-900">
+                  Will enqueue:{" "}
+                  {Object.values(selectedSendReportIds).filter(Boolean).length} / {sendPreview.toEnqueue.length}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Skipped (no email): {sendPreview.noEmail.length} · Already queued: {sendPreview.alreadyQueued.length}
+                </p>
+              </div>
+
+              <div className="max-h-[340px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                {sendPreview.toEnqueue.length === 0 ? (
+                  <div className="p-4 text-sm text-slate-600">No approved reports ready to enqueue.</div>
+                ) : (
+                  sendPreview.toEnqueue.map((it) => (
+                    <label key={it.reportId} className="flex items-start gap-3 px-4 py-3 border-b border-slate-100">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={Boolean(selectedSendReportIds[it.reportId])}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedSendReportIds((prev) => ({ ...prev, [it.reportId]: checked }));
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{it.participantName}</p>
+                        <p className="text-xs text-slate-500 truncate">{it.toEmail}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{it.weekRange}</p>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+
+              {(sendPreview.noEmail.length > 0 || sendPreview.alreadyQueued.length > 0) ? (
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-600 space-y-2">
+                  {sendPreview.noEmail.length > 0 ? (
+                    <p>
+                      <span className="font-semibold">Skipped (no email):</span> {sendPreview.noEmail.length}
+                    </p>
+                  ) : null}
+                  {sendPreview.alreadyQueued.length > 0 ? (
+                    <p>
+                      <span className="font-semibold">Already queued:</span> {sendPreview.alreadyQueued.length}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="outline" className="border-slate-300" size="sm" onClick={() => setIsSendApprovedOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                  disabled={Object.values(selectedSendReportIds).filter(Boolean).length === 0 || isSendingApproved}
+                  onClick={async () => {
+                    setIsSendingApproved(true);
+                    try {
+                      const { data: sessionData } = await supabase.auth.getSession();
+                      const token = sessionData?.session?.access_token;
+                      if (!token) throw new Error("Authentication required");
+                      const reportIds = Object.entries(selectedSendReportIds)
+                        .filter(([, v]) => v)
+                        .map(([k]) => k);
+                      const res = await fetch("/api/admin/weekly-reports/send-approved", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ reportIds }),
+                      });
+                      const j = (await res.json().catch(() => null)) as unknown;
+                      if (!res.ok) {
+                        const msg =
+                          j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
+                            ? (j as { error: string }).error
+                            : "Failed to enqueue approved reports";
+                        throw new Error(msg);
+                      }
+                      const enq =
+                        j && typeof j === "object" && "enqueued" in j && typeof (j as { enqueued?: unknown }).enqueued === "number"
+                          ? (j as { enqueued: number }).enqueued
+                          : 0;
+                      alert(`Enqueued ${enq} reports.`);
+                      setIsSendApprovedOpen(false);
+                      await refreshParticipantStatuses();
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : "Failed to enqueue approved reports");
+                    } finally {
+                      setIsSendingApproved(false);
+                    }
+                  }}
+                >
+                  {isSendingApproved ? "Enqueueing…" : "Confirm & enqueue"}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
 
       <Modal
         isOpen={isTemplatesOpen}
