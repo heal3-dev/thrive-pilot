@@ -512,7 +512,36 @@ export async function POST(request: Request) {
     content: parsed,
   });
 
+  // Persist the draft for approval/sending.
+  const { data: savedReport, error: saveErr } = await admin
+    .from("weekly_reports")
+    .upsert(
+      {
+        participant_id: payload.participantId,
+        week_ending: weekEnding,
+        week_range: weekRange,
+        badge_label: badge.label,
+        badge_icon: badge.icon,
+        html: updatedHtml,
+        status: "draft",
+        approved_at: null,
+        queued_at: null,
+        sent_at: null,
+        last_error: null,
+        email_job_id: null,
+      },
+      { onConflict: "participant_id,week_ending" }
+    )
+    .select("id, status")
+    .maybeSingle();
+
+  if (saveErr) {
+    return NextResponse.json({ error: `Failed to save weekly report draft: ${saveErr.message}` }, { status: 500 });
+  }
+
   return NextResponse.json({
+    reportId: savedReport?.id ?? null,
+    reportStatus: savedReport?.status ?? "draft",
     participantLabel,
     weekEnding,
     weekRange,

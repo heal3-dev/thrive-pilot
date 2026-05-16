@@ -129,6 +129,18 @@ export async function GET(request: NextRequest) {
             errors.push(`Failed to mark job sent (${job.id}): ${updateErr.message}`);
           }
 
+          if (job.kind === "weekly_report") {
+            const { error: reportErr } = await supabase
+              .from("weekly_reports")
+              .update({
+                status: "sent",
+                sent_at: new Date().toISOString(),
+                last_error: null,
+              })
+              .eq("email_job_id", job.id);
+            if (reportErr) errors.push(`Failed to mark weekly report sent (${job.id}): ${reportErr.message}`);
+          }
+
           continue;
         }
 
@@ -148,6 +160,17 @@ export async function GET(request: NextRequest) {
             })
             .eq("id", job.id);
           if (updateErr) errors.push(`Failed to mark job failed (${job.id}): ${updateErr.message}`);
+
+          if (job.kind === "weekly_report") {
+            const { error: reportErr } = await supabase
+              .from("weekly_reports")
+              .update({
+                status: "failed",
+                last_error: finalResult.detail,
+              })
+              .eq("email_job_id", job.id);
+            if (reportErr) errors.push(`Failed to mark weekly report failed (${job.id}): ${reportErr.message}`);
+          }
           continue;
         }
 
