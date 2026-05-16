@@ -17,7 +17,7 @@ type ParticipantMini = {
   phone_number: string | null;
 };
 
-type ParticipantStatus = "pending" | "approved";
+type ParticipantStatus = "draft" | "approved" | "queued" | "sent" | "failed";
 
 type ChatMessage = {
   id: string;
@@ -130,12 +130,9 @@ export default function WeeklyReportsPage() {
 
   const [statusByParticipant, setStatusByParticipant] = useState<Record<string, ParticipantStatus>>({});
   const selectedStatus: ParticipantStatus =
-    (selectedParticipant ? statusByParticipant[selectedParticipant.id] : undefined) ?? "pending";
+    (selectedParticipant ? statusByParticipant[selectedParticipant.id] : undefined) ?? "draft";
 
-  const approvedCount = useMemo(
-    () => Object.values(statusByParticipant).filter((s) => s === "approved").length,
-    [statusByParticipant]
-  );
+  const [approvedCount, setApprovedCount] = useState(0);
 
   const [chatByParticipant, setChatByParticipant] = useState<Record<string, ChatMessage[]>>({});
   const chat = selectedParticipant ? chatByParticipant[selectedParticipant.id] ?? [] : [];
@@ -145,6 +142,8 @@ export default function WeeklyReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [outreachCopied, setOutreachCopied] = useState(false);
   const feedbackTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isSendingApproved, setIsSendingApproved] = useState(false);
+  const lastSavedHtmlRef = useRef<Record<string, string>>({});
 
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
@@ -261,7 +260,7 @@ export default function WeeklyReportsPage() {
       if (!current.trim()) return;
       const next = mutateHtml(current, mutator);
       setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: next }));
-      setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+      setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "draft" }));
     },
     [htmlByParticipant, mutateHtml, selectedParticipant]
   );
@@ -490,6 +489,73 @@ export default function WeeklyReportsPage() {
     void loadTemplates(false);
   }, [isAdmin, loadTemplates]);
 
+  const refreshApprovedCount = useCallback(async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/admin/weekly-reports/summary", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const j = (await res.json()) as { approvedCount?: number };
+      setApprovedCount(typeof j.approvedCount === "number" ? j.approvedCount : 0);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshApprovedCount();
+  }, [refreshApprovedCount]);
+
+  useEffect(() => {
+    if (!selectedParticipant || !selectedMeta) return;
+    const pid = selectedParticipant.id;
+    const currentHtml = (html ?? "").trim();
+    if (!currentHtml) return;
+    if (lastSavedHtmlRef.current[pid] === currentHtml) return;
+
+    const handle = window.setTimeout(async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+
+        const res = await fetch("/api/admin/weekly-reports/report", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            participantId: pid,
+            weekEnding: selectedMeta.weekEnding,
+            weekRange: selectedMeta.weekRange,
+            badgeLabel: selectedMeta.badgeLabel,
+            badgeIcon: selectedMeta.badgeIcon,
+            html: currentHtml,
+          }),
+        });
+        if (!res.ok) return;
+
+        lastSavedHtmlRef.current[pid] = currentHtml;
+        setStatusByParticipant((prev) => ({ ...prev, [pid]: "draft" }));
+        void refreshApprovedCount();
+      } catch {
+        // ignore
+      }
+    }, 800);
+
+    return () => window.clearTimeout(handle);
+  }, [
+    refreshApprovedCount,
+    selectedMeta?.badgeIcon,
+    selectedMeta?.badgeLabel,
+    selectedMeta?.weekEnding,
+    selectedMeta?.weekRange,
+    selectedParticipant?.id,
+    html,
+  ]);
+
   useEffect(() => {
     if (!selectedParticipant) return;
     let cancelled = false;
@@ -508,6 +574,42 @@ export default function WeeklyReportsPage() {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token;
         if (!token) throw new Error("Authentication required");
+
+        // First, load the most recent saved report if it exists (avoid unnecessary OpenAI calls).
+        const existingRes = await fetch(`/api/admin/weekly-reports/report?participantId=${encodeURIComponent(p.id)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (existingRes.ok) {
+          const existingJson = (await existingRes.json().catch(() => null)) as unknown;
+          const report =
+            existingJson && typeof existingJson === "object" && "report" in existingJson
+              ? (existingJson as { report?: unknown }).report
+              : null;
+          if (report && typeof report === "object" && typeof report.html === "string" && report.html.trim().length > 0) {
+            setHtmlByParticipant((prev) => ({ ...prev, [p.id]: report.html }));
+            lastSavedHtmlRef.current[p.id] = report.html.trim();
+            if (typeof report.week_range === "string" && typeof report.badge_label === "string" && typeof report.badge_icon === "string") {
+              setMetaByParticipant((prev) => ({
+                ...prev,
+                [p.id]: {
+                  participantLabel: formatParticipantLabel(p),
+                  weekEnding: typeof report.week_ending === "string" ? report.week_ending : "",
+                  weekRange: report.week_range,
+                  badgeLabel: report.badge_label,
+                  badgeIcon: report.badge_icon,
+                },
+              }));
+            }
+            const statusRaw = typeof report.status === "string" ? report.status : "draft";
+            const status: ParticipantStatus =
+              statusRaw === "approved" || statusRaw === "queued" || statusRaw === "sent" || statusRaw === "failed"
+                ? statusRaw
+                : "draft";
+            setStatusByParticipant((prev) => ({ ...prev, [p.id]: status }));
+            autoGeneratedRef.current.add(p.id);
+            return;
+          }
+        }
 
         const statusUrl = `/api/admin/weekly-reports/data-status?participantId=${encodeURIComponent(p.id)}`;
         const statusRes = await fetch(statusUrl, { headers: { Authorization: `Bearer ${token}` } });
@@ -578,12 +680,15 @@ export default function WeeklyReportsPage() {
           weekRange?: string;
           badgeLabel?: string;
           badgeIcon?: string;
+          reportId?: string | null;
+          reportStatus?: string;
           completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
         };
         if (cancelled) return;
 
         setHtmlByParticipant((prev) => ({ ...prev, [p.id]: j.updatedHtml ?? "" }));
-        setStatusByParticipant((prev) => ({ ...prev, [p.id]: "pending" }));
+        lastSavedHtmlRef.current[p.id] = (j.updatedHtml ?? "").trim();
+        setStatusByParticipant((prev) => ({ ...prev, [p.id]: "draft" }));
         if (j.weekRange && j.badgeLabel && j.badgeIcon) {
           const weekRange = j.weekRange;
           const badgeLabel = j.badgeLabel;
@@ -675,14 +780,48 @@ export default function WeeklyReportsPage() {
           </Button>
           <Button
             size="sm"
-            onClick={() => {
-              // UI-only placeholder for now.
-              alert("Batch send (mock). Next step: enqueue weekly reports to email_jobs.");
+            onClick={async () => {
+              setIsSendingApproved(true);
+              try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const token = sessionData?.session?.access_token;
+                if (!token) throw new Error("Authentication required");
+                const res = await fetch("/api/admin/weekly-reports/send-approved", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({}),
+                });
+                const j = (await res.json().catch(() => null)) as unknown;
+                if (!res.ok) {
+                  const msg =
+                    j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
+                      ? (j as { error: string }).error
+                      : "Failed to send approved reports";
+                  throw new Error(msg);
+                }
+                const getNum = (key: "enqueued" | "skippedNoEmail" | "skippedAlreadyQueued" | "failed") => {
+                  if (!j || typeof j !== "object" || !(key in j)) return 0;
+                  const v = (j as Record<string, unknown>)[key];
+                  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+                };
+                const summary = `Enqueued: ${getNum("enqueued")}\nSkipped (no email): ${getNum("skippedNoEmail")}\nAlready queued: ${getNum(
+                  "skippedAlreadyQueued"
+                )}\nFailed: ${getNum("failed")}`;
+                alert(summary);
+                await refreshApprovedCount();
+              } catch (e) {
+                alert(e instanceof Error ? e.message : "Failed to send approved reports");
+              } finally {
+                setIsSendingApproved(false);
+              }
             }}
             disabled={approvedCount === 0}
             className="bg-teal-500 hover:bg-teal-600 text-white"
           >
-            Send approved ({approvedCount})
+            {isSendingApproved ? "Sending…" : `Send approved (${approvedCount})`}
           </Button>
         </div>
       </div>
@@ -885,7 +1024,17 @@ export default function WeeklyReportsPage() {
               <div className="p-4 text-sm text-slate-500">No participants.</div>
             ) : (
               participants.map((p) => {
-                const status = statusByParticipant[p.id] ?? "pending";
+                const status: ParticipantStatus = statusByParticipant[p.id] ?? "draft";
+                const statusLabel =
+                  status === "draft"
+                    ? "Draft"
+                    : status === "approved"
+                      ? "Approved"
+                      : status === "queued"
+                        ? "Queued"
+                        : status === "sent"
+                          ? "Sent"
+                          : "Failed";
                 const selected = p.id === selectedParticipantId;
                 return (
                   <button
@@ -903,12 +1052,18 @@ export default function WeeklyReportsPage() {
                         <p className="text-[11px] font-semibold uppercase tracking-wide mt-1">
                           <span
                             className={
-                              status === "approved"
-                                ? "text-emerald-600"
-                                : "text-amber-600"
+                              status === "sent"
+                                ? "text-emerald-700"
+                                : status === "queued"
+                                  ? "text-teal-700"
+                                  : status === "approved"
+                                    ? "text-emerald-700"
+                                    : status === "failed"
+                                      ? "text-red-700"
+                                      : "text-amber-700"
                             }
                           >
-                            {status}
+                            {statusLabel}
                           </span>
                         </p>
                       </div>
@@ -939,8 +1094,28 @@ export default function WeeklyReportsPage() {
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Status:{" "}
-                  <span className={selectedStatus === "approved" ? "text-emerald-700 font-semibold" : "text-amber-700 font-semibold"}>
-                    {selectedStatus === "approved" ? "Approved" : "Awaiting approval"}
+                  <span
+                    className={
+                      selectedStatus === "sent"
+                        ? "text-emerald-700 font-semibold"
+                        : selectedStatus === "queued"
+                          ? "text-teal-700 font-semibold"
+                          : selectedStatus === "approved"
+                            ? "text-emerald-700 font-semibold"
+                            : selectedStatus === "failed"
+                              ? "text-red-700 font-semibold"
+                              : "text-amber-700 font-semibold"
+                    }
+                  >
+                    {selectedStatus === "draft"
+                      ? "Draft"
+                      : selectedStatus === "approved"
+                        ? "Approved"
+                        : selectedStatus === "queued"
+                          ? "Queued"
+                          : selectedStatus === "sent"
+                            ? "Sent"
+                            : "Failed"}
                   </span>
                 </p>
               </div>
@@ -948,18 +1123,56 @@ export default function WeeklyReportsPage() {
               <div className="flex items-center gap-2 shrink-0">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    if (!selectedParticipant) return;
-                    setStatusByParticipant((prev) => ({
-                      ...prev,
-                      [selectedParticipant.id]: (prev[selectedParticipant.id] ?? "pending") === "approved" ? "pending" : "approved",
-                    }));
+                  onClick={async () => {
+                    if (!selectedParticipant || !selectedMeta) return;
+                    try {
+                      const { data: sessionData } = await supabase.auth.getSession();
+                      const token = sessionData?.session?.access_token;
+                      if (!token) throw new Error("Authentication required");
+
+                      const nextStatus: ParticipantStatus = selectedStatus === "approved" ? "draft" : "approved";
+                      const res = await fetch("/api/admin/weekly-reports/report/approve", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({
+                          participantId: selectedParticipant.id,
+                          weekEnding: selectedMeta.weekEnding,
+                          status: nextStatus === "approved" ? "approved" : "draft",
+                        }),
+                      });
+                      const j = (await res.json().catch(() => null)) as unknown;
+                      if (!res.ok) {
+                        const msg =
+                          j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
+                            ? (j as { error: string }).error
+                            : "Failed to update status";
+                        throw new Error(msg);
+                      }
+                      const statusRaw = (() => {
+                        if (!j || typeof j !== "object" || !("report" in j)) return nextStatus;
+                        const r = (j as { report?: unknown }).report;
+                        if (!r || typeof r !== "object" || !("status" in r)) return nextStatus;
+                        const s = (r as { status?: unknown }).status;
+                        return typeof s === "string" ? s : nextStatus;
+                      })();
+                      const normalized: ParticipantStatus =
+                        statusRaw === "approved" || statusRaw === "queued" || statusRaw === "sent" || statusRaw === "failed"
+                          ? statusRaw
+                          : "draft";
+                      setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: normalized }));
+                      await refreshApprovedCount();
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : "Failed to update status");
+                    }
                   }}
-                  disabled={!selectedParticipant}
+                  disabled={!selectedParticipant || !selectedMeta || selectedStatus === "queued" || selectedStatus === "sent"}
                   size="sm"
                   className="border-slate-300"
                 >
-                  {selectedStatus === "approved" ? "Mark Pending" : "Approve"}
+                  {selectedStatus === "approved" ? "Mark Draft" : "Approve"}
                 </Button>
               </div>
             </div>
@@ -1043,7 +1256,8 @@ export default function WeeklyReportsPage() {
                         const updatedHtml = j.updatedHtml ?? "";
 
                         setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: updatedHtml }));
-                        setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+                        lastSavedHtmlRef.current[selectedParticipant.id] = updatedHtml.trim();
+                        setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "draft" }));
                         if (j.weekRange && j.badgeLabel && j.badgeIcon) {
                           const weekRange = j.weekRange;
                           const badgeLabel = j.badgeLabel;
@@ -1470,7 +1684,7 @@ export default function WeeklyReportsPage() {
                             ...prev,
                             [selectedParticipant.id]: j.updatedHtml ?? prev[selectedParticipant.id] ?? "",
                           }));
-                          setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "pending" }));
+                          setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "draft" }));
                         } catch (e) {
                           setFeedbackError(e instanceof Error ? e.message : "Failed to send feedback");
                         } finally {
