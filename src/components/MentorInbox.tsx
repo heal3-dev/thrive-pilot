@@ -83,6 +83,7 @@ export function MentorInbox({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const composerResizeStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const [mobilePanel, setMobilePanel] = useState<"list" | "thread">("list");
+  const didInitMobilePanelRef = useRef(false);
 
   // Message templates
   const messageTemplates = [
@@ -516,6 +517,20 @@ export function MentorInbox({
 
   useEffect(() => {
     if (!selectedParticipant) setMobilePanel("list");
+  }, [selectedParticipant]);
+
+  useEffect(() => {
+    // On mobile, we often auto-select the first participant on load. If we stay in list mode,
+    // it can look like the message composer "disappeared". Auto-open the thread once.
+    if (didInitMobilePanelRef.current) return;
+    if (typeof window === "undefined") return;
+    if (window.innerWidth >= 768) {
+      didInitMobilePanelRef.current = true;
+      return;
+    }
+    if (!selectedParticipant) return;
+    setMobilePanel("thread");
+    didInitMobilePanelRef.current = true;
   }, [selectedParticipant]);
 
   useEffect(() => {
