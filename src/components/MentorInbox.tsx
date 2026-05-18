@@ -537,13 +537,18 @@ export function MentorInbox({
     // Keep the composer height in sync with input content.
     const el = composerRef.current;
     if (!el) return;
+    // When the thread panel is hidden on mobile (single-pane), the textarea can be `display:none`.
+    // In that state, layout metrics like scrollHeight may be 0, which would collapse the composer
+    // to `height: 0px` and make it look like it "disappeared" after load. Skip sizing until visible.
+    const isVisible = el.getClientRects().length > 0;
+    if (!isVisible) return;
     if (composerManualHeight != null) {
       el.style.height = `${clampComposerHeight(composerManualHeight)}px`;
       return;
     }
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-  }, [messageInput, composerManualHeight, clampComposerHeight]);
+  }, [messageInput, composerManualHeight, clampComposerHeight, mobilePanel]);
 
   useEffect(() => {
     if (!isComposerResizing) return;
