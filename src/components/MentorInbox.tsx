@@ -82,6 +82,8 @@ export function MentorInbox({
   const desktopLayoutRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const composerResizeStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const [mobilePanel, setMobilePanel] = useState<"list" | "thread">("list");
+  const userPinnedListRef = useRef(false);
 
   // Message templates
   const messageTemplates = [
@@ -514,16 +516,36 @@ export function MentorInbox({
   }, [selectedParticipant, fetchMessages]);
 
   useEffect(() => {
+    if (!selectedParticipant) {
+      // Reset back-to-list intent when nothing is selected.
+      userPinnedListRef.current = false;
+      setMobilePanel("list");
+      return;
+    }
+    // If a participant is selected (often auto-selected on load), keep the thread open unless the
+    // mentor explicitly navigated back to the list. This avoids the composer "disappearing"
+    // due to any transient re-renders that would otherwise leave us in list mode.
+    if (!userPinnedListRef.current) {
+      setMobilePanel("thread");
+    }
+  }, [selectedParticipant]);
+
+  useEffect(() => {
     // Keep the composer height in sync with input content.
     const el = composerRef.current;
     if (!el) return;
+    // When the thread panel is hidden on mobile (single-pane), the textarea can be `display:none`.
+    // In that state, layout metrics like scrollHeight may be 0, which would collapse the composer
+    // to `height: 0px` and make it look like it "disappeared" after load. Skip sizing until visible.
+    const isVisible = el.getClientRects().length > 0;
+    if (!isVisible) return;
     if (composerManualHeight != null) {
       el.style.height = `${clampComposerHeight(composerManualHeight)}px`;
       return;
     }
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-  }, [messageInput, composerManualHeight, clampComposerHeight]);
+  }, [messageInput, composerManualHeight, clampComposerHeight, mobilePanel]);
 
   useEffect(() => {
     if (!isComposerResizing) return;
@@ -972,7 +994,9 @@ export function MentorInbox({
       }`}
     >
       {/* Sidebar - Participant List */}
-      <div className="w-full md:w-72 md:border-r-2 border-slate-100 flex flex-col shrink-0 min-h-0">
+      <div
+        className={`${mobilePanel === "thread" ? "hidden md:flex" : "flex"} w-full md:w-72 md:border-r-2 border-slate-100 flex-col shrink-0 min-h-0`}
+      >
         <div className="p-4 border-b-2 border-slate-100">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -996,6 +1020,8 @@ export function MentorInbox({
                 key={participant.id}
                 onClick={() => {
                   setSelectedParticipant(participant);
+                  userPinnedListRef.current = false;
+                  setMobilePanel("thread");
                   // Mark as seen immediately (use DB timestamp when available to avoid clock-skew issues).
                   const lm = lastMessageByParticipantId[participant.id]?.created_at ?? null;
                   if (lm) setLastSeen(participant.id, lm);
@@ -1046,13 +1072,31 @@ export function MentorInbox({
       </div>
 
       {/* Main Area - Message Thread */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div
+        className={`${mobilePanel === "list" ? "hidden md:flex" : "flex"} flex-1 flex-col min-w-0 min-h-0`}
+      >
         {selectedParticipant ? (
           <>
             {/* Header */}
-            <div className="p-4 border-b-2 border-slate-100 bg-slate-50/50">
+            <div className="p-4 border-b-2 border-slate-100 bg-slate-50/50 shrink-0">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTemplates(false);
+                      setShowHealthPanel(false);
+                      userPinnedListRef.current = true;
+                      setMobilePanel("list");
+                    }}
+                    className="md:hidden -ml-2 h-10 w-10 shrink-0 rounded-lg hover:bg-white/70 transition-colors flex items-center justify-center cursor-pointer"
+                    aria-label="Back to participants"
+                    title="Back"
+                  >
+                    <svg className="w-5 h-5 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
                   <div className="w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold text-sm">
                     {getInitials(selectedParticipant.name, selectedParticipant.email, selectedParticipant.phone_number)}
                   </div>
@@ -1085,7 +1129,7 @@ export function MentorInbox({
             </div>
 
             {/* Messages */}
-            <div ref={messagesScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div ref={messagesScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
               {messagesError ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center max-w-sm">
@@ -1158,7 +1202,7 @@ export function MentorInbox({
             </div>
 
             {/* Send Box */}
-            <div className="p-4 border-t-2 border-slate-100 bg-white">
+            <div className="p-4 border-t-2 border-slate-100 bg-white pb-[calc(env(safe-area-inset-bottom)+1rem)] shrink-0">
               {sendError && (
                 <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200">
                   <p className="text-sm text-red-600 flex items-center gap-2">
