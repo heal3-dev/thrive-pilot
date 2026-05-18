@@ -83,7 +83,7 @@ export function MentorInbox({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const composerResizeStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const [mobilePanel, setMobilePanel] = useState<"list" | "thread">("list");
-  const didInitMobilePanelRef = useRef(false);
+  const userPinnedListRef = useRef(false);
 
   // Message templates
   const messageTemplates = [
@@ -516,21 +516,18 @@ export function MentorInbox({
   }, [selectedParticipant, fetchMessages]);
 
   useEffect(() => {
-    if (!selectedParticipant) setMobilePanel("list");
-  }, [selectedParticipant]);
-
-  useEffect(() => {
-    // On mobile, we often auto-select the first participant on load. If we stay in list mode,
-    // it can look like the message composer "disappeared". Auto-open the thread once.
-    if (didInitMobilePanelRef.current) return;
-    if (typeof window === "undefined") return;
-    if (window.innerWidth >= 768) {
-      didInitMobilePanelRef.current = true;
+    if (!selectedParticipant) {
+      // Reset back-to-list intent when nothing is selected.
+      userPinnedListRef.current = false;
+      setMobilePanel("list");
       return;
     }
-    if (!selectedParticipant) return;
-    setMobilePanel("thread");
-    didInitMobilePanelRef.current = true;
+    // If a participant is selected (often auto-selected on load), keep the thread open unless the
+    // mentor explicitly navigated back to the list. This avoids the composer "disappearing"
+    // due to any transient re-renders that would otherwise leave us in list mode.
+    if (!userPinnedListRef.current) {
+      setMobilePanel("thread");
+    }
   }, [selectedParticipant]);
 
   useEffect(() => {
@@ -1023,6 +1020,7 @@ export function MentorInbox({
                 key={participant.id}
                 onClick={() => {
                   setSelectedParticipant(participant);
+                  userPinnedListRef.current = false;
                   setMobilePanel("thread");
                   // Mark as seen immediately (use DB timestamp when available to avoid clock-skew issues).
                   const lm = lastMessageByParticipantId[participant.id]?.created_at ?? null;
@@ -1086,6 +1084,7 @@ export function MentorInbox({
                     onClick={() => {
                       setShowTemplates(false);
                       setShowHealthPanel(false);
+                      userPinnedListRef.current = true;
                       setMobilePanel("list");
                     }}
                     className="md:hidden -ml-2 h-10 w-10 shrink-0 rounded-lg hover:bg-white/70 transition-colors flex items-center justify-center cursor-pointer"
