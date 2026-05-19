@@ -28,75 +28,31 @@ BEFORE UPDATE ON garmin_stale_alerts
 FOR EACH ROW
 EXECUTE PROCEDURE set_garmin_stale_alerts_updated_at();
 
--- Helper RPC: returns connected participants with stale Garmin metrics and who haven't been alerted recently.
--- We consider a participant "connected" if either:
--- - participants.garmin_user_id is set, OR
--- - there's an active row in garmin_tokens (revoked_at is null) for their pseudonym_id
+-- NOTE: participant_pseudonyms no longer stores plaintext participant_id in production.
+-- Any logic that needs to map participants ↔ pseudonyms must do so in application code
+-- by decrypting participant_id_encrypted (requires PSEUDONYM_ENCRYPTION_KEY, which is not
+-- available inside the database).
 --
--- Staleness is based on the most recent garmin_metrics.updated_at for the pseudonym_id; if no metrics exist,
--- we fall back to participants.garmin_connected_at.
-CREATE OR REPLACE FUNCTION get_garmin_stale_alert_candidates(
-  stale_before timestamptz,
-  resend_before timestamptz
+-- Helper RPC: given a list of pseudonym_ids, return the latest garmin_metrics.updated_at
+-- for each pseudonym.
+DROP FUNCTION IF EXISTS get_garmin_metrics_last_updated(uuid[]);
+CREATE OR REPLACE FUNCTION get_garmin_metrics_last_updated(
+  pseudonym_ids uuid[]
 )
 RETURNS TABLE (
-  participant_id uuid,
   pseudonym_id uuid,
-  name text,
-  email text,
-  phone_number text,
-  garmin_user_id text,
-  garmin_connected_at timestamptz,
-  last_metric_updated_at timestamptz,
-  last_alerted_at timestamptz
+  last_metric_updated_at timestamptz
 )
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  WITH connected AS (
-    SELECT DISTINCT
-      p.id AS participant_id,
-      pp.pseudonym_id AS pseudonym_id,
-      p.name,
-      p.email,
-      p.phone_number,
-      p.garmin_user_id,
-      p.garmin_connected_at
-    FROM participants p
-    LEFT JOIN participant_pseudonyms pp ON pp.participant_id = p.id
-    LEFT JOIN garmin_tokens gt
-      ON gt.pseudonym_id = pp.pseudonym_id
-     AND gt.revoked_at IS NULL
-    WHERE (p.is_active IS NULL OR p.is_active = true)
-      AND (
-        p.garmin_user_id IS NOT NULL
-        OR gt.pseudonym_id IS NOT NULL
-      )
-      AND pp.pseudonym_id IS NOT NULL
-  ),
-  last_metrics AS (
-    SELECT gm.pseudonym_id, MAX(gm.updated_at) AS last_metric_updated_at
-    FROM garmin_metrics gm
-    JOIN connected c ON c.pseudonym_id = gm.pseudonym_id
-    GROUP BY gm.pseudonym_id
-  )
   SELECT
-    c.participant_id,
-    c.pseudonym_id,
-    c.name,
-    c.email,
-    c.phone_number,
-    c.garmin_user_id,
-    c.garmin_connected_at,
-    lm.last_metric_updated_at,
-    gsa.last_alerted_at
-  FROM connected c
-  LEFT JOIN last_metrics lm ON lm.pseudonym_id = c.pseudonym_id
-  LEFT JOIN garmin_stale_alerts gsa ON gsa.participant_id = c.participant_id
-  WHERE COALESCE(lm.last_metric_updated_at, c.garmin_connected_at) IS NOT NULL
-    AND COALESCE(lm.last_metric_updated_at, c.garmin_connected_at) < stale_before
-    AND (gsa.last_alerted_at IS NULL OR gsa.last_alerted_at < resend_before);
+    gm.pseudonym_id,
+    MAX(gm.updated_at) AS last_metric_updated_at
+  FROM garmin_metrics gm
+  WHERE gm.pseudonym_id = ANY(pseudonym_ids)
+  GROUP BY gm.pseudonym_id;
 $$;
 
 ALTER TABLE garmin_stale_alerts ENABLE ROW LEVEL SECURITY;
