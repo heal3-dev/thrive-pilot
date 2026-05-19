@@ -1,9 +1,13 @@
 -- Up Migration
--- Per-participant rate limiting for Garmin stale-metrics alerts + helper RPC.
+-- Rate limiting for Garmin stale-metrics alerts + helper RPC.
+--
+-- Note: After pseudonymization, we can no longer join participants -> participant_pseudonyms
+-- inside the database because participant_id is encrypted and the key lives in Vercel env vars.
+-- This migration therefore rate-limits by pseudonym_id, and the helper RPC returns
+-- participant_id_encrypted so the app can decrypt + load participant details.
 
 CREATE TABLE IF NOT EXISTS garmin_stale_alerts (
-  participant_id uuid PRIMARY KEY REFERENCES participants(id) ON DELETE CASCADE,
-  pseudonym_id uuid,
+  pseudonym_id uuid PRIMARY KEY REFERENCES participant_pseudonyms(pseudonym_id) ON DELETE CASCADE,
   last_metric_updated_at timestamptz,
   last_alerted_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -28,24 +32,17 @@ BEFORE UPDATE ON garmin_stale_alerts
 FOR EACH ROW
 EXECUTE PROCEDURE set_garmin_stale_alerts_updated_at();
 
--- Helper RPC: returns connected participants with stale Garmin metrics and who haven't been alerted recently.
--- We consider a participant "connected" if either:
--- - participants.garmin_user_id is set, OR
--- - there's an active row in garmin_tokens (revoked_at is null) for their pseudonym_id
---
--- Staleness is based on the most recent garmin_metrics.updated_at for the pseudonym_id; if no metrics exist,
--- we fall back to participants.garmin_connected_at.
+-- Helper RPC: returns connected pseudonyms with stale Garmin metrics and who haven't been alerted recently.
+-- Connected means an active (non-revoked) garmin_tokens row exists for the pseudonym.
+-- Staleness is based on the most recent garmin_metrics.updated_at for the pseudonym; if no metrics exist,
+-- we fall back to the most recent garmin_tokens.created_at.
 CREATE OR REPLACE FUNCTION get_garmin_stale_alert_candidates(
   stale_before timestamptz,
   resend_before timestamptz
 )
 RETURNS TABLE (
-  participant_id uuid,
   pseudonym_id uuid,
-  name text,
-  email text,
-  phone_number text,
-  garmin_user_id text,
+  participant_id_encrypted text,
   garmin_connected_at timestamptz,
   last_metric_updated_at timestamptz,
   last_alerted_at timestamptz
@@ -55,25 +52,14 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   WITH connected AS (
-    SELECT DISTINCT
-      p.id AS participant_id,
-      pp.pseudonym_id AS pseudonym_id,
-      p.name,
-      p.email,
-      p.phone_number,
-      p.garmin_user_id,
-      p.garmin_connected_at
-    FROM participants p
-    LEFT JOIN participant_pseudonyms pp ON pp.participant_id = p.id
-    LEFT JOIN garmin_tokens gt
-      ON gt.pseudonym_id = pp.pseudonym_id
-     AND gt.revoked_at IS NULL
-    WHERE (p.is_active IS NULL OR p.is_active = true)
-      AND (
-        p.garmin_user_id IS NOT NULL
-        OR gt.pseudonym_id IS NOT NULL
-      )
-      AND pp.pseudonym_id IS NOT NULL
+    SELECT
+      gt.pseudonym_id,
+      MAX(gt.created_at AT TIME ZONE 'UTC') AS garmin_connected_at,
+      MAX(pp.participant_id_encrypted) AS participant_id_encrypted
+    FROM garmin_tokens gt
+    JOIN participant_pseudonyms pp ON pp.pseudonym_id = gt.pseudonym_id
+    WHERE gt.revoked_at IS NULL
+    GROUP BY gt.pseudonym_id
   ),
   last_metrics AS (
     SELECT gm.pseudonym_id, MAX(gm.updated_at) AS last_metric_updated_at
@@ -82,18 +68,14 @@ AS $$
     GROUP BY gm.pseudonym_id
   )
   SELECT
-    c.participant_id,
     c.pseudonym_id,
-    c.name,
-    c.email,
-    c.phone_number,
-    c.garmin_user_id,
+    c.participant_id_encrypted,
     c.garmin_connected_at,
     lm.last_metric_updated_at,
     gsa.last_alerted_at
   FROM connected c
   LEFT JOIN last_metrics lm ON lm.pseudonym_id = c.pseudonym_id
-  LEFT JOIN garmin_stale_alerts gsa ON gsa.participant_id = c.participant_id
+  LEFT JOIN garmin_stale_alerts gsa ON gsa.pseudonym_id = c.pseudonym_id
   WHERE COALESCE(lm.last_metric_updated_at, c.garmin_connected_at) IS NOT NULL
     AND COALESCE(lm.last_metric_updated_at, c.garmin_connected_at) < stale_before
     AND (gsa.last_alerted_at IS NULL OR gsa.last_alerted_at < resend_before);

@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { decryptParticipantId } from "@/lib/pseudonym-crypto";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,12 +34,8 @@ function escapeHtml(s: string): string {
 }
 
 type CandidateRow = {
-  participant_id: string;
   pseudonym_id: string;
-  name: string | null;
-  email: string | null;
-  phone_number: string | null;
-  garmin_user_id: string | null;
+  participant_id_encrypted: string | null;
   garmin_connected_at: string | null;
   last_metric_updated_at: string | null;
   last_alerted_at: string | null;
@@ -97,9 +94,66 @@ export async function GET(request: NextRequest) {
     idempotency_key: string;
   }> = [];
 
+  // Decrypt participant IDs and load participant details (mapping is encrypted in DB).
+  const participantIds: string[] = [];
+  const participantIdByPseudonym = new Map<string, string | null>();
+
   for (const c of candidates) {
-    const display = c.name?.trim() || c.email?.trim() || c.participant_id;
-    const refIso = c.last_metric_updated_at ?? c.garmin_connected_at ?? null;
+    let participantId: string | null = null;
+    if (c.participant_id_encrypted) {
+      try {
+        participantId = decryptParticipantId(c.participant_id_encrypted);
+      } catch {
+        participantId = null;
+      }
+    }
+    participantIdByPseudonym.set(c.pseudonym_id, participantId);
+    if (participantId) participantIds.push(participantId);
+  }
+
+  const uniqueParticipantIds = Array.from(new Set(participantIds));
+  const participantById = new Map<
+    string,
+    {
+      id: string;
+      name: string | null;
+      email: string | null;
+      phone_number: string | null;
+      garmin_user_id: string | null;
+      garmin_connected_at: string | null;
+      is_active: boolean | null;
+    }
+  >();
+
+  if (uniqueParticipantIds.length > 0) {
+    const { data: participantRows, error: participantErr } = await admin
+      .from("participants")
+      .select("id, name, email, phone_number, garmin_user_id, garmin_connected_at, is_active")
+      .in("id", uniqueParticipantIds);
+
+    if (participantErr) {
+      Sentry.captureException(participantErr, { extra: { context: "load participants for garmin stale alerts" } });
+    } else {
+      for (const p of participantRows ?? []) {
+        participantById.set(p.id, p);
+      }
+    }
+  }
+
+  const alerted: CandidateRow[] = [];
+
+  for (const c of candidates) {
+    const participantId = participantIdByPseudonym.get(c.pseudonym_id) ?? null;
+    const participant = participantId ? participantById.get(participantId) ?? null : null;
+
+    // If we can resolve participant state and they are inactive, skip alerting.
+    if (participant?.is_active === false) continue;
+
+    const display =
+      participant?.name?.trim() || participant?.email?.trim() || participantId || c.pseudonym_id;
+
+    const refIso =
+      c.last_metric_updated_at ?? participant?.garmin_connected_at ?? c.garmin_connected_at ?? null;
     const refMs = refIso ? new Date(refIso).getTime() : NaN;
     const staleForHours =
       Number.isFinite(refMs) ? Math.round(((now - refMs) / 36e5) * 10) / 10 : null;
@@ -114,25 +168,25 @@ export async function GET(request: NextRequest) {
 
         <table cellpadding="0" cellspacing="0" style="border-collapse:collapse; width:100%; max-width:720px;">
           <tr><td style="padding:6px 0; color:#64748b;">Participant</td><td style="padding:6px 0; font-weight:600;">${escapeHtml(display)}</td></tr>
-          <tr><td style="padding:6px 0; color:#64748b;">Participant ID</td><td style="padding:6px 0;"><code>${escapeHtml(c.participant_id)}</code></td></tr>
+          <tr><td style="padding:6px 0; color:#64748b;">Participant ID</td><td style="padding:6px 0;"><code>${escapeHtml(participantId ?? "—")}</code></td></tr>
           <tr><td style="padding:6px 0; color:#64748b;">Pseudonym ID</td><td style="padding:6px 0;"><code>${escapeHtml(c.pseudonym_id)}</code></td></tr>
-          <tr><td style="padding:6px 0; color:#64748b;">Email</td><td style="padding:6px 0;">${escapeHtml(c.email ?? "—")}</td></tr>
-          <tr><td style="padding:6px 0; color:#64748b;">Phone</td><td style="padding:6px 0;">${escapeHtml(c.phone_number ?? "—")}</td></tr>
-          <tr><td style="padding:6px 0; color:#64748b;">Garmin user id</td><td style="padding:6px 0;">${escapeHtml(c.garmin_user_id ?? "—")}</td></tr>
-          <tr><td style="padding:6px 0; color:#64748b;">Garmin connected at</td><td style="padding:6px 0;">${escapeHtml(c.garmin_connected_at ?? "—")}</td></tr>
+          <tr><td style="padding:6px 0; color:#64748b;">Email</td><td style="padding:6px 0;">${escapeHtml(participant?.email ?? "—")}</td></tr>
+          <tr><td style="padding:6px 0; color:#64748b;">Phone</td><td style="padding:6px 0;">${escapeHtml(participant?.phone_number ?? "—")}</td></tr>
+          <tr><td style="padding:6px 0; color:#64748b;">Garmin user id</td><td style="padding:6px 0;">${escapeHtml(participant?.garmin_user_id ?? "—")}</td></tr>
+          <tr><td style="padding:6px 0; color:#64748b;">Garmin connected at</td><td style="padding:6px 0;">${escapeHtml(participant?.garmin_connected_at ?? c.garmin_connected_at ?? "—")}</td></tr>
           <tr><td style="padding:6px 0; color:#64748b;">Last metric updated at</td><td style="padding:6px 0;">${escapeHtml(c.last_metric_updated_at ?? "—")}</td></tr>
           <tr><td style="padding:6px 0; color:#64748b;">Stale for</td><td style="padding:6px 0;">${staleForHours == null ? "—" : `${staleForHours} hours`}</td></tr>
           <tr><td style="padding:6px 0; color:#64748b;">Last alerted at</td><td style="padding:6px 0;">${escapeHtml(c.last_alerted_at ?? "—")}</td></tr>
         </table>
 
         <p style="margin:14px 0 0 0; color:#64748b; font-size:12px;">
-          This alert is rate-limited per participant (default: once per ${resendHours} hours) until data updates again.
+          This alert is rate-limited per pseudonym (default: once per ${resendHours} hours) until data updates again.
         </p>
       </div>
     `.trim();
 
     for (const to of ALERT_RECIPIENTS) {
-      const idempotencyKey = `garmin-stale:${c.participant_id}:${dayBucket}:${to}`;
+      const idempotencyKey = `garmin-stale:${participantId ?? c.pseudonym_id}:${dayBucket}:${to}`;
       toEnqueue.push({
         kind: "garmin_stale_alert",
         to_email: to,
@@ -141,12 +195,13 @@ export async function GET(request: NextRequest) {
         idempotency_key: idempotencyKey,
       });
     }
+
+    alerted.push(c);
   }
 
-  // Record rate-limit state for each participant we are alerting on.
+  // Record rate-limit state for each pseudonym we are alerting on.
   // Update last_metric_updated_at for visibility.
-  const upserts = candidates.map((c) => ({
-    participant_id: c.participant_id,
+  const upserts = alerted.map((c) => ({
     pseudonym_id: c.pseudonym_id,
     last_metric_updated_at: c.last_metric_updated_at,
     last_alerted_at: new Date().toISOString(),
@@ -154,7 +209,7 @@ export async function GET(request: NextRequest) {
 
   const { error: alertsErr } = await admin
     .from("garmin_stale_alerts")
-    .upsert(upserts, { onConflict: "participant_id" });
+    .upsert(upserts, { onConflict: "pseudonym_id" });
 
   if (alertsErr) {
     Sentry.captureException(alertsErr, { extra: { context: "upsert garmin_stale_alerts" } });
@@ -173,7 +228,7 @@ export async function GET(request: NextRequest) {
   Sentry.captureCheckIn({ checkInId, monitorSlug: "garmin-stale-alert", status: "ok" });
   return NextResponse.json({
     ok: true,
-    alerted: candidates.length,
+    alerted: alerted.length,
     enqueuedEmails: toEnqueue.length,
     staleHours,
     resendHours,
