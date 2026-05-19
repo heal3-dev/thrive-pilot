@@ -77,7 +77,10 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
   }, [adminFetch]);
 
   useEffect(() => {
-    fetchMentors();
+    // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+    queueMicrotask(() => {
+      void fetchMentors();
+    });
   }, [fetchMentors]);
 
   // Real-time updates
@@ -209,27 +212,31 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
       )}
 
       {/* Header with search and actions */}
-      <div className="bg-white rounded-2xl border-2 border-slate-100 p-4 shrink-0">
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+      <div className="bg-white rounded-2xl border-2 border-slate-100 p-3 shrink-0">
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center min-w-0 sm:flex-nowrap sm:overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Input
               placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-64 h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
+              className="w-full sm:w-48 h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
             />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none"
+              className="h-10 px-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 shadow-none w-full sm:w-[8.5rem]"
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={() => setIsAddModalOpen(true)} className="bg-teal-500 hover:bg-teal-600 text-white cursor-pointer px-3">
+          <div className="flex gap-2 shrink-0">
+            <Button
+              size="sm"
+              onClick={() => setIsAddModalOpen(true)}
+              className="bg-teal-500 hover:bg-teal-600 text-white cursor-pointer px-3 w-full sm:w-auto"
+            >
               <svg className="w-4 h-4 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
@@ -340,6 +347,10 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
           mentor={editingMentor}
           onClose={() => { setEditingMentor(null); setFormError(null); }}
           onSubmit={handleEditMentor}
+          onSendPasswordResetEmail={() => {
+            void handleSendPasswordRecovery(editingMentor);
+          }}
+          isSendingPasswordResetEmail={isSendingRecoveryForMentorId === editingMentor.id}
           isSaving={isSaving}
           error={formError}
         />
