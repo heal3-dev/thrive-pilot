@@ -177,15 +177,15 @@ export async function GET(request: NextRequest) {
   }
 
   const participantIds = connected.map((c) => c.participant.id);
-  const { data: alertsRaw, error: alertsErr } = await admin
+  const { data: alertsRaw, error: fetchAlertsErr } = await admin
     .from("garmin_stale_alerts")
     .select("participant_id, last_alerted_at")
     .in("participant_id", participantIds);
 
-  if (alertsErr) {
-    Sentry.captureException(alertsErr, { extra: { context: "fetch garmin_stale_alerts" } });
+  if (fetchAlertsErr) {
+    Sentry.captureException(fetchAlertsErr, { extra: { context: "fetch garmin_stale_alerts" } });
     Sentry.captureCheckIn({ checkInId, monitorSlug: "garmin-stale-alert", status: "error" });
-    return NextResponse.json({ error: `Failed to fetch alert state: ${alertsErr.message}` }, { status: 500 });
+    return NextResponse.json({ error: `Failed to fetch alert state: ${fetchAlertsErr.message}` }, { status: 500 });
   }
 
   const lastAlertedByParticipant = new Map<string, string>();
