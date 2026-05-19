@@ -259,7 +259,8 @@ export function ParticipantMetricsTable({
         ref={scrollRef}
         className="overflow-x-auto max-h-[70vh] overflow-y-auto"
       >
-        <table className="w-full table-fixed text-sm text-left">
+        {/* Force a minimum table width so narrow side panels scroll horizontally instead of squishing columns. */}
+        <table className="w-full min-w-[900px] table-fixed text-sm text-left">
           <colgroup>
             {COL_WIDTHS_PCT.map((w, i) => (
               <col key={i} style={{ width: `${w}%` }} />
