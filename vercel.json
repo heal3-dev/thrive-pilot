@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/refresh-garmin-tokens",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/garmin-stale-alert",
+      "schedule": "0 7 * * *"
     }
   ]
 }
