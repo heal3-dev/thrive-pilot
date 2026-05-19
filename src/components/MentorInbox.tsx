@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ParticipantMetricsTable } from "@/components/admin/ParticipantMetricsTable";
 import type { Participant, SMSMessage } from "@/types";
 import type { WeeklyFlag } from "@/lib/flags/rules";
@@ -70,6 +71,7 @@ export function MentorInbox({
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [lastMessageByParticipantId, setLastMessageByParticipantId] = useState<Record<string, LastMessagePreview>>({});
   const lastSeenRef = useRef<Record<string, string>>({});
+  const [participantSearchQuery, setParticipantSearchQuery] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
   const [showHealthPanel, setShowHealthPanel] = useState(false);
   const [healthPanelWidth, setHealthPanelWidth] = useState(380);
@@ -110,6 +112,24 @@ export function MentorInbox({
       return String(a.id).localeCompare(String(b.id));
     });
   }, [participants, lastMessageByParticipantId]);
+
+  const visibleParticipants = useMemo(() => {
+    const q = participantSearchQuery.trim().toLowerCase();
+    if (!q) return sortedParticipants;
+    const qDigits = q.replace(/\D/g, "");
+    return sortedParticipants.filter((p) => {
+      const name = (p.name ?? "").toLowerCase();
+      const email = (p.email ?? "").toLowerCase();
+      const phone = (p.phone_number ?? "").toLowerCase();
+      const phoneDigits = (p.phone_number ?? "").replace(/\D/g, "");
+      return (
+        name.includes(q) ||
+        email.includes(q) ||
+        phone.includes(q) ||
+        (qDigits.length >= 2 && phoneDigits.includes(qDigits))
+      );
+    });
+  }, [sortedParticipants, participantSearchQuery]);
 
   const isInboxReadOnly = !isMentorActive;
 
@@ -272,7 +292,7 @@ export function MentorInbox({
     } catch (e) {
       console.warn("refreshUnreadCounts error:", e);
     }
-  }, [participants, selectedParticipant?.id, getLastSeen]);
+  }, [participants, selectedParticipant, getLastSeen]);
 
   const refreshLastMessages = useCallback(async () => {
     if (participants.length === 0) return;
@@ -321,7 +341,9 @@ export function MentorInbox({
   }, [participants]);
 
   useEffect(() => {
-    void refreshUnreadCounts();
+    queueMicrotask(() => {
+      void refreshUnreadCounts();
+    });
   }, [refreshUnreadCounts]);
 
   useEffect(() => {
@@ -343,7 +365,9 @@ export function MentorInbox({
   }, [refreshUnreadCounts, refreshLastMessages]);
 
   useEffect(() => {
-    void refreshLastMessages();
+    queueMicrotask(() => {
+      void refreshLastMessages();
+    });
   }, [refreshLastMessages]);
 
   useEffect(() => {
@@ -411,7 +435,7 @@ export function MentorInbox({
     } finally {
       setIsLoadingMessages(false);
     }
-  }, []);
+  }, [setLastSeen]);
 
   const fetchHealthMetrics = useCallback(async (participantId: string) => {
     setIsLoadingHealthMetrics(true);
@@ -466,7 +490,9 @@ export function MentorInbox({
 
     const parsed = Number(savedWidth);
     if (!Number.isFinite(parsed)) return;
-    setHealthPanelWidth(clampHealthPanelWidth(parsed));
+    queueMicrotask(() => {
+      setHealthPanelWidth(clampHealthPanelWidth(parsed));
+    });
   }, [clampHealthPanelWidth]);
 
   useEffect(() => {
@@ -509,9 +535,13 @@ export function MentorInbox({
   // Fetch messages when selected participant changes
   useEffect(() => {
     if (selectedParticipant) {
-      fetchMessages(selectedParticipant.id);
+      queueMicrotask(() => {
+        void fetchMessages(selectedParticipant.id);
+      });
     } else {
-      setMessages([]);
+      queueMicrotask(() => {
+        setMessages([]);
+      });
     }
   }, [selectedParticipant, fetchMessages]);
 
@@ -519,14 +549,18 @@ export function MentorInbox({
     if (!selectedParticipant) {
       // Reset back-to-list intent when nothing is selected.
       userPinnedListRef.current = false;
-      setMobilePanel("list");
+      queueMicrotask(() => {
+        setMobilePanel("list");
+      });
       return;
     }
     // If a participant is selected (often auto-selected on load), keep the thread open unless the
     // mentor explicitly navigated back to the list. This avoids the composer "disappearing"
     // due to any transient re-renders that would otherwise leave us in list mode.
     if (!userPinnedListRef.current) {
-      setMobilePanel("thread");
+      queueMicrotask(() => {
+        setMobilePanel("thread");
+      });
     }
   }, [selectedParticipant]);
 
@@ -579,7 +613,9 @@ export function MentorInbox({
 
   useEffect(() => {
     if (!enableHealthPanel || !showHealthPanel || !selectedParticipant) return;
-    fetchHealthMetrics(selectedParticipant.id);
+    queueMicrotask(() => {
+      void fetchHealthMetrics(selectedParticipant.id);
+    });
   }, [enableHealthPanel, showHealthPanel, selectedParticipant, fetchHealthMetrics]);
 
   // Realtime updates for assigned participants
@@ -740,7 +776,7 @@ export function MentorInbox({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [participants, selectedParticipant, fetchMessages]);
+  }, [participants, selectedParticipant, fetchMessages, setLastSeen]);
 
   // Poll as a fallback (in case Realtime isn't enabled / deliverable for sms_messages)
   // Uses silent=true to avoid showing loading spinner during background refresh
@@ -1001,7 +1037,11 @@ export function MentorInbox({
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="font-bold text-slate-900">Participants</h2>
-              <p className="text-xs text-slate-500 mt-0.5">{participants.length} assigned</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {participantSearchQuery.trim()
+                  ? `Showing ${visibleParticipants.length} of ${participants.length}`
+                  : `${participants.length} assigned`}
+              </p>
             </div>
             {totalUnread > 0 ? (
               <div className="shrink-0">
@@ -1011,63 +1051,79 @@ export function MentorInbox({
               </div>
             ) : null}
           </div>
+          <div className="mt-3">
+            <Input
+              placeholder="Search participants..."
+              value={participantSearchQuery}
+              onChange={(e) => setParticipantSearchQuery(e.target.value)}
+              className="w-full h-10 rounded-lg shadow-none text-sm placeholder:text-sm"
+            />
+          </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
-          {sortedParticipants.map((participant) => {
-            const unreadCount = unreadCounts[participant.id] || 0;
-            return (
-              <button
-                key={participant.id}
-                onClick={() => {
-                  setSelectedParticipant(participant);
-                  userPinnedListRef.current = false;
-                  setMobilePanel("thread");
-                  // Mark as seen immediately (use DB timestamp when available to avoid clock-skew issues).
-                  const lm = lastMessageByParticipantId[participant.id]?.created_at ?? null;
-                  if (lm) setLastSeen(participant.id, lm);
-                  // Clear unread count for this participant
-                  setUnreadCounts(prev => {
-                    const updated = { ...prev };
-                    delete updated[participant.id];
-                    return updated;
-                  });
-                }}
-                className={`w-full p-4 text-left border-b border-slate-50 transition-colors cursor-pointer ${
-                  selectedParticipant?.id === participant.id
-                    ? "bg-teal-50 border-l-4 border-l-teal-500"
-                    : "hover:bg-slate-50 border-l-4 border-l-transparent"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${
-                      selectedParticipant?.id === participant.id ? "bg-teal-500" : "bg-slate-400"
-                    }`}>
-                      {getInitials(participant.name, participant.email, participant.phone_number)}
+          {visibleParticipants.length === 0 ? (
+            <div className="p-6 text-sm text-slate-500">
+              No participants match your search.
+            </div>
+          ) : (
+            visibleParticipants.map((participant) => {
+              const unreadCount = unreadCounts[participant.id] || 0;
+              return (
+                <button
+                  key={participant.id}
+                  onClick={() => {
+                    setSelectedParticipant(participant);
+                    userPinnedListRef.current = false;
+                    setMobilePanel("thread");
+                    // Mark as seen immediately (use DB timestamp when available to avoid clock-skew issues).
+                    const lm = lastMessageByParticipantId[participant.id]?.created_at ?? null;
+                    if (lm) setLastSeen(participant.id, lm);
+                    // Clear unread count for this participant
+                    setUnreadCounts((prev) => {
+                      const updated = { ...prev };
+                      delete updated[participant.id];
+                      return updated;
+                    });
+                  }}
+                  className={`w-full p-4 text-left border-b border-slate-50 transition-colors cursor-pointer ${
+                    selectedParticipant?.id === participant.id
+                      ? "bg-teal-50 border-l-4 border-l-teal-500"
+                      : "hover:bg-slate-50 border-l-4 border-l-transparent"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                          selectedParticipant?.id === participant.id ? "bg-teal-500" : "bg-slate-400"
+                        }`}
+                      >
+                        {getInitials(participant.name, participant.email, participant.phone_number)}
+                      </div>
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                          {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
+                      )}
                     </div>
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                      </span>
-                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate text-slate-900">
+                        {participant.name || "Unnamed"}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {formatPhone(participant.phone_number)}
+                      </p>
+                      {(participant.unassigned_at || participant.is_active === false) && (
+                        <span className="inline-flex mt-1 items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                          Unassigned
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`font-semibold text-sm truncate ${unreadCount > 0 ? 'text-slate-900' : 'text-slate-900'}`}>
-                      {participant.name || "Unnamed"}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {formatPhone(participant.phone_number)}
-                    </p>
-                    {(participant.unassigned_at || participant.is_active === false) && (
-                      <span className="inline-flex mt-1 items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
-                        Unassigned
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
