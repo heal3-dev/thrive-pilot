@@ -59,8 +59,7 @@ export async function GET(request: NextRequest) {
   const checkInId = Sentry.captureCheckIn(
     { monitorSlug: "garmin-stale-alert", status: "in_progress" },
     {
-      // Staleness threshold is 48h, so running a few times per day is sufficient.
-      schedule: { type: "crontab", value: "0 */6 * * *" },
+      schedule: { type: "crontab", value: "0 7 * * *" },
       maxRuntime: 60,
       timezone: "UTC",
     }
