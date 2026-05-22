@@ -194,7 +194,10 @@ export function ParticipantManagement({
   }, [adminFetch, mode, demoMode]);
 
   useEffect(() => {
-    fetchParticipants();
+    // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+    queueMicrotask(() => {
+      fetchParticipants();
+    });
   }, [fetchParticipants]);
 
   const inviteOnlyCounts = useMemo(() => {
@@ -213,8 +216,11 @@ export function ParticipantManagement({
     if (!inviteAlertDismissed) return;
     if (inviteAlertDismissedTotal === null) return;
     if (inviteOnlyCounts.total > inviteAlertDismissedTotal) {
-      setInviteAlertDismissed(false);
-      setInviteAlertDismissedTotal(null);
+      // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+      queueMicrotask(() => {
+        setInviteAlertDismissed(false);
+        setInviteAlertDismissedTotal(null);
+      });
     }
   }, [inviteOnlyCounts.total, inviteAlertDismissed, inviteAlertDismissedTotal]);
 

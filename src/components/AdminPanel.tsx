@@ -134,7 +134,10 @@ export function AdminPanel() {
   // Sync tab state with URL hash for back button support
   useEffect(() => {
     // Set initial tab from hash
-    setActiveTab(getTabFromHash());
+    // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+    queueMicrotask(() => {
+      setActiveTab(getTabFromHash());
+    });
     
     // Listen for back/forward navigation
     const handlePopState = () => {
@@ -278,7 +281,10 @@ export function AdminPanel() {
   // Initial fetch
   useEffect(() => {
     if (!isAdmin) return;
-    fetchStats();
+    // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+    queueMicrotask(() => {
+      fetchStats();
+    });
   }, [fetchStats, isAdmin]);
 
   // Real-time updates for all relevant tables

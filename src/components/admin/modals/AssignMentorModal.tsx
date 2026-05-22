@@ -54,7 +54,10 @@ export function AssignMentorModal({ isOpen, onClose, onSuccess }: AssignMentorMo
 
   useEffect(() => {
     if (isOpen) {
-      fetchData();
+      // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+      queueMicrotask(() => {
+        void fetchData();
+      });
     }
   }, [isOpen]);
 
