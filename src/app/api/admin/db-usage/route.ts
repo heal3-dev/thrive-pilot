@@ -4,24 +4,75 @@ import { requireAdmin } from "@/app/api/admin/_utils";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type AdminDbUsageTable = {
+  schema_name: string;
+  table_name: string;
+  total_bytes: number;
+  table_bytes: number;
+  index_bytes: number;
+  toast_bytes: number;
+  row_estimate: number | null;
+};
+
 type AdminDbUsageJson = {
   captured_at?: string;
-  db?: { size_bytes?: number; size_pretty?: string };
-  public_schema?: { size_bytes?: number; size_pretty?: string };
-  tables?: Array<{
-    schema_name: string;
-    table_name: string;
-    total_bytes: number;
-    total_pretty: string;
-    table_bytes: number;
-    table_pretty: string;
-    index_bytes: number;
-    index_pretty: string;
-    toast_bytes: number;
-    toast_pretty: string;
-    row_estimate: number | null;
-  }>;
+  totals?: { database_bytes?: number; public_schema_bytes?: number };
+  top_tables?: AdminDbUsageTable[];
+  // Back-compat for older function shapes (pre v2)
+  db?: { size_bytes?: number };
+  public_schema?: { size_bytes?: number };
+  tables?: Array<
+    | AdminDbUsageTable
+    | {
+        schema?: string;
+        table?: string;
+        total_bytes?: number;
+        table_bytes?: number;
+        index_bytes?: number;
+        toast_bytes?: number;
+        approx_rows?: number | null;
+      }
+  >;
+  retention_purge?: {
+    run_id: string;
+    started_at: string;
+    finished_at?: string | null;
+    retention_raw_days: number;
+    retention_logs_days: number;
+    rows_deleted: number;
+    estimated_deleted_bytes: number;
+    reclaimed_bytes: number;
+  } | null;
 };
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeTable(row: unknown): AdminDbUsageTable | null {
+  if (!isObject(row)) return null;
+  const schema_name =
+    (typeof row.schema_name === "string" && row.schema_name) ||
+    (typeof row.schema === "string" && row.schema) ||
+    null;
+  const table_name =
+    (typeof row.table_name === "string" && row.table_name) ||
+    (typeof row.table === "string" && row.table) ||
+    null;
+  if (!schema_name || !table_name) return null;
+  const rowEstimateRaw =
+    row.row_estimate === undefined ? (row.approx_rows as unknown) : row.row_estimate;
+  return {
+    schema_name,
+    table_name,
+    total_bytes: Number(row.total_bytes ?? 0),
+    table_bytes: Number(row.table_bytes ?? 0),
+    index_bytes: Number(row.index_bytes ?? 0),
+    toast_bytes: Number(row.toast_bytes ?? 0),
+    row_estimate:
+      rowEstimateRaw === null || rowEstimateRaw === undefined ? null : Number(rowEstimateRaw),
+  };
+}
 
 export async function GET(request: Request) {
   const guard = await requireAdmin(request);
@@ -50,7 +101,27 @@ export async function GET(request: Request) {
         })())
       : ((data as AdminDbUsageJson | null) ?? null);
 
-  if (!parsed?.db?.size_bytes || !Array.isArray(parsed.tables)) {
+  const totals =
+    parsed?.totals && typeof parsed.totals.database_bytes === "number"
+      ? parsed.totals
+      : parsed?.db?.size_bytes
+        ? {
+            database_bytes: parsed.db.size_bytes,
+            public_schema_bytes: parsed.public_schema?.size_bytes ?? null,
+          }
+        : null;
+
+  const rawTables = Array.isArray(parsed?.top_tables)
+    ? parsed?.top_tables
+    : Array.isArray(parsed?.tables)
+      ? parsed?.tables
+      : null;
+
+  const top_tables = (rawTables ?? [])
+    .map(normalizeTable)
+    .filter((t): t is AdminDbUsageTable => Boolean(t));
+
+  if (!totals?.database_bytes) {
     return NextResponse.json(
       { error: "Failed to load db usage: unexpected function response" },
       { status: 500 }
@@ -58,14 +129,14 @@ export async function GET(request: Request) {
   }
 
   const res = NextResponse.json({
-    generated_at: parsed.captured_at ?? new Date().toISOString(),
+    generated_at: parsed?.captured_at ?? new Date().toISOString(),
     totals: {
-      database_bytes: parsed.db.size_bytes,
-      database_pretty: parsed.db.size_pretty ?? null,
-      public_schema_bytes: parsed.public_schema?.size_bytes ?? null,
-      public_schema_pretty: parsed.public_schema?.size_pretty ?? null,
+      database_bytes: totals.database_bytes,
+      public_schema_bytes:
+        typeof totals.public_schema_bytes === "number" ? totals.public_schema_bytes : null,
     },
-    top_tables: parsed.tables,
+    top_tables,
+    retention_purge: parsed?.retention_purge ?? null,
   });
   res.headers.set("Cache-Control", "no-store, max-age=0");
   return res;
