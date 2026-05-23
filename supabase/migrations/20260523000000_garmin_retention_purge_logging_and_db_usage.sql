@@ -250,7 +250,7 @@ begin
       perform cron.unschedule(jid);
     end if;
   exception
-    when undefined_table or undefined_schema or undefined_function then
+    when undefined_table or invalid_schema_name or undefined_function then
       null;
   end;
 
@@ -258,7 +258,7 @@ begin
     perform cron.schedule(
       'garmin-retention-purge',
       '0 3 * * 0',
-      $$select public.run_garmin_retention_purge_and_log()$$
+      $cmd$select public.run_garmin_retention_purge_and_log()$cmd$
     );
   exception
     when others then
