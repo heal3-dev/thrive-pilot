@@ -129,7 +129,7 @@ export async function GET(request: Request) {
   }
 
   const res = NextResponse.json({
-    generated_at: parsed.captured_at ?? new Date().toISOString(),
+    generated_at: parsed?.captured_at ?? new Date().toISOString(),
     totals: {
       database_bytes: totals.database_bytes,
       public_schema_bytes:
