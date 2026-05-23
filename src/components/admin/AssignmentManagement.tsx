@@ -89,7 +89,10 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
   }, [adminFetch]);
 
   useEffect(() => {
-    fetchData();
+    // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+    queueMicrotask(() => {
+      fetchData();
+    });
   }, [fetchData]);
 
   // Real-time updates

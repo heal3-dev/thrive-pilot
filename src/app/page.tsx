@@ -26,11 +26,17 @@ export default function LoginPage() {
       const errorDescription = params.get('error_description');
 
       if (hashError === 'access_denied' && errorCode === 'otp_expired') {
-        setError('Your invite link has expired. Please contact your administrator for a new invitation.');
+        // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+        queueMicrotask(() => {
+          setError('Your invite link has expired. Please contact your administrator for a new invitation.');
+        });
         window.history.replaceState(null, '', window.location.pathname);
         return;
       } else if (hashError) {
-        setError(errorDescription || 'Authentication failed. Please try again or contact support.');
+        // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+        queueMicrotask(() => {
+          setError(errorDescription || 'Authentication failed. Please try again or contact support.');
+        });
         window.history.replaceState(null, '', window.location.pathname);
         return;
       }

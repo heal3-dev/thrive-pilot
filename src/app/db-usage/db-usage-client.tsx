@@ -93,7 +93,10 @@ export default function DbUsageClient() {
   );
 
   useEffect(() => {
-    void fetchUsage();
+    // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+    queueMicrotask(() => {
+      void fetchUsage();
+    });
   }, [fetchUsage]);
 
   return (

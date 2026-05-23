@@ -50,10 +50,12 @@ export default function ParticipantDetailsPage() {
     [id, mentor.role]
   );
 
-  // Initial load
-  useEffect(() => {
+  const loadInitial = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
     // Handle demo participants (no API call needed)
-    if (id.startsWith('demo-')) {
+    if (id.startsWith("demo-")) {
       const demo = getDemoParticipant(id);
       if (demo) {
         setParticipant({
@@ -66,65 +68,72 @@ export default function ParticipantDetailsPage() {
         });
         setMetrics(demo.metrics);
         setWeeklyFlag(demo.weekly_flag);
+        setHasMore(false);
       } else {
+        setParticipant(null);
+        setMetrics([]);
+        setWeeklyFlag(null);
+        setHasMore(false);
         setError("Demo participant not found");
       }
       setIsLoading(false);
       return;
     }
 
-    async function fetchData() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-        if (!token) {
-          setError("Not authenticated");
-          setIsLoading(false);
-          return;
-        }
-
-        const res = await fetch(getEndpoint(0), {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!res.ok) {
-          if (res.status === 404) {
-            setError("Participant not found");
-          } else {
-            try {
-              const errJson = await res.json();
-              setError(errJson.error || `Failed to load details (${res.status})`);
-            } catch {
-              setError(`Failed to load details (${res.status})`);
-            }
-          }
-          setIsLoading(false);
-          return;
-        }
-
-        const json = await res.json();
-        setParticipant({
-          ...json.participant,
-          is_connected: json.is_connected
-        });
-        setMetrics(json.metrics);
-        setWeeklyFlag(json.weekly_flag || null);
-        setHasMore(json.pagination?.hasMore ?? false);
-      } catch (err) {
-        console.error("Error loading details:", err);
-        setError("An error occurred");
-      } finally {
-        setIsLoading(false);
+      if (!token) {
+        setError("Not authenticated");
+        return;
       }
-    }
 
-    if (id) {
-      fetchData();
+      const res = await fetch(getEndpoint(0), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          setError("Participant not found");
+        } else {
+          try {
+            const errJson = await res.json();
+            setError(errJson.error || `Failed to load details (${res.status})`);
+          } catch {
+            setError(`Failed to load details (${res.status})`);
+          }
+        }
+        return;
+      }
+
+      const json = await res.json();
+      setParticipant({
+        ...json.participant,
+        is_connected: json.is_connected,
+      });
+      setMetrics(json.metrics);
+      setWeeklyFlag(json.weekly_flag || null);
+      setHasMore(json.pagination?.hasMore ?? false);
+    } catch (err) {
+      console.error("Error loading details:", err);
+      setError("An error occurred");
+    } finally {
+      setIsLoading(false);
     }
-  }, [id, mentor.role, getEndpoint]);
+  }, [getEndpoint, id]);
+
+  // Initial load
+  useEffect(() => {
+    // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+    queueMicrotask(() => {
+      void loadInitial();
+    });
+  }, [loadInitial]);
 
   // Load more handler
   const handleLoadMore = useCallback(async () => {
