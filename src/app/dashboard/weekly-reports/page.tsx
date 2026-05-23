@@ -283,6 +283,32 @@ export default function WeeklyReportsPage() {
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }, []);
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<{
+        participantsWidthPx: number;
+        editorWidthPx: number;
+        editorHeightPx: number;
+      }>;
+      // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+      queueMicrotask(() => {
+        if (typeof parsed.participantsWidthPx === "number" && Number.isFinite(parsed.participantsWidthPx)) {
+          setParticipantsWidthPx(parsed.participantsWidthPx);
+        }
+        if (typeof parsed.editorWidthPx === "number" && Number.isFinite(parsed.editorWidthPx)) {
+          setEditorWidthPx(parsed.editorWidthPx);
+        }
+        if (typeof parsed.editorHeightPx === "number" && Number.isFinite(parsed.editorHeightPx)) {
+          setEditorHeightPx(parsed.editorHeightPx);
+        }
+      });
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const persistLayout = useCallback((next?: { participantsWidthPx?: number; editorWidthPx?: number; editorHeightPx?: number }) => {
     try {
       const current = {
@@ -551,73 +577,6 @@ export default function WeeklyReportsPage() {
     });
   }, [refreshParticipantStatuses]);
 
-  const refreshStatusesInFlightRef = useRef(false);
-  const safeRefreshParticipantStatuses = useCallback(async () => {
-    if (refreshStatusesInFlightRef.current) return;
-    refreshStatusesInFlightRef.current = true;
-    try {
-      await refreshParticipantStatuses();
-    } finally {
-      refreshStatusesInFlightRef.current = false;
-    }
-  }, [refreshParticipantStatuses]);
-
-  const participantIdSet = useMemo(() => new Set(participants.map((p) => p.id)), [participants]);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    if (participantIdSet.size === 0) return;
-
-    const channel = supabase
-      .channel("weekly-reports-status")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "weekly_reports" },
-        (payload) => {
-          const next = payload?.new as unknown;
-          if (!next || typeof next !== "object") return;
-          const pid = (next as Record<string, unknown>).participant_id;
-          if (typeof pid !== "string") return;
-          if (!participantIdSet.has(pid)) return;
-
-          const raw = (next as Record<string, unknown>).status;
-          const status: ParticipantStatus =
-            raw === "approved" || raw === "queued" || raw === "sent" || raw === "failed" || raw === "draft" ? raw : "draft";
-
-          setStatusByParticipant((prev) => ({ ...prev, [pid]: status }));
-          void refreshApprovedCount();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [isAdmin, participantIdSet, refreshApprovedCount]);
-
-  const hasQueuedReports = useMemo(
-    () => Object.values(statusByParticipant).some((s) => s === "queued"),
-    [statusByParticipant]
-  );
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    if (!hasQueuedReports) return;
-
-    // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
-    queueMicrotask(() => {
-      void safeRefreshParticipantStatuses();
-    });
-
-    const intervalMs = 10_000;
-    const handle = window.setInterval(() => {
-      if (document.visibilityState === "hidden") return;
-      void safeRefreshParticipantStatuses();
-    }, intervalMs);
-
-    return () => window.clearInterval(handle);
-  }, [hasQueuedReports, isAdmin, safeRefreshParticipantStatuses]);
-
   useEffect(() => {
     if (!selectedParticipant || !selectedMeta) return;
     const pid = selectedParticipant.id;
@@ -659,12 +618,10 @@ export default function WeeklyReportsPage() {
     return () => window.clearTimeout(handle);
   }, [
     refreshApprovedCount,
-    selectedMeta,
     selectedMeta?.badgeIcon,
     selectedMeta?.badgeLabel,
     selectedMeta?.weekEnding,
     selectedMeta?.weekRange,
-    selectedParticipant,
     selectedParticipant?.id,
     html,
   ]);

@@ -11,6 +11,8 @@ const requestSchema = z.object({
   participantIds: z.array(z.string().uuid()).optional(),
   // Prefer specifying reportIds when selecting a subset.
   reportIds: z.array(z.string().uuid()).optional(),
+  // Optional filter to only send a specific week.
+  weekEnding: z.string().min(10).max(10).optional(),
   // When true, returns a preview without enqueueing.
   dryRun: z.boolean().optional(),
 });
@@ -86,6 +88,10 @@ export async function POST(request: Request) {
     .from("weekly_reports")
     .select("id, participant_id, week_ending, week_range, badge_label, badge_icon, html, status, email_job_id")
     .eq("status", "approved");
+
+  if (payload.weekEnding && /^\d{4}-\d{2}-\d{2}$/.test(payload.weekEnding)) {
+    query = query.eq("week_ending", payload.weekEnding);
+  }
 
   if (payload.reportIds && payload.reportIds.length > 0) {
     query = query.in("id", payload.reportIds);
