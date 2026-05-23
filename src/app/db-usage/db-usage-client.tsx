@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 
 type DbUsageTotals = {
   database_bytes: number;
-  public_schema_bytes: number;
+  public_schema_bytes: number | null;
 };
 
 type DbUsageTable = {
@@ -19,19 +19,32 @@ type DbUsageTable = {
   table_bytes: number;
   index_bytes: number;
   toast_bytes: number;
-  row_estimate: number;
+  row_estimate: number | null;
+};
+
+type RetentionPurgeSummary = {
+  run_id: string;
+  started_at: string;
+  finished_at: string | null;
+  retention_raw_days: number;
+  retention_logs_days: number;
+  rows_deleted: number;
+  estimated_deleted_bytes: number;
+  reclaimed_bytes: number;
 };
 
 type DbUsageResponse = {
   generated_at: string;
   totals: DbUsageTotals;
   top_tables: DbUsageTable[];
+  retention_purge?: RetentionPurgeSummary | null;
 };
 
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes)) return "—";
+function formatBytes(bytes: number | null | undefined): string {
+  const b = typeof bytes === "number" ? bytes : Number.NaN;
+  if (!Number.isFinite(b)) return "—";
   const units = ["B", "KB", "MB", "GB", "TB"];
-  let v = bytes;
+  let v = b;
   let i = 0;
   while (v >= 1024 && i < units.length - 1) {
     v /= 1024;
@@ -41,9 +54,19 @@ function formatBytes(bytes: number): string {
   return `${v.toFixed(decimals)} ${units[i]}`;
 }
 
-function formatInt(n: number): string {
-  if (!Number.isFinite(n)) return "—";
-  return new Intl.NumberFormat().format(Math.round(n));
+function formatInt(n: number | null | undefined): string {
+  const v = typeof n === "number" ? n : Number.NaN;
+  if (!Number.isFinite(v)) return "—";
+  return new Intl.NumberFormat().format(Math.round(v));
+}
+
+function formatDateTime(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(d);
 }
 
 export default function DbUsageClient() {
@@ -155,6 +178,45 @@ export default function DbUsageClient() {
               <p className="mt-2 text-2xl font-bold text-slate-900">
                 {formatBytes(data.totals.public_schema_bytes)}
               </p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border-2 border-slate-100 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">Last retention purge</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">
+                  {data.retention_purge?.started_at
+                    ? formatDateTime(data.retention_purge.started_at)
+                    : "—"}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Retention: raw {data.retention_purge?.retention_raw_days ?? 14} days, logs{" "}
+                  {data.retention_purge?.retention_logs_days ?? 30} days
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <div>
+                  <p className="font-semibold text-slate-700">Rows deleted</p>
+                  <p className="mt-1 font-bold text-slate-900">
+                    {data.retention_purge ? formatInt(data.retention_purge.rows_deleted) : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-700">Estimated cleaned</p>
+                  <p className="mt-1 font-bold text-slate-900">
+                    {data.retention_purge
+                      ? formatBytes(data.retention_purge.estimated_deleted_bytes)
+                      : "—"}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-500">
+                    Note: Postgres often won’t shrink on-disk size immediately after deletes; this
+                    is an estimate of logically removed data.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
