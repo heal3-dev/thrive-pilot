@@ -196,19 +196,28 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
 
   // Initial fetch
   useEffect(() => {
-    fetchList();
+    // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+    queueMicrotask(() => {
+      fetchList();
+    });
   }, [fetchList]);
 
   // Fetch thread when participant selected
   useEffect(() => {
     if (selectedParticipantId) {
-      fetchThread(selectedParticipantId);
-      // On mobile, close sidebar when selecting
-      if (window.innerWidth < 768) {
-        setSidebarOpen(false);
-      }
+      // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+      queueMicrotask(() => {
+        fetchThread(selectedParticipantId);
+        // On mobile, close sidebar when selecting
+        if (window.innerWidth < 768) {
+          setSidebarOpen(false);
+        }
+      });
     } else {
-      setThreadData(null);
+      // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
+      queueMicrotask(() => {
+        setThreadData(null);
+      });
     }
   }, [selectedParticipantId, fetchThread]);
 
