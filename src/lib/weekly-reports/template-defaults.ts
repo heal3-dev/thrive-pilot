@@ -559,31 +559,30 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
       color:#1f2937;
       max-width:760px;
     }
-    .support{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:18px;
-      margin-top:8px;
+    .graph{
+      margin-top:14px;
     }
-    .support-box{
-      background:rgba(255,255,255,.45);
-      border:1px solid rgba(255,255,255,.55);
-      border-radius:18px;
-      padding:18px;
+    .graph-head{
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:8px;
     }
-    .support-label{
+    .graph-label{
       font-size:12px;
       letter-spacing:.18em;
       text-transform:uppercase;
       color:#64748b;
-      font-weight:700;
-      margin:0 0 8px;
+      font-weight:800;
     }
-    .support-text{
-      font-size:17px;
-      line-height:1.7;
-      margin:0;
-      color:#1f2937;
+    .graph-range{
+      font-size:11px;
+      color:#64748b;
+      font-weight:600;
+    }
+    .graph-slot{
+      display:block;
     }
     .meaning{
       background:var(--panel);
@@ -622,7 +621,6 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
       .section-title{font-size:30px}
       .card-grid{grid-template-columns:1fr}
       .icon-circle{margin:0 auto}
-      .support{grid-template-columns:1fr}
     }
   </style>
 </head>
@@ -650,15 +648,12 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
           <p class="card-sub">How steady your system looked this week</p>
           <div class="state">Low to Moderate</div>
           <p class="body">Your week looked fairly steady overall. Daily stress stayed mostly in a manageable range, with no strong sign that stress was the main issue this week.</p>
-          <div class="support">
-            <div class="support-box">
-              <p class="support-label">Daily pattern</p>
-              <p class="support-text">Most days looked moderate, with a calmer finish to the week.</p>
+          <div class="graph">
+            <div class="graph-head">
+              <div class="graph-label">Stress</div>
+              <div class="graph-range">April 25 – May 1, 2025</div>
             </div>
-            <div class="support-box">
-              <p class="support-label">What stood out</p>
-              <p class="support-text">Stress did not appear to be the biggest concern compared with the rest of the week.</p>
-            </div>
+            <div class="graph-slot" data-graph="stress"></div>
           </div>
         </div>
       </div>
@@ -672,15 +667,12 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
           <p class="card-sub">How much and how well your body rested overnight</p>
           <div class="state">Mixed</div>
           <p class="body">Sleep looked uneven this week. Several nights were solid, but one clearly short night and a low sleep score in the middle of the week stood out and likely made it harder to feel fully settled.</p>
-          <div class="support">
-            <div class="support-box">
-              <p class="support-label">Sleep amount</p>
-              <p class="support-text">Most nights were around a workable range, but one much shorter night interrupted the pattern.</p>
+          <div class="graph">
+            <div class="graph-head">
+              <div class="graph-label">Sleep score</div>
+              <div class="graph-range">April 25 – May 1, 2025</div>
             </div>
-            <div class="support-box">
-              <p class="support-label">Sleep quality</p>
-              <p class="support-text">Sleep quality improved again by the end of the week after a rougher stretch midweek.</p>
-            </div>
+            <div class="graph-slot" data-graph="sleep_score"></div>
           </div>
         </div>
       </div>
@@ -694,15 +686,12 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
           <p class="card-sub">How well your body recharged across the week</p>
           <div class="state">Partial</div>
           <p class="body">Recovery looked only partly consistent this week. While some days showed decent recharge, your system did not stay as settled across the full week, which is the main area to watch.</p>
-          <div class="support">
-            <div class="support-box">
-              <p class="support-label">Recharge pattern</p>
-              <p class="support-text">You had some stronger recovery days, especially near the end of the week.</p>
+          <div class="graph">
+            <div class="graph-head">
+              <div class="graph-label">Body battery</div>
+              <div class="graph-range">April 25 – May 1, 2025</div>
             </div>
-            <div class="support-box">
-              <p class="support-label">Main watch area</p>
-              <p class="support-text">Recovery steadiness looked less consistent across the week, suggesting your body had to work harder to stay balanced.</p>
-            </div>
+            <div class="graph-slot" data-graph="body_battery"></div>
           </div>
         </div>
       </div>

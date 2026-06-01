@@ -47,6 +47,7 @@ type EditableReportContent = {
   badgeText: string;
   cards: [EditableCard, EditableCard, EditableCard];
   meaningParagraph: string;
+  hasSupportBoxes: boolean;
 };
 
 function formatParticipantLabel(p: ParticipantMini): string {
@@ -99,6 +100,17 @@ const DEFAULT_TEMPLATES: Record<TemplateKey, string> = {
   html_base_template: DEFAULT_OLGA_HTML_BASE_TEMPLATE,
 };
 
+function formatUpdatedAtUtc(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  // Use fixed locale + UTC to avoid SSR/client hydration mismatches.
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(d);
+}
+
 export default function WeeklyReportsPage() {
   const router = useRouter();
   const { mentor } = useDashboard();
@@ -116,6 +128,8 @@ export default function WeeklyReportsPage() {
 
   const [htmlByParticipant, setHtmlByParticipant] = useState<Record<string, string>>({});
   const html = selectedParticipant ? htmlByParticipant[selectedParticipant.id] ?? "" : "";
+  const [outreachByParticipant, setOutreachByParticipant] = useState<Record<string, string>>({});
+  const outreachText = selectedParticipant ? outreachByParticipant[selectedParticipant.id] ?? "" : "";
   const [metaByParticipant, setMetaByParticipant] = useState<Record<string, WeeklyReportMeta>>({});
   const selectedMeta = selectedParticipant ? metaByParticipant[selectedParticipant.id] ?? null : null;
   const [completenessByParticipant, setCompletenessByParticipant] = useState<
@@ -198,8 +212,8 @@ export default function WeeklyReportsPage() {
   const buildOutreachText = useCallback((meta: WeeklyReportMeta) => {
     const first = meta.participantLabel.trim().split(/\s+/)[0] || meta.participantLabel.trim();
     return [
-      `Hi ${first}, here’s your Thrive Weekly Report for ${meta.weekRange} — ${meta.badgeLabel} ${meta.badgeIcon}.`,
-      "Reply here if you’d like to talk through anything or want help choosing one thing to focus on this week.",
+      `Hi ${first}, this week your Thrive weekly report (${meta.weekRange}) shows that you flagged ${meta.badgeLabel} ${meta.badgeIcon}.`,
+      "Let us know if you have any questions after you’ve reviewed the report.",
     ].join(" ");
   }, []);
 
@@ -213,6 +227,7 @@ export default function WeeklyReportsPage() {
 
       const sections = Array.from(doc.querySelectorAll("section.card")).slice(0, 3);
       const defaultTitles = ["STRESS", "SLEEP", "RECOVERY"] as const;
+      const hasSupportBoxes = sections.some((s) => Boolean(s.querySelector(".support")));
       const cards = sections.map((section, idx) => {
         const title = (section.querySelector("h3")?.textContent ?? defaultTitles[idx] ?? `CARD ${idx + 1}`).trim();
         const state = (section.querySelector(".state")?.textContent ?? "").trim();
@@ -240,6 +255,7 @@ export default function WeeklyReportsPage() {
         badgeText,
         cards: [cards[0]!, cards[1]!, cards[2]!] as [EditableCard, EditableCard, EditableCard],
         meaningParagraph,
+        hasSupportBoxes,
       };
     } catch {
       return null;
@@ -760,6 +776,7 @@ export default function WeeklyReportsPage() {
           weekRange?: string;
           badgeLabel?: string;
           badgeIcon?: string;
+          outreachText?: string;
           reportId?: string | null;
           reportStatus?: string;
           completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
@@ -769,6 +786,9 @@ export default function WeeklyReportsPage() {
         setHtmlByParticipant((prev) => ({ ...prev, [p.id]: j.updatedHtml ?? "" }));
         lastSavedHtmlRef.current[p.id] = (j.updatedHtml ?? "").trim();
         setStatusByParticipant((prev) => ({ ...prev, [p.id]: "draft" }));
+        if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
+          setOutreachByParticipant((prev) => ({ ...prev, [p.id]: j.outreachText!.trim() }));
+        }
         if (j.weekRange && j.badgeLabel && j.badgeIcon) {
           const weekRange = j.weekRange;
           const badgeLabel = j.badgeLabel;
@@ -1065,7 +1085,7 @@ export default function WeeklyReportsPage() {
               <p className="text-xs text-slate-500 mt-0.5">{TEMPLATE_LABELS[templateKey].hint}</p>
               {currentTemplateRow ? (
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Active version: v{currentTemplateRow.version} · Updated {new Date(currentTemplateRow.updated_at).toLocaleString()}
+                  Active version: v{currentTemplateRow.version} · Updated {formatUpdatedAtUtc(currentTemplateRow.updated_at)} UTC
                 </p>
               ) : (
                 <p className="text-[11px] text-slate-400 mt-1">
@@ -1450,6 +1470,7 @@ export default function WeeklyReportsPage() {
                           weekRange?: string;
                           badgeLabel?: string;
                           badgeIcon?: string;
+                          outreachText?: string;
                           completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
                         };
                         const updatedHtml = j.updatedHtml ?? "";
@@ -1457,6 +1478,9 @@ export default function WeeklyReportsPage() {
                         setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: updatedHtml }));
                         lastSavedHtmlRef.current[selectedParticipant.id] = updatedHtml.trim();
                         setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "draft" }));
+                        if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
+                          setOutreachByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: j.outreachText!.trim() }));
+                        }
                         if (j.weekRange && j.badgeLabel && j.badgeIcon) {
                           const weekRange = j.weekRange;
                           const badgeLabel = j.badgeLabel;
@@ -1525,7 +1549,7 @@ export default function WeeklyReportsPage() {
                         className="border-slate-300 shrink-0"
                         onClick={async () => {
                           try {
-                            const text = buildOutreachText(selectedMeta);
+                            const text = outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta);
                             await navigator.clipboard.writeText(text);
                             setOutreachCopied(true);
                             window.setTimeout(() => setOutreachCopied(false), 1200);
@@ -1539,7 +1563,7 @@ export default function WeeklyReportsPage() {
                     </div>
                     <textarea
                       readOnly
-                      value={buildOutreachText(selectedMeta)}
+                      value={outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta)}
                       className="mt-3 w-full min-h-[88px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 resize-none"
                     />
                   </div>
@@ -1680,68 +1704,74 @@ export default function WeeklyReportsPage() {
                               />
                             </div>
 
-                            <div className="grid grid-cols-1 gap-3">
-                              <div>
-                                <p className="text-[11px] font-semibold text-slate-600">Support box 1 label</p>
-                                <input
-                                  value={card.support1Label}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    updateSelectedHtml((doc) => {
-                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
-                                      const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
-                                      if (labels[0]) labels[0].textContent = v;
-                                    });
-                                  }}
-                                  className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
-                                />
+                            {editable.hasSupportBoxes ? (
+                              <div className="grid grid-cols-1 gap-3">
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-600">Support box 1 label</p>
+                                  <input
+                                    value={card.support1Label}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      updateSelectedHtml((doc) => {
+                                        const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                        const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
+                                        if (labels[0]) labels[0].textContent = v;
+                                      });
+                                    }}
+                                    className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
+                                  />
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-600">Support box 1 text</p>
+                                  <textarea
+                                    value={card.support1Text}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      updateSelectedHtml((doc) => {
+                                        const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                        const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
+                                        if (texts[0]) texts[0].textContent = v;
+                                      });
+                                    }}
+                                    className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
+                                  />
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-600">Support box 2 label</p>
+                                  <input
+                                    value={card.support2Label}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      updateSelectedHtml((doc) => {
+                                        const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                        const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
+                                        if (labels[1]) labels[1].textContent = v;
+                                      });
+                                    }}
+                                    className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
+                                  />
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-600">Support box 2 text</p>
+                                  <textarea
+                                    value={card.support2Text}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      updateSelectedHtml((doc) => {
+                                        const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                        const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
+                                        if (texts[1]) texts[1].textContent = v;
+                                      });
+                                    }}
+                                    className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
+                                  />
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-[11px] font-semibold text-slate-600">Support box 1 text</p>
-                                <textarea
-                                  value={card.support1Text}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    updateSelectedHtml((doc) => {
-                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
-                                      const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
-                                      if (texts[0]) texts[0].textContent = v;
-                                    });
-                                  }}
-                                  className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
-                                />
+                            ) : (
+                              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                                This template uses graphs in place of support boxes.
                               </div>
-                              <div>
-                                <p className="text-[11px] font-semibold text-slate-600">Support box 2 label</p>
-                                <input
-                                  value={card.support2Label}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    updateSelectedHtml((doc) => {
-                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
-                                      const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
-                                      if (labels[1]) labels[1].textContent = v;
-                                    });
-                                  }}
-                                  className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
-                                />
-                              </div>
-                              <div>
-                                <p className="text-[11px] font-semibold text-slate-600">Support box 2 text</p>
-                                <textarea
-                                  value={card.support2Text}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    updateSelectedHtml((doc) => {
-                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
-                                      const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
-                                      if (texts[1]) texts[1].textContent = v;
-                                    });
-                                  }}
-                                  className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
-                                />
-                              </div>
-                            </div>
+                            )}
                           </div>
                         </div>
                       ))}
