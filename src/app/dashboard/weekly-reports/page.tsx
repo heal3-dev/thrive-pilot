@@ -116,6 +116,8 @@ export default function WeeklyReportsPage() {
 
   const [htmlByParticipant, setHtmlByParticipant] = useState<Record<string, string>>({});
   const html = selectedParticipant ? htmlByParticipant[selectedParticipant.id] ?? "" : "";
+  const [outreachByParticipant, setOutreachByParticipant] = useState<Record<string, string>>({});
+  const outreachText = selectedParticipant ? outreachByParticipant[selectedParticipant.id] ?? "" : "";
   const [metaByParticipant, setMetaByParticipant] = useState<Record<string, WeeklyReportMeta>>({});
   const selectedMeta = selectedParticipant ? metaByParticipant[selectedParticipant.id] ?? null : null;
   const [completenessByParticipant, setCompletenessByParticipant] = useState<
@@ -198,8 +200,8 @@ export default function WeeklyReportsPage() {
   const buildOutreachText = useCallback((meta: WeeklyReportMeta) => {
     const first = meta.participantLabel.trim().split(/\s+/)[0] || meta.participantLabel.trim();
     return [
-      `Hi ${first}, here’s your Thrive Weekly Report for ${meta.weekRange} — ${meta.badgeLabel} ${meta.badgeIcon}.`,
-      "Reply here if you’d like to talk through anything or want help choosing one thing to focus on this week.",
+      `Hi ${first}, this week your Thrive weekly report (${meta.weekRange}) shows that you flagged ${meta.badgeLabel} ${meta.badgeIcon}.`,
+      "Let us know if you have any questions after you’ve reviewed the report.",
     ].join(" ");
   }, []);
 
@@ -760,6 +762,7 @@ export default function WeeklyReportsPage() {
           weekRange?: string;
           badgeLabel?: string;
           badgeIcon?: string;
+          outreachText?: string;
           reportId?: string | null;
           reportStatus?: string;
           completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
@@ -769,6 +772,9 @@ export default function WeeklyReportsPage() {
         setHtmlByParticipant((prev) => ({ ...prev, [p.id]: j.updatedHtml ?? "" }));
         lastSavedHtmlRef.current[p.id] = (j.updatedHtml ?? "").trim();
         setStatusByParticipant((prev) => ({ ...prev, [p.id]: "draft" }));
+        if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
+          setOutreachByParticipant((prev) => ({ ...prev, [p.id]: j.outreachText!.trim() }));
+        }
         if (j.weekRange && j.badgeLabel && j.badgeIcon) {
           const weekRange = j.weekRange;
           const badgeLabel = j.badgeLabel;
@@ -1450,6 +1456,7 @@ export default function WeeklyReportsPage() {
                           weekRange?: string;
                           badgeLabel?: string;
                           badgeIcon?: string;
+                          outreachText?: string;
                           completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
                         };
                         const updatedHtml = j.updatedHtml ?? "";
@@ -1457,6 +1464,9 @@ export default function WeeklyReportsPage() {
                         setHtmlByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: updatedHtml }));
                         lastSavedHtmlRef.current[selectedParticipant.id] = updatedHtml.trim();
                         setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "draft" }));
+                        if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
+                          setOutreachByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: j.outreachText!.trim() }));
+                        }
                         if (j.weekRange && j.badgeLabel && j.badgeIcon) {
                           const weekRange = j.weekRange;
                           const badgeLabel = j.badgeLabel;
@@ -1525,7 +1535,7 @@ export default function WeeklyReportsPage() {
                         className="border-slate-300 shrink-0"
                         onClick={async () => {
                           try {
-                            const text = buildOutreachText(selectedMeta);
+                            const text = outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta);
                             await navigator.clipboard.writeText(text);
                             setOutreachCopied(true);
                             window.setTimeout(() => setOutreachCopied(false), 1200);
@@ -1539,7 +1549,7 @@ export default function WeeklyReportsPage() {
                     </div>
                     <textarea
                       readOnly
-                      value={buildOutreachText(selectedMeta)}
+                      value={outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta)}
                       className="mt-3 w-full min-h-[88px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 resize-none"
                     />
                   </div>
