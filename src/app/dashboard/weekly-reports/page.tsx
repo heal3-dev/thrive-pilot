@@ -99,6 +99,17 @@ const DEFAULT_TEMPLATES: Record<TemplateKey, string> = {
   html_base_template: DEFAULT_OLGA_HTML_BASE_TEMPLATE,
 };
 
+function formatUpdatedAtUtc(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  // Use fixed locale + UTC to avoid SSR/client hydration mismatches.
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(d);
+}
+
 export default function WeeklyReportsPage() {
   const router = useRouter();
   const { mentor } = useDashboard();
@@ -1071,7 +1082,7 @@ export default function WeeklyReportsPage() {
               <p className="text-xs text-slate-500 mt-0.5">{TEMPLATE_LABELS[templateKey].hint}</p>
               {currentTemplateRow ? (
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Active version: v{currentTemplateRow.version} · Updated {new Date(currentTemplateRow.updated_at).toLocaleString()}
+                  Active version: v{currentTemplateRow.version} · Updated {formatUpdatedAtUtc(currentTemplateRow.updated_at)} UTC
                 </p>
               ) : (
                 <p className="text-[11px] text-slate-400 mt-1">
