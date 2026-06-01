@@ -351,16 +351,19 @@ function fillOlgaTemplate(params: {
       title: "Stress",
       points: params.graphs.stress,
       stroke: "#e11d48",
+      slot: "stress",
     },
     {
       title: "Sleep score",
       points: params.graphs.sleepScore,
       stroke: "#2563eb",
+      slot: "sleep_score",
     },
     {
       title: "Body battery",
       points: params.graphs.bodyBattery,
       stroke: "#0f766e",
+      slot: "body_battery",
     },
   ] as const;
 
@@ -379,8 +382,25 @@ function fillOlgaTemplate(params: {
       );
       s = replaceFirst(s, /(<p\s+class="body"[^>]*>)([\s\S]*?)(<\/p>)/i, escapeHtml(cc.body));
 
-      // Replace the two "support boxes" with the required graph for this card.
-      const graphHtml = `
+      // Preferred: fill graph placeholder inside the template.
+      const svg = renderSparklineSvg({ points: g.points, stroke: g.stroke });
+      const slotRe = new RegExp(
+        `(<div\\s+class="graph-slot"[^>]*data-graph="${g.slot}"[^>]*>)([\\s\\S]*?)(<\\/div>)`,
+        "i"
+      );
+
+      if (slotRe.test(s)) {
+        s = replaceFirst(s, slotRe, svg);
+        // Also replace the visible date range in the graph head if present.
+        s = s.replace(
+          /(<div\s+class="graph-range"[^>]*>)([\s\S]*?)(<\/div>)/i,
+          (_m, p1: string, _p2: string, p3: string) => `${p1}${escapeHtml(params.weekRange)}${p3}`
+        );
+        return s;
+      }
+
+      // Back-compat: old templates had two "support boxes" — replace that block with the graph.
+      const fallbackGraphHtml = `
 <div class="graph" style="margin-top:16px">
   <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px">
     <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#64748b;font-weight:800">
@@ -388,11 +408,11 @@ function fillOlgaTemplate(params: {
     </div>
     <div style="font-size:11px;color:#64748b;font-weight:600">${escapeHtml(params.weekRange)}</div>
   </div>
-  ${renderSparklineSvg({ points: g.points, stroke: g.stroke })}
+  ${svg}
 </div>
       `.trim();
 
-      s = s.replace(/<div\s+class="support"[^>]*>[\s\S]*?<\/div>/i, graphHtml);
+      s = s.replace(/<div\s+class="support"[^>]*>[\s\S]*?<\/div>/i, fallbackGraphHtml);
       return s;
     });
     html = replaceAllNth(html, sectionRe, updatedSections);

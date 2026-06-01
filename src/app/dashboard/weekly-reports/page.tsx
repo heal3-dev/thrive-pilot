@@ -47,6 +47,7 @@ type EditableReportContent = {
   badgeText: string;
   cards: [EditableCard, EditableCard, EditableCard];
   meaningParagraph: string;
+  hasSupportBoxes: boolean;
 };
 
 function formatParticipantLabel(p: ParticipantMini): string {
@@ -226,6 +227,7 @@ export default function WeeklyReportsPage() {
 
       const sections = Array.from(doc.querySelectorAll("section.card")).slice(0, 3);
       const defaultTitles = ["STRESS", "SLEEP", "RECOVERY"] as const;
+      const hasSupportBoxes = sections.some((s) => Boolean(s.querySelector(".support")));
       const cards = sections.map((section, idx) => {
         const title = (section.querySelector("h3")?.textContent ?? defaultTitles[idx] ?? `CARD ${idx + 1}`).trim();
         const state = (section.querySelector(".state")?.textContent ?? "").trim();
@@ -253,6 +255,7 @@ export default function WeeklyReportsPage() {
         badgeText,
         cards: [cards[0]!, cards[1]!, cards[2]!] as [EditableCard, EditableCard, EditableCard],
         meaningParagraph,
+        hasSupportBoxes,
       };
     } catch {
       return null;
@@ -1701,68 +1704,74 @@ export default function WeeklyReportsPage() {
                               />
                             </div>
 
-                            <div className="grid grid-cols-1 gap-3">
-                              <div>
-                                <p className="text-[11px] font-semibold text-slate-600">Support box 1 label</p>
-                                <input
-                                  value={card.support1Label}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    updateSelectedHtml((doc) => {
-                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
-                                      const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
-                                      if (labels[0]) labels[0].textContent = v;
-                                    });
-                                  }}
-                                  className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
-                                />
+                            {editable.hasSupportBoxes ? (
+                              <div className="grid grid-cols-1 gap-3">
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-600">Support box 1 label</p>
+                                  <input
+                                    value={card.support1Label}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      updateSelectedHtml((doc) => {
+                                        const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                        const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
+                                        if (labels[0]) labels[0].textContent = v;
+                                      });
+                                    }}
+                                    className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
+                                  />
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-600">Support box 1 text</p>
+                                  <textarea
+                                    value={card.support1Text}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      updateSelectedHtml((doc) => {
+                                        const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                        const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
+                                        if (texts[0]) texts[0].textContent = v;
+                                      });
+                                    }}
+                                    className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
+                                  />
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-600">Support box 2 label</p>
+                                  <input
+                                    value={card.support2Label}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      updateSelectedHtml((doc) => {
+                                        const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                        const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
+                                        if (labels[1]) labels[1].textContent = v;
+                                      });
+                                    }}
+                                    className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
+                                  />
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-600">Support box 2 text</p>
+                                  <textarea
+                                    value={card.support2Text}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      updateSelectedHtml((doc) => {
+                                        const section = Array.from(doc.querySelectorAll("section.card"))[idx];
+                                        const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
+                                        if (texts[1]) texts[1].textContent = v;
+                                      });
+                                    }}
+                                    className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
+                                  />
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-[11px] font-semibold text-slate-600">Support box 1 text</p>
-                                <textarea
-                                  value={card.support1Text}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    updateSelectedHtml((doc) => {
-                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
-                                      const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
-                                      if (texts[0]) texts[0].textContent = v;
-                                    });
-                                  }}
-                                  className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
-                                />
+                            ) : (
+                              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                                This template uses graphs in place of support boxes.
                               </div>
-                              <div>
-                                <p className="text-[11px] font-semibold text-slate-600">Support box 2 label</p>
-                                <input
-                                  value={card.support2Label}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    updateSelectedHtml((doc) => {
-                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
-                                      const labels = Array.from(section?.querySelectorAll(".support-label") ?? []);
-                                      if (labels[1]) labels[1].textContent = v;
-                                    });
-                                  }}
-                                  className="mt-1 w-full h-9 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-300"
-                                />
-                              </div>
-                              <div>
-                                <p className="text-[11px] font-semibold text-slate-600">Support box 2 text</p>
-                                <textarea
-                                  value={card.support2Text}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    updateSelectedHtml((doc) => {
-                                      const section = Array.from(doc.querySelectorAll("section.card"))[idx];
-                                      const texts = Array.from(section?.querySelectorAll(".support-text") ?? []);
-                                      if (texts[1]) texts[1].textContent = v;
-                                    });
-                                  }}
-                                  className="mt-1 w-full min-h-[56px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
-                                />
-                              </div>
-                            </div>
+                            )}
                           </div>
                         </div>
                       ))}
