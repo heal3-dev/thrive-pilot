@@ -190,6 +190,34 @@ function renderSparklineSvg(params: {
 `.trim();
 }
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function replaceGraphSlot(params: {
+  html: string;
+  slotKeys: readonly string[];
+  svg: string;
+}): { html: string; replaced: boolean } {
+  // Match variants like:
+  // - class="graph-slot"
+  // - class="graph-slot something"
+  // - class='graph-slot'
+  // - data-graph="sleep_score" or data-graph='sleep score'
+  const keyAlternation = params.slotKeys.map(escapeRegex).join("|");
+  const re = new RegExp(
+    `(<div[^>]*class=(["'])[^\\"']*\\bgraph-slot\\b[^\\2]*\\2[^>]*data-graph=(["'])(?:${keyAlternation})\\3[^>]*>)([\\s\\S]*?)(<\\/div>)`,
+    "i"
+  );
+
+  if (!re.test(params.html)) return { html: params.html, replaced: false };
+
+  const next = params.html.replace(re, (_m, p1: string, _q1: string, _q2: string, _inner: string, pEnd: string) => {
+    return `${p1}${params.svg}${pEnd}`;
+  });
+  return { html: next, replaced: true };
+}
+
 function computeCompleteness(metrics: Metric[], weekEnding: string): DataCompleteness {
   const days = list7DaysEnding(weekEnding);
   const byDate = new Map(metrics.map((m) => [m.metric_date, m]));
@@ -352,18 +380,21 @@ function fillOlgaTemplate(params: {
       points: params.graphs.stress,
       stroke: "#e11d48",
       slot: "stress",
+      slotKeys: ["stress"],
     },
     {
       title: "Sleep score",
       points: params.graphs.sleepScore,
       stroke: "#2563eb",
       slot: "sleep_score",
+      slotKeys: ["sleep_score", "sleep score", "sleep", "sleepScore"],
     },
     {
       title: "Body battery",
       points: params.graphs.bodyBattery,
       stroke: "#0f766e",
       slot: "body_battery",
+      slotKeys: ["body_battery", "body battery", "bodybattery", "recovery"],
     },
   ] as const;
 
@@ -384,13 +415,9 @@ function fillOlgaTemplate(params: {
 
       // Preferred: fill graph placeholder inside the template.
       const svg = renderSparklineSvg({ points: g.points, stroke: g.stroke });
-      const slotRe = new RegExp(
-        `(<div\\s+class="graph-slot"[^>]*data-graph="${g.slot}"[^>]*>)([\\s\\S]*?)(<\\/div>)`,
-        "i"
-      );
-
-      if (slotRe.test(s)) {
-        s = replaceFirst(s, slotRe, svg);
+      const filled = replaceGraphSlot({ html: s, slotKeys: g.slotKeys, svg });
+      if (filled.replaced) {
+        s = filled.html;
         // Also replace the visible date range in the graph head if present.
         s = s.replace(
           /(<div\s+class="graph-range"[^>]*>)([\s\S]*?)(<\/div>)/i,
