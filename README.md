@@ -7,16 +7,23 @@ Next.js app with Supabase + Twilio integration.
 - **Install deps**
 
 ```bash
-npm install
+pnpm install
 ```
 
 - **Run the dev server**
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Open `http://localhost:3000`.
+
+- **Lint / build**
+
+```bash
+pnpm lint
+pnpm build
+```
 
 ## Environment Variables
 
@@ -67,6 +74,12 @@ To configure Resend SMTP in a new environment:
    - Port: `465`
    - Username: `resend`
    - Password: Your Resend API key
+
+## Email delivery: queue + failover
+
+In addition to Supabase Auth invite emails, the app uses a **DB-backed email queue** (`email_jobs`) for reliable delivery and provider failover (drained by a cron route).
+
+- **Docs**: `src/lib/email/README.md`
 
 ## Participant Invite Flow
 
@@ -169,6 +182,34 @@ The invite redirect URL is determined in order of priority:
 3. `X-Forwarded-Host` header (for proxied requests)
 
 Always set `NEXT_PUBLIC_SITE_URL` in production to ensure consistent redirect URLs.
+
+## Weekly Reports (Admin)
+
+Weekly reports are persisted in `weekly_reports` per participant + week (`(participant_id, week_ending)` unique).
+
+### Status lifecycle
+
+- **draft**: editable in the admin UI
+- **approved**: ready to be sent
+- **queued**: enqueued for email delivery
+- **sent**: successfully sent
+- **failed**: send attempt failed
+
+### Current week behavior in the UI
+
+The admin UI shows the **current week range** (e.g. `May 10–May 16`) in the header.
+
+- If the latest saved `weekly_reports` row for a participant is **not** for the current `week_ending`, the UI displays their status as **Draft** (to avoid starting a new week with everyone showing **Sent** from last week).
+- While any reports are **queued**, the UI auto-refreshes statuses (Supabase Realtime + a polling fallback).
+
+### Key endpoints
+
+- **List**: `POST /api/admin/weekly-reports/list`
+  - Returns `latestByParticipant` used for the participant list status badges (includes `status` + `week_ending`).
+- **Summary**: `GET /api/admin/weekly-reports/summary?weekEnding=YYYY-MM-DD`
+  - Returns `approvedCount` for the selected/current week.
+- **Send approved**: `POST /api/admin/weekly-reports/send-approved`
+  - Body supports `dryRun` and `weekEnding` to scope preview/enqueue to the current week.
 
 ## API
 
