@@ -938,12 +938,11 @@ export default function WeeklyReportsPage() {
             disabled={approvedCount === 0}
             className="bg-teal-500 hover:bg-teal-600 text-white"
           >
-            {isSendingApproved ? "Sending…" : `Send approved (${approvedCount})`}
+            {isSendingApproved ? "Sending…" : `Send Email (${approvedCount})`}
           </Button>
 
           <Button
             size="sm"
-            variant="outline"
             onClick={async () => {
               setIsSendSmsOpen(true);
               setSmsPreview(null);
@@ -1001,9 +1000,9 @@ export default function WeeklyReportsPage() {
               }
             }}
             disabled={approvedCount === 0}
-            className="border-slate-300"
+            className="bg-teal-500 hover:bg-teal-600 text-white"
           >
-            {isSendingSms ? "Sending…" : "Send approved (SMS)"}
+            {isSendingSms ? "Sending…" : `Send SMS (${approvedCount})`}
           </Button>
         </div>
       </div>
