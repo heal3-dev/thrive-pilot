@@ -165,6 +165,14 @@ export default function WeeklyReportsPage() {
   }>(null);
   const [selectedSendReportIds, setSelectedSendReportIds] = useState<Record<string, boolean>>({});
 
+  const [isSendSmsOpen, setIsSendSmsOpen] = useState(false);
+  const [isSendingSms, setIsSendingSms] = useState(false);
+  const [smsPreview, setSmsPreview] = useState<null | {
+    toSend: Array<{ reportId: string; participantId: string; participantName: string; toPhone: string; weekRange: string; shareUrl: string; expiresAt: string }>;
+    alreadySent: Array<{ reportId: string; participantId: string; weekRange: string }>;
+  }>(null);
+  const [selectedSmsReportIds, setSelectedSmsReportIds] = useState<Record<string, boolean>>({});
+
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
   const [templatesByKey, setTemplatesByKey] = useState<Partial<Record<TemplateKey, TemplateRow>>>({});
@@ -932,6 +940,71 @@ export default function WeeklyReportsPage() {
           >
             {isSendingApproved ? "Sending…" : `Send approved (${approvedCount})`}
           </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              setIsSendSmsOpen(true);
+              setSmsPreview(null);
+              setSelectedSmsReportIds({});
+              setIsSendingSms(true);
+              try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const token = sessionData?.session?.access_token;
+                if (!token) throw new Error("Authentication required");
+                const res = await fetch("/api/admin/weekly-reports/send-approved-sms", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({ dryRun: true }),
+                });
+                const j = (await res.json().catch(() => null)) as unknown;
+                if (!res.ok) {
+                  const msg =
+                    j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
+                      ? (j as { error: string }).error
+                      : "Failed to preview SMS sends";
+                  throw new Error(msg);
+                }
+
+                const list =
+                  j && typeof j === "object" && "preview" in j && Array.isArray((j as { preview?: unknown }).preview)
+                    ? ((j as { preview: unknown[] }).preview as Array<{
+                        reportId: string;
+                        participantId: string;
+                        participantName: string;
+                        toPhone: string;
+                        weekRange: string;
+                        shareUrl: string;
+                        expiresAt: string;
+                      }>)
+                    : [];
+
+                const alreadySent =
+                  j && typeof j === "object" && "skippedAlreadySent" in j
+                    ? [] // server returns counts only; keep empty list for now
+                    : [];
+
+                const preview = { toSend: list, alreadySent };
+                setSmsPreview(preview);
+                const initial: Record<string, boolean> = {};
+                for (const it of preview.toSend) initial[it.reportId] = true;
+                setSelectedSmsReportIds(initial);
+              } catch (e) {
+                alert(e instanceof Error ? e.message : "Failed to preview SMS sends");
+                setIsSendSmsOpen(false);
+              } finally {
+                setIsSendingSms(false);
+              }
+            }}
+            disabled={approvedCount === 0}
+            className="border-slate-300"
+          >
+            {isSendingSms ? "Sending…" : "Send approved (SMS)"}
+          </Button>
         </div>
       </div>
 
@@ -1038,6 +1111,123 @@ export default function WeeklyReportsPage() {
                   }}
                 >
                   {isSendingApproved ? "Enqueueing…" : "Confirm & enqueue"}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isSendSmsOpen}
+        onClose={() => setIsSendSmsOpen(false)}
+        title="Send approved reports (SMS)"
+        subtitle="Confirm who will receive an SMS with a report link."
+        size="lg"
+      >
+        <div className="space-y-4">
+          {!smsPreview ? (
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-600">Loading preview…</div>
+          ) : (
+            <>
+              <div className="p-3 rounded-xl border border-slate-200 bg-white">
+                <p className="text-sm font-semibold text-slate-900">
+                  Will send: {Object.values(selectedSmsReportIds).filter(Boolean).length} / {smsPreview.toSend.length}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">Links expire after 7 days.</p>
+              </div>
+
+              <div className="max-h-[340px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                {smsPreview.toSend.length === 0 ? (
+                  <div className="p-4 text-sm text-slate-600">No approved reports ready to send via SMS.</div>
+                ) : (
+                  smsPreview.toSend.map((it) => (
+                    <label key={it.reportId} className="flex items-start gap-3 px-4 py-3 border-b border-slate-100">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={Boolean(selectedSmsReportIds[it.reportId])}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedSmsReportIds((prev) => ({ ...prev, [it.reportId]: checked }));
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{it.participantName}</p>
+                        <p className="text-xs text-slate-500 truncate">{it.toPhone}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{it.weekRange}</p>
+                        <p className="text-[11px] text-slate-400 mt-1 truncate">{it.shareUrl}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-slate-300 shrink-0"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          try {
+                            await navigator.clipboard.writeText(it.shareUrl);
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                      >
+                        Copy link
+                      </Button>
+                    </label>
+                  ))
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="outline" className="border-slate-300" size="sm" onClick={() => setIsSendSmsOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                  disabled={Object.values(selectedSmsReportIds).filter(Boolean).length === 0 || isSendingSms}
+                  onClick={async () => {
+                    setIsSendingSms(true);
+                    try {
+                      const { data: sessionData } = await supabase.auth.getSession();
+                      const token = sessionData?.session?.access_token;
+                      if (!token) throw new Error("Authentication required");
+                      const reportIds = Object.entries(selectedSmsReportIds)
+                        .filter(([, v]) => v)
+                        .map(([k]) => k);
+                      const res = await fetch("/api/admin/weekly-reports/send-approved-sms", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ reportIds }),
+                      });
+                      const j = (await res.json().catch(() => null)) as unknown;
+                      if (!res.ok) {
+                        const msg =
+                          j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
+                            ? (j as { error: string }).error
+                            : "Failed to send SMS";
+                        throw new Error(msg);
+                      }
+                      const sent =
+                        j && typeof j === "object" && "sent" in j && typeof (j as { sent?: unknown }).sent === "number"
+                          ? (j as { sent: number }).sent
+                          : 0;
+                      alert(`Sent ${sent} SMS messages.`);
+                      setIsSendSmsOpen(false);
+                      await refreshParticipantStatuses();
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : "Failed to send SMS");
+                    } finally {
+                      setIsSendingSms(false);
+                    }
+                  }}
+                >
+                  {isSendingSms ? "Sending…" : "Confirm & send"}
                 </Button>
               </div>
             </>
