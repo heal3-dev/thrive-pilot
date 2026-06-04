@@ -414,6 +414,8 @@ export default function WeeklyReportsPage() {
     [editorHeightPx, persistLayout]
   );
 
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     if (!isAdmin) router.replace("/dashboard");
   }, [isAdmin, router]);
@@ -634,11 +636,8 @@ export default function WeeklyReportsPage() {
     return () => window.clearTimeout(handle);
   }, [
     refreshApprovedCount,
-    selectedMeta?.badgeIcon,
-    selectedMeta?.badgeLabel,
-    selectedMeta?.weekEnding,
-    selectedMeta?.weekRange,
-    selectedParticipant?.id,
+    selectedMeta,
+    selectedParticipant,
     html,
   ]);
 
@@ -1652,7 +1651,7 @@ export default function WeeklyReportsPage() {
                       Generate a report to edit its content.
                     </div>
                   ) : (
-                    <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+                    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y space-y-4 pr-1">
                       <div>
                         <p className="text-xs font-bold text-slate-900">Badge summary sentence</p>
                         <textarea
@@ -1806,13 +1805,16 @@ export default function WeeklyReportsPage() {
                 />
 
                 {/* Chat */}
-                <div className="p-4 min-h-0 flex flex-col">
+                <div className="p-4 h-full min-h-0 flex flex-col">
                   {feedbackError && (
                     <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200">
                       <p className="text-sm text-red-700 font-semibold">{feedbackError}</p>
                     </div>
                   )}
-                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div
+                    ref={chatScrollRef}
+                    className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                  >
                     {chat.length === 0 ? (
                       <p className="text-sm text-slate-500">
                         Add feedback like “make it more encouraging” to update the HTML draft.
@@ -1908,6 +1910,13 @@ export default function WeeklyReportsPage() {
                             ...prev,
                             [selectedParticipant.id]: [...(prev[selectedParticipant.id] ?? []), assistantMsg],
                           }));
+
+                          // Keep the latest assistant reply visible.
+                          window.requestAnimationFrame(() => {
+                            const el = chatScrollRef.current;
+                            if (!el) return;
+                            el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+                          });
 
                           setHtmlByParticipant((prev) => ({
                             ...prev,
