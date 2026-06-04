@@ -652,20 +652,77 @@ export async function POST(request: Request) {
     );
   }
 
-  // Minimal shape validation (server-side) to avoid injecting undefined.
-  const isCard = (v: unknown): v is CardContent =>
-    typeof v === "object" &&
-    v !== null &&
-    ["state", "body", "support1Label", "support1Text", "support2Label", "support2Text"].every(
-      (k) => typeof (v as Record<string, unknown>)[k] === "string"
-    );
-
-  if (typeof parsed.badgeText !== "string" || !isCard(parsed.stress) || !isCard(parsed.sleep) || !isCard(parsed.recovery) || typeof parsed.meaningParagraph !== "string") {
-    return NextResponse.json(
-      { error: "OpenAI returned invalid JSON shape (missing required fields)" },
-      { status: 502 }
-    );
+  function asString(v: unknown): string {
+    if (typeof v === "string") return v;
+    if (v == null) return "";
+    if (typeof v === "number" || typeof v === "boolean") return String(v);
+    return "";
   }
+
+  function severityRank(color: string | null | undefined): number {
+    const c = String(color ?? "").toLowerCase();
+    if (c === "red") return 4;
+    if (c === "orange") return 3;
+    if (c === "yellow") return 2;
+    if (c === "green") return 1;
+    return 0; // no_data / insufficient_baseline_data / unknown
+  }
+
+  function stateForColor(color: string | null | undefined): string {
+    const c = String(color ?? "").toLowerCase();
+    if (c === "green") return "Mostly Stable 🟢";
+    if (c === "yellow") return "Mild Strain 🟡";
+    if (c === "orange") return "Strain Emerging 🟠";
+    if (c === "red") return "High Strain 🔴";
+    return "Mixed signals ⚪";
+  }
+
+  function coerceCard(v: unknown, fallbackState: string): CardContent {
+    const o = (typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {}) as Record<string, unknown>;
+    return {
+      state: asString(o.state).trim() || fallbackState,
+      body: asString(o.body),
+      support1Label: asString(o.support1Label),
+      support1Text: asString(o.support1Text),
+      support2Label: asString(o.support2Label),
+      support2Text: asString(o.support2Text),
+    };
+  }
+
+  const o = (typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {}) as Record<string, unknown>;
+  const stressColor = weeklyFlag.metrics.stress?.color ?? null;
+  const sleepColor = (() => {
+    const colors = [
+      weeklyFlag.metrics.sleep_duration?.color,
+      weeklyFlag.metrics.sleep_score?.color,
+      weeklyFlag.metrics.waso?.color,
+    ];
+    return colors.sort((a, b) => severityRank(b) - severityRank(a))[0] ?? null;
+  })();
+  const recoveryColor = (() => {
+    const colors = [
+      weeklyFlag.metrics.body_battery?.color,
+      weeklyFlag.metrics.hrv?.color,
+      weeklyFlag.metrics.hrv_stability?.color,
+      weeklyFlag.metrics.rhr?.color,
+    ];
+    return colors.sort((a, b) => severityRank(b) - severityRank(a))[0] ?? null;
+  })();
+
+  // Coerce any missing fields rather than failing the whole workflow.
+  // This prevents occasional model formatting hiccups from blocking admins.
+  parsed = {
+    badgeText:
+      asString(o.badgeText).trim() ||
+      `This week you flagged ${badge.label} ${badge.icon}.`,
+    stress: coerceCard(o.stress, stateForColor(stressColor)),
+    sleep: coerceCard(o.sleep, stateForColor(sleepColor)),
+    recovery: coerceCard(o.recovery, stateForColor(recoveryColor)),
+    meaningParagraph:
+      asString(o.meaningParagraph).trim() ||
+      "This week shows a few mixed signals across stress, sleep, and recovery. Consider small, consistent routines and listen to your body.",
+    assistantMessage: asString(o.assistantMessage),
+  };
 
   const assistantMessage = typeof parsed.assistantMessage === "string" ? parsed.assistantMessage : "Generated the weekly report draft.";
 
