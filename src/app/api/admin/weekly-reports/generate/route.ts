@@ -500,9 +500,9 @@ export async function POST(request: Request) {
   }
 
   const latestMetricDate = (rows[0] as unknown as { metric_date?: string }).metric_date ?? todayYmd;
-  // Use a consistent default window: end on "yesterday (UTC)" when possible, but never after the latest available metric date.
-  const defaultWeekEnding = ymdAddDays(todayYmd, -1);
-  const weekEnding = minYmd(latestMetricDate, defaultWeekEnding);
+  // Align weekEnding with Participant Trends: use the latest available metric date (clamped to today).
+  // This keeps the report badge/date-range consistent with the weekly flag shown elsewhere in the UI.
+  const weekEnding = minYmd(latestMetricDate, todayYmd);
 
   const typed: Metric[] = (rows ?? []).map((m) => {
     const mm = m as unknown as {
