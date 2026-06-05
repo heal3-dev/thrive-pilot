@@ -231,7 +231,12 @@ export default function WeeklyReportsPage() {
 
   const composedOutreachText = useMemo(() => {
     if (!selectedMeta) return "";
-    const base = (outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta)).trim();
+    const rawBase = (outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta)).trim();
+    // Outreach text is cached per-participant in UI state; ensure the visible week range always matches the selected report.
+    const base = rawBase.replace(
+      /\b(Thrive\s+weekly\s+report)\s*\(([^)]*)\)/i,
+      `$1 (${selectedMeta.weekRange})`
+    );
     if (!shareUrl.trim()) return base;
     return `${base}\n\nWeekly report: ${shareUrl.trim()}`;
   }, [buildOutreachText, outreachText, selectedMeta, shareUrl]);
