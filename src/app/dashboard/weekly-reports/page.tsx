@@ -132,6 +132,7 @@ export default function WeeklyReportsPage() {
   const [outreachByParticipant, setOutreachByParticipant] = useState<Record<string, string>>({});
   const outreachText = selectedParticipant ? outreachByParticipant[selectedParticipant.id] ?? "" : "";
   const [shareUrlByParticipant, setShareUrlByParticipant] = useState<Record<string, string>>({});
+  const [shareReportIdByParticipant, setShareReportIdByParticipant] = useState<Record<string, string>>({});
   const shareUrl = selectedParticipant ? shareUrlByParticipant[selectedParticipant.id] ?? "" : "";
   const [metaByParticipant, setMetaByParticipant] = useState<Record<string, WeeklyReportMeta>>({});
   const selectedMeta = selectedParticipant ? metaByParticipant[selectedParticipant.id] ?? null : null;
@@ -240,7 +241,7 @@ export default function WeeklyReportsPage() {
     async function ensureShareUrl() {
       if (!selectedParticipant || !selectedMeta?.reportId) return;
       const pid = selectedParticipant.id;
-      if (shareUrlByParticipant[pid]) return;
+      if (shareUrlByParticipant[pid] && shareReportIdByParticipant[pid] === selectedMeta.reportId) return;
 
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -269,6 +270,7 @@ export default function WeeklyReportsPage() {
         const url = `${origin}/r/w/${encodeURIComponent(tok)}`;
         if (cancelled) return;
         setShareUrlByParticipant((prev) => ({ ...prev, [pid]: url }));
+        setShareReportIdByParticipant((prev) => ({ ...prev, [pid]: selectedMeta.reportId }));
       } catch {
         // ignore
       }
@@ -277,7 +279,7 @@ export default function WeeklyReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedMeta?.reportId, selectedParticipant, shareUrlByParticipant]);
+  }, [selectedMeta?.reportId, selectedParticipant, shareReportIdByParticipant, shareUrlByParticipant]);
 
   const getEditableContent = useCallback((html: string): EditableReportContent | null => {
     if (!html.trim()) return null;
@@ -1703,7 +1705,10 @@ export default function WeeklyReportsPage() {
                             "Content-Type": "application/json",
                             Authorization: `Bearer ${token}`,
                           },
-                          body: JSON.stringify({ participantId: selectedParticipant.id }),
+                          body: JSON.stringify({
+                            participantId: selectedParticipant.id,
+                            weekEnding: selectedMeta?.weekEnding || undefined,
+                          }),
                         });
                         if (!res.ok) {
                           const j = (await res.json().catch(() => null)) as unknown;
