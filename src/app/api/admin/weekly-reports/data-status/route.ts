@@ -15,10 +15,6 @@ function ymdAddDays(ymd: string, deltaDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function minYmd(a: string, b: string): string {
-  return a <= b ? a : b;
-}
-
 function list7DaysEnding(weekEnding: string): string[] {
   return Array.from({ length: 7 }, (_, i) => ymdAddDays(weekEnding, -6 + i));
 }
@@ -89,7 +85,25 @@ export async function GET(request: Request) {
   }
 
   const todayYmd = new Date().toISOString().slice(0, 10);
-  const since = ymdAddDays(todayYmd, -40);
+
+  const { data: latestRow, error: latestErr } = await admin
+    .from("garmin_metrics")
+    .select("metric_date")
+    .eq("pseudonym_id", pseudonymId)
+    .order("metric_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestErr) {
+    return NextResponse.json({ error: "Failed to fetch latest metric date" }, { status: 500 });
+  }
+
+  const weekEnding =
+    (latestRow && typeof (latestRow as unknown as { metric_date?: unknown }).metric_date === "string"
+      ? ((latestRow as unknown as { metric_date: string }).metric_date as string)
+      : todayYmd) || todayYmd;
+
+  const since = ymdAddDays(weekEnding, -40);
   const { data: rows, error: metricsError } = await admin
     .from("garmin_metrics")
     .select(
@@ -97,7 +111,7 @@ export async function GET(request: Request) {
     )
     .eq("pseudonym_id", pseudonymId)
     .gte("metric_date", since)
-    .lte("metric_date", todayYmd)
+    .lte("metric_date", weekEnding)
     .order("metric_date", { ascending: false })
     .limit(200);
 
@@ -112,9 +126,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const latestMetricDate = (rows[0] as unknown as { metric_date?: string }).metric_date ?? todayYmd;
-  const defaultWeekEnding = ymdAddDays(todayYmd, -1);
-  const weekEnding = minYmd(latestMetricDate, defaultWeekEnding);
+  const latestMetricDate = weekEnding;
 
   const typed: Metric[] = (rows ?? []).map((m) => {
     const mm = m as unknown as {
