@@ -26,6 +26,7 @@ type ChatMessage = {
 };
 
 type WeeklyReportMeta = {
+  reportId: string;
   participantLabel: string;
   weekEnding: string;
   weekRange: string;
@@ -130,6 +131,9 @@ export default function WeeklyReportsPage() {
   const html = selectedParticipant ? htmlByParticipant[selectedParticipant.id] ?? "" : "";
   const [outreachByParticipant, setOutreachByParticipant] = useState<Record<string, string>>({});
   const outreachText = selectedParticipant ? outreachByParticipant[selectedParticipant.id] ?? "" : "";
+  const [shareUrlByParticipant, setShareUrlByParticipant] = useState<Record<string, string>>({});
+  const [shareReportIdByParticipant, setShareReportIdByParticipant] = useState<Record<string, string>>({});
+  const shareUrl = selectedParticipant ? shareUrlByParticipant[selectedParticipant.id] ?? "" : "";
   const [metaByParticipant, setMetaByParticipant] = useState<Record<string, WeeklyReportMeta>>({});
   const selectedMeta = selectedParticipant ? metaByParticipant[selectedParticipant.id] ?? null : null;
   const [completenessByParticipant, setCompletenessByParticipant] = useState<
@@ -164,6 +168,14 @@ export default function WeeklyReportsPage() {
     alreadyQueued: Array<{ reportId: string; participantId: string; weekRange: string }>;
   }>(null);
   const [selectedSendReportIds, setSelectedSendReportIds] = useState<Record<string, boolean>>({});
+
+  const [isSendSmsOpen, setIsSendSmsOpen] = useState(false);
+  const [isSendingSms, setIsSendingSms] = useState(false);
+  const [smsPreview, setSmsPreview] = useState<null | {
+    toSend: Array<{ reportId: string; participantId: string; participantName: string; toPhone: string; weekRange: string; shareUrl: string; expiresAt: string }>;
+    alreadySent: Array<{ reportId: string; participantId: string; weekRange: string }>;
+  }>(null);
+  const [selectedSmsReportIds, setSelectedSmsReportIds] = useState<Record<string, boolean>>({});
 
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
@@ -216,6 +228,58 @@ export default function WeeklyReportsPage() {
       "Let us know if you have any questions after you’ve reviewed the report.",
     ].join(" ");
   }, []);
+
+  const composedOutreachText = useMemo(() => {
+    if (!selectedMeta) return "";
+    const base = (outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta)).trim();
+    if (!shareUrl.trim()) return base;
+    return `${base}\n\nWeekly report: ${shareUrl.trim()}`;
+  }, [buildOutreachText, outreachText, selectedMeta, shareUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function ensureShareUrl() {
+      if (!selectedParticipant || !selectedMeta?.reportId) return;
+      const pid = selectedParticipant.id;
+      if (shareUrlByParticipant[pid] && shareReportIdByParticipant[pid] === selectedMeta.reportId) return;
+
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+
+        const res = await fetch("/api/admin/weekly-reports/share", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ reportId: selectedMeta.reportId }),
+        });
+        const j = (await res.json().catch(() => null)) as unknown;
+        if (!res.ok) return;
+        const tok =
+          j && typeof j === "object" && "token" in j && typeof (j as { token?: unknown }).token === "string"
+            ? (j as { token: string }).token
+            : null;
+        if (!tok) return;
+        const origin =
+          typeof window !== "undefined" && window.location?.origin ? window.location.origin : "";
+        if (!origin) return;
+
+        const url = `${origin}/r/w/${encodeURIComponent(tok)}`;
+        if (cancelled) return;
+        setShareUrlByParticipant((prev) => ({ ...prev, [pid]: url }));
+        setShareReportIdByParticipant((prev) => ({ ...prev, [pid]: selectedMeta.reportId }));
+      } catch {
+        // ignore
+      }
+    }
+    void ensureShareUrl();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedMeta?.reportId, selectedParticipant, shareReportIdByParticipant, shareUrlByParticipant]);
 
   const getEditableContent = useCallback((html: string): EditableReportContent | null => {
     if (!html.trim()) return null;
@@ -681,10 +745,12 @@ export default function WeeklyReportsPage() {
               const badgeLabel = typeof r.badge_label === "string" ? r.badge_label : null;
               const badgeIcon = typeof r.badge_icon === "string" ? r.badge_icon : null;
               const weekEnding = typeof r.week_ending === "string" ? r.week_ending : "";
+              const reportId = typeof r.id === "string" ? r.id : "";
               if (weekRange && badgeLabel && badgeIcon) {
               setMetaByParticipant((prev) => ({
                 ...prev,
                 [p.id]: {
+                  reportId,
                   participantLabel: formatParticipantLabel(p),
                   weekEnding,
                   weekRange,
@@ -788,13 +854,14 @@ export default function WeeklyReportsPage() {
         if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
           setOutreachByParticipant((prev) => ({ ...prev, [p.id]: j.outreachText!.trim() }));
         }
-        if (j.weekRange && j.badgeLabel && j.badgeIcon) {
+        if (j.weekRange && j.badgeLabel && j.badgeIcon && j.reportId) {
           const weekRange = j.weekRange;
           const badgeLabel = j.badgeLabel;
           const badgeIcon = j.badgeIcon;
           setMetaByParticipant((prev) => ({
             ...prev,
             [p.id]: {
+              reportId: j.reportId || "",
               participantLabel: j.participantLabel || formatParticipantLabel(p),
               weekEnding: j.weekEnding || "",
               weekRange,
@@ -807,15 +874,17 @@ export default function WeeklyReportsPage() {
           setCompletenessByParticipant((prev) => ({ ...prev, [p.id]: j.completeness! }));
         }
 
-        const nextMeta = j.weekRange && j.badgeLabel && j.badgeIcon
-          ? ({
-              participantLabel: j.participantLabel || formatParticipantLabel(p),
-              weekEnding: j.weekEnding || "",
-              weekRange: j.weekRange,
-              badgeLabel: j.badgeLabel,
-              badgeIcon: j.badgeIcon,
-            } as WeeklyReportMeta)
-          : null;
+        const nextMeta =
+          j.reportId && j.weekRange && j.badgeLabel && j.badgeIcon
+            ? ({
+                reportId: j.reportId,
+                participantLabel: j.participantLabel || formatParticipantLabel(p),
+                weekEnding: j.weekEnding || "",
+                weekRange: j.weekRange,
+                badgeLabel: j.badgeLabel,
+                badgeIcon: j.badgeIcon,
+              } as WeeklyReportMeta)
+            : null;
 
         const assistantMsg: ChatMessage = {
           id: createId("gen"),
@@ -869,6 +938,14 @@ export default function WeeklyReportsPage() {
         <BackButton onClick={() => router.push("/dashboard")} className="border-slate-300" />
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/dashboard/weekly-reports/demo")}
+            className="border-slate-300"
+          >
+            Demo
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -929,7 +1006,71 @@ export default function WeeklyReportsPage() {
             disabled={approvedCount === 0}
             className="bg-teal-500 hover:bg-teal-600 text-white"
           >
-            {isSendingApproved ? "Sending…" : `Send approved (${approvedCount})`}
+            {isSendingApproved ? "Sending…" : `Send Email (${approvedCount})`}
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={async () => {
+              setIsSendSmsOpen(true);
+              setSmsPreview(null);
+              setSelectedSmsReportIds({});
+              setIsSendingSms(true);
+              try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const token = sessionData?.session?.access_token;
+                if (!token) throw new Error("Authentication required");
+                const res = await fetch("/api/admin/weekly-reports/send-approved-sms", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({ dryRun: true }),
+                });
+                const j = (await res.json().catch(() => null)) as unknown;
+                if (!res.ok) {
+                  const msg =
+                    j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
+                      ? (j as { error: string }).error
+                      : "Failed to preview SMS sends";
+                  throw new Error(msg);
+                }
+
+                const list =
+                  j && typeof j === "object" && "preview" in j && Array.isArray((j as { preview?: unknown }).preview)
+                    ? ((j as { preview: unknown[] }).preview as Array<{
+                        reportId: string;
+                        participantId: string;
+                        participantName: string;
+                        toPhone: string;
+                        weekRange: string;
+                        shareUrl: string;
+                        expiresAt: string;
+                      }>)
+                    : [];
+
+                const alreadySent =
+                  j && typeof j === "object" && "skippedAlreadySent" in j
+                    ? [] // server returns counts only; keep empty list for now
+                    : [];
+
+                const preview = { toSend: list, alreadySent };
+                setSmsPreview(preview);
+                const initial: Record<string, boolean> = {};
+                for (const it of preview.toSend) initial[it.reportId] = true;
+                setSelectedSmsReportIds(initial);
+              } catch (e) {
+                alert(e instanceof Error ? e.message : "Failed to preview SMS sends");
+                setIsSendSmsOpen(false);
+              } finally {
+                setIsSendingSms(false);
+              }
+            }}
+            disabled={approvedCount === 0}
+            className="bg-teal-500 hover:bg-teal-600 text-white"
+          >
+            {isSendingSms ? "Sending…" : `Send SMS (${approvedCount})`}
           </Button>
         </div>
       </div>
@@ -1037,6 +1178,123 @@ export default function WeeklyReportsPage() {
                   }}
                 >
                   {isSendingApproved ? "Enqueueing…" : "Confirm & enqueue"}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isSendSmsOpen}
+        onClose={() => setIsSendSmsOpen(false)}
+        title="Send approved reports (SMS)"
+        subtitle="Confirm who will receive an SMS with a report link."
+        size="lg"
+      >
+        <div className="space-y-4">
+          {!smsPreview ? (
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-600">Loading preview…</div>
+          ) : (
+            <>
+              <div className="p-3 rounded-xl border border-slate-200 bg-white">
+                <p className="text-sm font-semibold text-slate-900">
+                  Will send: {Object.values(selectedSmsReportIds).filter(Boolean).length} / {smsPreview.toSend.length}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">Links expire after 7 days.</p>
+              </div>
+
+              <div className="max-h-[340px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                {smsPreview.toSend.length === 0 ? (
+                  <div className="p-4 text-sm text-slate-600">No approved reports ready to send via SMS.</div>
+                ) : (
+                  smsPreview.toSend.map((it) => (
+                    <label key={it.reportId} className="flex items-start gap-3 px-4 py-3 border-b border-slate-100">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={Boolean(selectedSmsReportIds[it.reportId])}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedSmsReportIds((prev) => ({ ...prev, [it.reportId]: checked }));
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{it.participantName}</p>
+                        <p className="text-xs text-slate-500 truncate">{it.toPhone}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{it.weekRange}</p>
+                        <p className="text-[11px] text-slate-400 mt-1 truncate">{it.shareUrl}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-slate-300 shrink-0"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          try {
+                            await navigator.clipboard.writeText(it.shareUrl);
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                      >
+                        Copy link
+                      </Button>
+                    </label>
+                  ))
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="outline" className="border-slate-300" size="sm" onClick={() => setIsSendSmsOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                  disabled={Object.values(selectedSmsReportIds).filter(Boolean).length === 0 || isSendingSms}
+                  onClick={async () => {
+                    setIsSendingSms(true);
+                    try {
+                      const { data: sessionData } = await supabase.auth.getSession();
+                      const token = sessionData?.session?.access_token;
+                      if (!token) throw new Error("Authentication required");
+                      const reportIds = Object.entries(selectedSmsReportIds)
+                        .filter(([, v]) => v)
+                        .map(([k]) => k);
+                      const res = await fetch("/api/admin/weekly-reports/send-approved-sms", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ reportIds }),
+                      });
+                      const j = (await res.json().catch(() => null)) as unknown;
+                      if (!res.ok) {
+                        const msg =
+                          j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
+                            ? (j as { error: string }).error
+                            : "Failed to send SMS";
+                        throw new Error(msg);
+                      }
+                      const sent =
+                        j && typeof j === "object" && "sent" in j && typeof (j as { sent?: unknown }).sent === "number"
+                          ? (j as { sent: number }).sent
+                          : 0;
+                      alert(`Sent ${sent} SMS messages.`);
+                      setIsSendSmsOpen(false);
+                      await refreshParticipantStatuses();
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : "Failed to send SMS");
+                    } finally {
+                      setIsSendingSms(false);
+                    }
+                  }}
+                >
+                  {isSendingSms ? "Sending…" : "Confirm & send"}
                 </Button>
               </div>
             </>
@@ -1447,7 +1705,10 @@ export default function WeeklyReportsPage() {
                             "Content-Type": "application/json",
                             Authorization: `Bearer ${token}`,
                           },
-                          body: JSON.stringify({ participantId: selectedParticipant.id }),
+                          body: JSON.stringify({
+                            participantId: selectedParticipant.id,
+                            weekEnding: selectedMeta?.weekEnding || undefined,
+                          }),
                         });
                         if (!res.ok) {
                           const j = (await res.json().catch(() => null)) as unknown;
@@ -1470,6 +1731,7 @@ export default function WeeklyReportsPage() {
                           badgeLabel?: string;
                           badgeIcon?: string;
                           outreachText?: string;
+                          reportId?: string | null;
                           completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
                         };
                         const updatedHtml = j.updatedHtml ?? "";
@@ -1480,13 +1742,14 @@ export default function WeeklyReportsPage() {
                         if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
                           setOutreachByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: j.outreachText!.trim() }));
                         }
-                        if (j.weekRange && j.badgeLabel && j.badgeIcon) {
+                        if (j.weekRange && j.badgeLabel && j.badgeIcon && j.reportId) {
                           const weekRange = j.weekRange;
                           const badgeLabel = j.badgeLabel;
                           const badgeIcon = j.badgeIcon;
                           setMetaByParticipant((prev) => ({
                             ...prev,
                             [selectedParticipant.id]: {
+                              reportId: j.reportId || "",
                               participantLabel: j.participantLabel || participantLabel,
                               weekEnding: j.weekEnding || "",
                               weekRange,
@@ -1499,15 +1762,17 @@ export default function WeeklyReportsPage() {
                           setCompletenessByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: j.completeness! }));
                         }
 
-                        const nextMeta = j.weekRange && j.badgeLabel && j.badgeIcon
-                          ? ({
-                              participantLabel: j.participantLabel || participantLabel,
-                              weekEnding: j.weekEnding || "",
-                              weekRange: j.weekRange,
-                              badgeLabel: j.badgeLabel,
-                              badgeIcon: j.badgeIcon,
-                            } as WeeklyReportMeta)
-                          : null;
+                        const nextMeta =
+                          j.reportId && j.weekRange && j.badgeLabel && j.badgeIcon
+                            ? ({
+                                reportId: j.reportId,
+                                participantLabel: j.participantLabel || participantLabel,
+                                weekEnding: j.weekEnding || "",
+                                weekRange: j.weekRange,
+                                badgeLabel: j.badgeLabel,
+                                badgeIcon: j.badgeIcon,
+                              } as WeeklyReportMeta)
+                            : null;
 
                         const assistantMsg: ChatMessage = {
                           id: createId("gen"),
@@ -1538,9 +1803,6 @@ export default function WeeklyReportsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-900">Outreach text (copy/paste)</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Participant-facing SMS text you can send alongside the report.
-                        </p>
                       </div>
                       <Button
                         variant="outline"
@@ -1548,7 +1810,7 @@ export default function WeeklyReportsPage() {
                         className="border-slate-300 shrink-0"
                         onClick={async () => {
                           try {
-                            const text = outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta);
+                            const text = composedOutreachText;
                             await navigator.clipboard.writeText(text);
                             setOutreachCopied(true);
                             window.setTimeout(() => setOutreachCopied(false), 1200);
@@ -1562,8 +1824,8 @@ export default function WeeklyReportsPage() {
                     </div>
                     <textarea
                       readOnly
-                      value={outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta)}
-                      className="mt-3 w-full min-h-[88px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 resize-none"
+                      value={composedOutreachText}
+                      className="mt-3 w-full min-h-[124px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 resize-none"
                     />
                   </div>
                 ) : null}
