@@ -26,6 +26,7 @@ type ChatMessage = {
 };
 
 type WeeklyReportMeta = {
+  reportId: string;
   participantLabel: string;
   weekEnding: string;
   weekRange: string;
@@ -130,6 +131,8 @@ export default function WeeklyReportsPage() {
   const html = selectedParticipant ? htmlByParticipant[selectedParticipant.id] ?? "" : "";
   const [outreachByParticipant, setOutreachByParticipant] = useState<Record<string, string>>({});
   const outreachText = selectedParticipant ? outreachByParticipant[selectedParticipant.id] ?? "" : "";
+  const [shareUrlByParticipant, setShareUrlByParticipant] = useState<Record<string, string>>({});
+  const shareUrl = selectedParticipant ? shareUrlByParticipant[selectedParticipant.id] ?? "" : "";
   const [metaByParticipant, setMetaByParticipant] = useState<Record<string, WeeklyReportMeta>>({});
   const selectedMeta = selectedParticipant ? metaByParticipant[selectedParticipant.id] ?? null : null;
   const [completenessByParticipant, setCompletenessByParticipant] = useState<
@@ -224,6 +227,57 @@ export default function WeeklyReportsPage() {
       "Let us know if you have any questions after you’ve reviewed the report.",
     ].join(" ");
   }, []);
+
+  const composedOutreachText = useMemo(() => {
+    if (!selectedMeta) return "";
+    const base = (outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta)).trim();
+    if (!shareUrl.trim()) return base;
+    return `${base}\n\nWeekly report: ${shareUrl.trim()}`;
+  }, [buildOutreachText, outreachText, selectedMeta, shareUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function ensureShareUrl() {
+      if (!selectedParticipant || !selectedMeta?.reportId) return;
+      const pid = selectedParticipant.id;
+      if (shareUrlByParticipant[pid]) return;
+
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+
+        const res = await fetch("/api/admin/weekly-reports/share", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ reportId: selectedMeta.reportId }),
+        });
+        const j = (await res.json().catch(() => null)) as unknown;
+        if (!res.ok) return;
+        const tok =
+          j && typeof j === "object" && "token" in j && typeof (j as { token?: unknown }).token === "string"
+            ? (j as { token: string }).token
+            : null;
+        if (!tok) return;
+        const origin =
+          typeof window !== "undefined" && window.location?.origin ? window.location.origin : "";
+        if (!origin) return;
+
+        const url = `${origin}/r/w/${encodeURIComponent(tok)}`;
+        if (cancelled) return;
+        setShareUrlByParticipant((prev) => ({ ...prev, [pid]: url }));
+      } catch {
+        // ignore
+      }
+    }
+    void ensureShareUrl();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedMeta?.reportId, selectedParticipant, shareUrlByParticipant]);
 
   const getEditableContent = useCallback((html: string): EditableReportContent | null => {
     if (!html.trim()) return null;
@@ -689,10 +743,12 @@ export default function WeeklyReportsPage() {
               const badgeLabel = typeof r.badge_label === "string" ? r.badge_label : null;
               const badgeIcon = typeof r.badge_icon === "string" ? r.badge_icon : null;
               const weekEnding = typeof r.week_ending === "string" ? r.week_ending : "";
+              const reportId = typeof r.id === "string" ? r.id : "";
               if (weekRange && badgeLabel && badgeIcon) {
               setMetaByParticipant((prev) => ({
                 ...prev,
                 [p.id]: {
+                  reportId,
                   participantLabel: formatParticipantLabel(p),
                   weekEnding,
                   weekRange,
@@ -796,13 +852,14 @@ export default function WeeklyReportsPage() {
         if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
           setOutreachByParticipant((prev) => ({ ...prev, [p.id]: j.outreachText!.trim() }));
         }
-        if (j.weekRange && j.badgeLabel && j.badgeIcon) {
+        if (j.weekRange && j.badgeLabel && j.badgeIcon && j.reportId) {
           const weekRange = j.weekRange;
           const badgeLabel = j.badgeLabel;
           const badgeIcon = j.badgeIcon;
           setMetaByParticipant((prev) => ({
             ...prev,
             [p.id]: {
+              reportId: j.reportId || "",
               participantLabel: j.participantLabel || formatParticipantLabel(p),
               weekEnding: j.weekEnding || "",
               weekRange,
@@ -815,15 +872,17 @@ export default function WeeklyReportsPage() {
           setCompletenessByParticipant((prev) => ({ ...prev, [p.id]: j.completeness! }));
         }
 
-        const nextMeta = j.weekRange && j.badgeLabel && j.badgeIcon
-          ? ({
-              participantLabel: j.participantLabel || formatParticipantLabel(p),
-              weekEnding: j.weekEnding || "",
-              weekRange: j.weekRange,
-              badgeLabel: j.badgeLabel,
-              badgeIcon: j.badgeIcon,
-            } as WeeklyReportMeta)
-          : null;
+        const nextMeta =
+          j.reportId && j.weekRange && j.badgeLabel && j.badgeIcon
+            ? ({
+                reportId: j.reportId,
+                participantLabel: j.participantLabel || formatParticipantLabel(p),
+                weekEnding: j.weekEnding || "",
+                weekRange: j.weekRange,
+                badgeLabel: j.badgeLabel,
+                badgeIcon: j.badgeIcon,
+              } as WeeklyReportMeta)
+            : null;
 
         const assistantMsg: ChatMessage = {
           id: createId("gen"),
@@ -1667,6 +1726,7 @@ export default function WeeklyReportsPage() {
                           badgeLabel?: string;
                           badgeIcon?: string;
                           outreachText?: string;
+                          reportId?: string | null;
                           completeness?: { calendarDaysPresent: number; calendarDaysExpected: number; sleepNightsPresent: number; sleepNightsExpected: number };
                         };
                         const updatedHtml = j.updatedHtml ?? "";
@@ -1677,13 +1737,14 @@ export default function WeeklyReportsPage() {
                         if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
                           setOutreachByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: j.outreachText!.trim() }));
                         }
-                        if (j.weekRange && j.badgeLabel && j.badgeIcon) {
+                        if (j.weekRange && j.badgeLabel && j.badgeIcon && j.reportId) {
                           const weekRange = j.weekRange;
                           const badgeLabel = j.badgeLabel;
                           const badgeIcon = j.badgeIcon;
                           setMetaByParticipant((prev) => ({
                             ...prev,
                             [selectedParticipant.id]: {
+                              reportId: j.reportId || "",
                               participantLabel: j.participantLabel || participantLabel,
                               weekEnding: j.weekEnding || "",
                               weekRange,
@@ -1696,15 +1757,17 @@ export default function WeeklyReportsPage() {
                           setCompletenessByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: j.completeness! }));
                         }
 
-                        const nextMeta = j.weekRange && j.badgeLabel && j.badgeIcon
-                          ? ({
-                              participantLabel: j.participantLabel || participantLabel,
-                              weekEnding: j.weekEnding || "",
-                              weekRange: j.weekRange,
-                              badgeLabel: j.badgeLabel,
-                              badgeIcon: j.badgeIcon,
-                            } as WeeklyReportMeta)
-                          : null;
+                        const nextMeta =
+                          j.reportId && j.weekRange && j.badgeLabel && j.badgeIcon
+                            ? ({
+                                reportId: j.reportId,
+                                participantLabel: j.participantLabel || participantLabel,
+                                weekEnding: j.weekEnding || "",
+                                weekRange: j.weekRange,
+                                badgeLabel: j.badgeLabel,
+                                badgeIcon: j.badgeIcon,
+                              } as WeeklyReportMeta)
+                            : null;
 
                         const assistantMsg: ChatMessage = {
                           id: createId("gen"),
@@ -1735,9 +1798,6 @@ export default function WeeklyReportsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-900">Outreach text (copy/paste)</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Participant-facing SMS text you can send alongside the report.
-                        </p>
                       </div>
                       <Button
                         variant="outline"
@@ -1745,7 +1805,7 @@ export default function WeeklyReportsPage() {
                         className="border-slate-300 shrink-0"
                         onClick={async () => {
                           try {
-                            const text = outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta);
+                            const text = composedOutreachText;
                             await navigator.clipboard.writeText(text);
                             setOutreachCopied(true);
                             window.setTimeout(() => setOutreachCopied(false), 1200);
@@ -1759,8 +1819,8 @@ export default function WeeklyReportsPage() {
                     </div>
                     <textarea
                       readOnly
-                      value={outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta)}
-                      className="mt-3 w-full min-h-[88px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 resize-none"
+                      value={composedOutreachText}
+                      className="mt-3 w-full min-h-[124px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 resize-none"
                     />
                   </div>
                 ) : null}
