@@ -19,9 +19,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   const { data, error } = await admin
     .from("weekly_report_shares")
-    .select(
-      "id, token, is_active, expires_at, access_count, weekly_report_id, weekly_reports:weekly_report_id ( html )"
-    )
+    .select("id, token, is_active, expires_at, access_count, weekly_report_id")
     .eq("token", t)
     .eq("is_active", true)
     .maybeSingle();
@@ -37,7 +35,16 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Expired" }, { status: 410 });
   }
 
-  const html = (data.weekly_reports as unknown as { html?: string } | null)?.html ?? "";
+  const { data: report, error: reportErr } = await admin
+    .from("weekly_reports")
+    .select("html")
+    .eq("id", data.weekly_report_id)
+    .maybeSingle();
+  if (reportErr || !report) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const html = report.html ?? "";
   if (!html || html.trim().length === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -55,7 +62,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store, max-age=0",
+      // Ensure regenerated reports are always fetched fresh (no CDN/browser caching).
+      "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+      "Surrogate-Control": "no-store",
       "X-Robots-Tag": "noindex, nofollow, noarchive",
       "Referrer-Policy": "no-referrer",
     },
