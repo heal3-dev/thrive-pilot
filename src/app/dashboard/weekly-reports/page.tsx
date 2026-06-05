@@ -880,6 +880,14 @@ export default function WeeklyReportsPage() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => router.push("/dashboard/weekly-reports/demo")}
+            className="border-slate-300"
+          >
+            Demo
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setIsTemplatesOpen(true)}
             className="border-slate-300"
           >
