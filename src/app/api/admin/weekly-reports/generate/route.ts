@@ -89,10 +89,6 @@ function ymdAddDays(ymd: string, deltaDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function minYmd(a: string, b: string): string {
-  return a <= b ? a : b;
-}
-
 function list7DaysEnding(weekEnding: string): string[] {
   return Array.from({ length: 7 }, (_, i) => ymdAddDays(weekEnding, -6 + i));
 }
@@ -480,8 +476,30 @@ export async function POST(request: Request) {
   }
 
   // Pull enough history to compute a stable weekly flag (baselines + last 7 days).
+  //
+  // Important: do NOT clamp by "today (UTC)" here. Garmin `metric_date` is a date (not timestamp)
+  // and can legitimately be "ahead" of UTC depending on locale/timezone. We instead anchor on the
+  // latest available metric_date (matching Participant Trends behavior).
   const todayYmd = new Date().toISOString().slice(0, 10);
-  const since = ymdAddDays(todayYmd, -40);
+
+  const { data: latestRow, error: latestErr } = await admin
+    .from("garmin_metrics")
+    .select("metric_date")
+    .eq("pseudonym_id", pseudonymId)
+    .order("metric_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestErr) {
+    return NextResponse.json({ error: "Failed to fetch latest metric date" }, { status: 500 });
+  }
+
+  const weekEnding =
+    (latestRow && typeof (latestRow as unknown as { metric_date?: unknown }).metric_date === "string"
+      ? ((latestRow as unknown as { metric_date: string }).metric_date as string)
+      : todayYmd) || todayYmd;
+
+  const since = ymdAddDays(weekEnding, -40);
   const { data: rows, error: metricsError } = await admin
     .from("garmin_metrics")
     .select(
@@ -489,7 +507,7 @@ export async function POST(request: Request) {
     )
     .eq("pseudonym_id", pseudonymId)
     .gte("metric_date", since)
-    .lte("metric_date", todayYmd)
+    .lte("metric_date", weekEnding)
     .order("metric_date", { ascending: false });
 
   if (metricsError) {
@@ -499,10 +517,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No health data available for participant" }, { status: 400 });
   }
 
-  const latestMetricDate = (rows[0] as unknown as { metric_date?: string }).metric_date ?? todayYmd;
-  // Align weekEnding with Participant Trends: use the latest available metric date (clamped to today).
-  // This keeps the report badge/date-range consistent with the weekly flag shown elsewhere in the UI.
-  const weekEnding = minYmd(latestMetricDate, todayYmd);
+  // weekEnding is anchored above from the latest metric_date.
 
   const typed: Metric[] = (rows ?? []).map((m) => {
     const mm = m as unknown as {
