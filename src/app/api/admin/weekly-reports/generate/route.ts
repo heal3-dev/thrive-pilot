@@ -76,10 +76,38 @@ function expectedBadgeExplanationLine(badgeLabel: string): string {
   return "Keep an eye on rest, recovery, and stress.";
 }
 
-function badgeExplanationLine(params: { badgeLabel: string; badgeText: string }): string {
+function stripLeadingBadgeRepeat(params: { badgeText: string; badgeLabel: string; badgeIcon: string }): string {
+  const raw = params.badgeText.trim();
+  if (!raw) return raw;
+
+  // If the model accidentally repeats the badge label/icon at the start (e.g. "Mild Strain 🟡 ..."),
+  // strip that prefix so the badge area doesn't show duplicated label text.
+  const patterns = [
+    `${params.badgeLabel} ${params.badgeIcon}`,
+    `${params.badgeLabel}${params.badgeIcon}`,
+    params.badgeLabel,
+    params.badgeIcon,
+  ]
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+  const re = new RegExp(`^(?:${patterns.join("|")})\\s*[:\\-—–]?\\s*`, "i");
+  return raw.replace(re, "").trim();
+}
+
+function badgeExplanationLine(params: { badgeLabel: string; badgeIcon: string; badgeText: string }): string {
   // Preferred: rely on model output.
   const candidate = (params.badgeText ?? "").trim();
-  if (candidate.length > 0) return candidate;
+  if (candidate.length > 0) {
+    const stripped = stripLeadingBadgeRepeat({
+      badgeText: candidate,
+      badgeLabel: params.badgeLabel,
+      badgeIcon: params.badgeIcon,
+    });
+    if (stripped.length > 0) return stripped;
+    // If stripping removed everything, treat as missing and use the fixed fallback.
+  }
 
   // Fallback: if model omitted badgeText, use fixed approved copy for the computed flag.
   return expectedBadgeExplanationLine(params.badgeLabel);
@@ -338,7 +366,7 @@ function fillOlgaTemplate(params: {
   html = replaceFirst(
     html,
     /(<p\s+class="badge-text"[^>]*>)([\s\S]*?)(<\/p>)/i,
-    escapeHtml(badgeExplanationLine({ badgeLabel: params.badgeLabel, badgeText: params.content.badgeText }))
+    escapeHtml(badgeExplanationLine({ badgeLabel: params.badgeLabel, badgeIcon: params.badgeIcon, badgeText: params.content.badgeText }))
   );
 
   // Cards (exactly 3, in order: Stress, Sleep, Recovery)
