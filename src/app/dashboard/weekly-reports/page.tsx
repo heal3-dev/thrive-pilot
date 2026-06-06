@@ -199,6 +199,17 @@ export default function WeeklyReportsPage() {
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [hasLoadedTemplates, setHasLoadedTemplates] = useState(false);
+  const [templatesSaveNotice, setTemplatesSaveNotice] = useState<string | null>(null);
+  const templatesSaveNoticeTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (templatesSaveNoticeTimeoutRef.current) {
+        window.clearTimeout(templatesSaveNoticeTimeoutRef.current);
+        templatesSaveNoticeTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const contentColumnsRef = useRef<HTMLDivElement | null>(null);
@@ -1327,12 +1338,21 @@ export default function WeeklyReportsPage() {
         onClose={() => setIsTemplatesOpen(false)}
         title="Weekly Report Templates"
         subtitle="Edit the active prompt templates used by generation/revision. Changes apply immediately to new chat revisions."
-        size="2xl"
+        size="4xl"
+        resizable
+        closeOnBackdropClick={false}
+        className="max-w-[96vw] md:max-w-5xl lg:max-w-6xl h-[88vh]"
+        bodyClassName="p-4 sm:p-6"
       >
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4 h-full min-h-0">
           {templatesError ? (
             <div className="p-3 rounded-xl bg-red-50 border border-red-200">
               <p className="text-sm font-semibold text-red-700">{templatesError}</p>
+            </div>
+          ) : null}
+          {templatesSaveNotice ? (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+              <p className="text-sm font-semibold text-emerald-800">{templatesSaveNotice}</p>
             </div>
           ) : null}
 
@@ -1382,10 +1402,10 @@ export default function WeeklyReportsPage() {
               setTemplateDraftByKey((prev) => ({ ...prev, [templateKey]: v }));
             }}
             placeholder="Enter template content…"
-            className="w-full min-h-[360px] rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-slate-300 resize-y"
+            className="w-full flex-1 min-h-0 rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-slate-300 resize-none"
           />
 
-          <div className="flex items-center justify-between gap-3">
+          <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-white border-t border-slate-100 flex items-center justify-between gap-3">
             <p className="text-xs text-slate-500">
               Saving creates a new active version for this template key.
             </p>
@@ -1443,6 +1463,7 @@ export default function WeeklyReportsPage() {
                     return;
                   }
                   setTemplatesError(null);
+                  setTemplatesSaveNotice(null);
                   setIsSavingTemplate(true);
                   try {
                     const { data: sessionData } = await supabase.auth.getSession();
@@ -1471,6 +1492,15 @@ export default function WeeklyReportsPage() {
                     const j = (await res.json()) as { template: TemplateRow };
                     setTemplatesByKey((prev) => ({ ...prev, [templateKey]: j.template }));
                     setTemplateDraftByKey((prev) => ({ ...prev, [templateKey]: j.template.content }));
+
+                    setTemplatesSaveNotice("Saved.");
+                    if (templatesSaveNoticeTimeoutRef.current) {
+                      window.clearTimeout(templatesSaveNoticeTimeoutRef.current);
+                    }
+                    templatesSaveNoticeTimeoutRef.current = window.setTimeout(() => {
+                      setTemplatesSaveNotice(null);
+                      templatesSaveNoticeTimeoutRef.current = null;
+                    }, 1400);
                   } catch (e) {
                     setTemplatesError(e instanceof Error ? e.message : "Failed to save template");
                   } finally {

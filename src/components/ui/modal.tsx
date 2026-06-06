@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback } from "react";
 
-type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl";
+type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
 
 interface ModalProps {
   /** Whether the modal is open */
@@ -19,6 +19,12 @@ interface ModalProps {
   footer?: React.ReactNode;
   /** Modal size - affects max-width */
   size?: ModalSize;
+  /** Optional additional classes for modal panel */
+  className?: string;
+  /** Optional additional classes for modal body */
+  bodyClassName?: string;
+  /** Whether the modal panel is resizable (desktop) */
+  resizable?: boolean;
   /** Whether to allow closing by clicking backdrop */
   closeOnBackdropClick?: boolean;
   /** Whether to allow closing by pressing Escape */
@@ -31,6 +37,8 @@ const sizeClasses: Record<ModalSize, string> = {
   lg: "max-w-lg",
   xl: "max-w-xl",
   "2xl": "max-w-2xl",
+  "3xl": "max-w-3xl",
+  "4xl": "max-w-4xl",
 };
 
 /**
@@ -51,6 +59,9 @@ export function Modal({
   children,
   footer,
   size = "md",
+  className,
+  bodyClassName,
+  resizable = false,
   closeOnBackdropClick = true,
   closeOnEscape = true,
 }: ModalProps) {
@@ -84,7 +95,9 @@ export function Modal({
       onClick={closeOnBackdropClick ? onClose : undefined}
     >
       <div
-        className={`bg-white rounded-2xl shadow-xl w-full ${sizeClasses[size]}`}
+        className={`bg-white rounded-2xl shadow-xl w-full ${sizeClasses[size]} max-h-[90vh] flex flex-col overflow-hidden ${
+          resizable ? "resize-both" : ""
+        } ${className ?? ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -107,13 +120,13 @@ export function Modal({
         </div>
 
         {/* Body */}
-        <div className="p-6">
+        <div className={`p-6 flex-1 min-h-0 overflow-auto ${bodyClassName ?? ""}`}>
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex justify-end gap-3 px-6 pb-6">
+          <div className="flex justify-end gap-3 px-6 pb-6 shrink-0">
             {footer}
           </div>
         )}
