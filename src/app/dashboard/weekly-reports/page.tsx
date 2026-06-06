@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useDashboard } from "@/app/dashboard/layout";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { BackButton } from "@/components/ui/back-button";
 import { DEFAULT_GENERATE_WRAPPER, DEFAULT_MASTER_RULES, DEFAULT_OLGA_HTML_BASE_TEMPLATE, DEFAULT_REVISE_WRAPPER } from "@/lib/weekly-reports/template-defaults";
@@ -120,6 +121,20 @@ export default function WeeklyReportsPage() {
   const [participants, setParticipants] = useState<ParticipantMini[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [participantSearchQuery, setParticipantSearchQuery] = useState("");
+  const filteredParticipants = useMemo(() => {
+    const q = participantSearchQuery.trim().toLowerCase();
+    if (!q) return participants;
+    return participants.filter((p) => {
+      const name = (p.name ?? "").toLowerCase();
+      if (name.includes(q)) return true;
+      // Helpful fallback: allow searching by email/phone too (same behavior as other admin pages).
+      const email = (p.email ?? "").toLowerCase();
+      const phone = (p.phone_number ?? "").toLowerCase();
+      return email.includes(q) || phone.includes(q);
+    });
+  }, [participantSearchQuery, participants]);
 
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
   const selectedParticipant = useMemo(
@@ -1489,7 +1504,10 @@ export default function WeeklyReportsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-bold text-slate-900">Participants</h2>
-                <p className="text-xs text-slate-500 mt-0.5">{participants.length} total</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {participantSearchQuery.trim().length > 0 ? `${filteredParticipants.length} of ${participants.length}` : `${participants.length}`}{" "}
+                  total
+                </p>
               </div>
               {approvedCount > 0 ? (
                 <span className="inline-flex min-w-8 h-7 px-2 bg-teal-500 text-white text-sm font-bold rounded-full items-center justify-center">
@@ -1497,14 +1515,25 @@ export default function WeeklyReportsPage() {
                 </span>
               ) : null}
             </div>
+
+            <div className="mt-3">
+              <Input
+                value={participantSearchQuery}
+                onChange={(e) => setParticipantSearchQuery(e.target.value)}
+                placeholder="Search participants…"
+                className="h-8 text-xs placeholder:text-xs"
+              />
+            </div>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto">
             {isLoading ? (
               <div className="p-4 text-sm text-slate-500">Loading…</div>
             ) : participants.length === 0 ? (
               <div className="p-4 text-sm text-slate-500">No participants.</div>
+            ) : filteredParticipants.length === 0 ? (
+              <div className="p-4 text-sm text-slate-500">No participants match your search.</div>
             ) : (
-              participants.map((p) => {
+              filteredParticipants.map((p) => {
                 const status: ParticipantStatus = statusByParticipant[p.id] ?? "draft";
                 const statusLabel =
                   status === "draft"
