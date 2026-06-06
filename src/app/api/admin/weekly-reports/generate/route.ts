@@ -58,7 +58,7 @@ function escapeHtml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function badgeExplanationLine(badgeLabel: string): string {
+function expectedBadgeExplanationLine(badgeLabel: string): string {
   const label = badgeLabel.trim().toLowerCase();
   if (label === "mostly stable") {
     return "Your body is recovering well from stress. Keep doing what’s working.";
@@ -74,6 +74,23 @@ function badgeExplanationLine(badgeLabel: string): string {
   }
   // Should never happen (badge labels are constrained in code), but keep a safe fallback.
   return "Keep an eye on rest, recovery, and stress.";
+}
+
+function normalizeBadgeLine(s: string): string {
+  return s
+    .replace(/\r\n/g, "\n")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function selectBadgeExplanationLine(params: { badgeLabel: string; badgeText: string }): string {
+  const expected = expectedBadgeExplanationLine(params.badgeLabel);
+  const candidate = params.badgeText ?? "";
+  // Hybrid approach:
+  // - If the model produced the exact approved line (allowing whitespace/newline differences), use it.
+  // - Otherwise, fall back to the approved fixed line.
+  if (normalizeBadgeLine(candidate) === normalizeBadgeLine(expected)) return expected;
+  return expected;
 }
 
 function ymdAddDays(ymd: string, deltaDays: number): string {
@@ -329,7 +346,7 @@ function fillOlgaTemplate(params: {
   html = replaceFirst(
     html,
     /(<p\s+class="badge-text"[^>]*>)([\s\S]*?)(<\/p>)/i,
-    escapeHtml(badgeExplanationLine(params.badgeLabel))
+    escapeHtml(selectBadgeExplanationLine({ badgeLabel: params.badgeLabel, badgeText: params.content.badgeText }))
   );
 
   // Cards (exactly 3, in order: Stress, Sleep, Recovery)
