@@ -118,7 +118,7 @@ export function buildWeeklyReportDemoHtml(): string {
   html = html.replace(/<p class="badge-title">[\s\S]*?<\/p>/i, `<p class="badge-title">Mild Strain</p>`);
   html = html.replace(
     /<p class="badge-text">[\s\S]*?<\/p>/i,
-    `<p class="badge-text">This is a demo preview of the Thrive Weekly Report template (layout + graphs), using sample data.</p>`
+    `<p class="badge-text">Your system is feeling a bit taxed. Keep an eye on rest, recovery, and stress.</p>`
   );
   html = html.replace(/(<div class="graph-range">)([\s\S]*?)(<\/div>)/gi, `$1${escapeHtml(weekRange)}$3`);
 

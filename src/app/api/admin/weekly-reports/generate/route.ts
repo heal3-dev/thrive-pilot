@@ -58,29 +58,22 @@ function escapeHtml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function stripLeadingBadgeRepeat(params: { badgeText: string; badgeLabel: string; badgeIcon: string }): string {
-  const raw = params.badgeText.trim();
-  if (!raw) return raw;
-
-  // Common bad pattern: badge summary starts with the badge label/icon again.
-  // Example: "High Strain 🔴. Sleep was..."
-  const patterns = [
-    `${params.badgeLabel} ${params.badgeIcon}`,
-    `${params.badgeLabel}${params.badgeIcon}`,
-    params.badgeLabel,
-    params.badgeIcon,
-  ]
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-
-  const re = new RegExp(`^(?:${patterns.join("|")})\\s*[:\\-—–]?\\s*`, "i");
-  const next = raw.replace(re, "").trim();
-  if (next.length > 0) return next;
-
-  // If the entire summary was just a duplicate badge label/icon, replace it with a
-  // neutral one-sentence summary starter (without repeating the label again).
-  return "Your weekly status reflects the broader pattern across stress, sleep, and recovery this week.";
+function badgeExplanationLine(badgeLabel: string): string {
+  const label = badgeLabel.trim().toLowerCase();
+  if (label === "mostly stable") {
+    return "Your body is recovering well from stress. Keep doing what’s working.";
+  }
+  if (label === "mild strain") {
+    return "Your system is feeling a bit taxed. Keep an eye on rest, recovery, and stress.";
+  }
+  if (label === "strain emerging") {
+    return "Your system may be struggling to keep up. Recovery is slipping and stress may be building.";
+  }
+  if (label === "high strain") {
+    return "Your system is having a hard time bouncing back. Consider focusing on rest, recovery, and reducing stress.";
+  }
+  // Should never happen (badge labels are constrained in code), but keep a safe fallback.
+  return "Keep an eye on rest, recovery, and stress.";
 }
 
 function ymdAddDays(ymd: string, deltaDays: number): string {
@@ -336,7 +329,7 @@ function fillOlgaTemplate(params: {
   html = replaceFirst(
     html,
     /(<p\s+class="badge-text"[^>]*>)([\s\S]*?)(<\/p>)/i,
-    escapeHtml(stripLeadingBadgeRepeat({ badgeText: params.content.badgeText, badgeLabel: params.badgeLabel, badgeIcon: params.badgeIcon }))
+    escapeHtml(badgeExplanationLine(params.badgeLabel))
   );
 
   // Cards (exactly 3, in order: Stress, Sleep, Recovery)
