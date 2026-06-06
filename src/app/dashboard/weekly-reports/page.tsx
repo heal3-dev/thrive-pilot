@@ -1521,7 +1521,7 @@ export default function WeeklyReportsPage() {
                 value={participantSearchQuery}
                 onChange={(e) => setParticipantSearchQuery(e.target.value)}
                 placeholder="Search participants…"
-                className="h-9"
+                className="h-8 text-xs placeholder:text-xs"
               />
             </div>
           </div>
