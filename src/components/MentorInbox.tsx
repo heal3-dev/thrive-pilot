@@ -1134,7 +1134,7 @@ export function MentorInbox({
         {selectedParticipant ? (
           <>
             {/* Header */}
-            <div className="p-4 border-b-2 border-slate-100 bg-slate-50/50 shrink-0">
+            <div className="p-3 sm:p-4 border-b-2 border-slate-100 bg-slate-50/50 shrink-0">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <button
@@ -1145,7 +1145,7 @@ export function MentorInbox({
                       userPinnedListRef.current = true;
                       setMobilePanel("list");
                     }}
-                    className="md:hidden -ml-2 h-10 w-10 shrink-0 rounded-lg hover:bg-white/70 transition-colors flex items-center justify-center cursor-pointer"
+                    className="md:hidden -ml-2 h-9 w-9 shrink-0 rounded-lg hover:bg-white/70 transition-colors flex items-center justify-center cursor-pointer"
                     aria-label="Back to participants"
                     title="Back"
                   >
@@ -1153,7 +1153,7 @@ export function MentorInbox({
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
-                  <div className="w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold text-sm">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-teal-500 flex items-center justify-center text-white font-bold text-sm">
                     {getInitials(selectedParticipant.name, selectedParticipant.email, selectedParticipant.phone_number)}
                   </div>
                   <div>
@@ -1173,12 +1173,13 @@ export function MentorInbox({
                     variant="outline"
                     size="sm"
                     onClick={() => setShowHealthPanel((prev) => !prev)}
-                    className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                    className="border-slate-300 text-slate-700 hover:bg-slate-100 h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
                   >
-                    <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-4 h-4 mr-0 sm:mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2" />
                     </svg>
-                    {showHealthPanel ? "Hide Health Trend" : "View Health Trend"}
+                    <span className="hidden sm:inline">{showHealthPanel ? "Hide Health Trend" : "View Health Trend"}</span>
+                    <span className="sm:hidden">{showHealthPanel ? "Hide" : "Trends"}</span>
                   </Button>
                 )}
               </div>
@@ -1258,7 +1259,7 @@ export function MentorInbox({
             </div>
 
             {/* Send Box */}
-            <div className="p-4 border-t-2 border-slate-100 bg-white pb-[calc(env(safe-area-inset-bottom)+1rem)] shrink-0">
+            <div className="p-3 sm:p-4 border-t-2 border-slate-100 bg-white pb-[calc(env(safe-area-inset-bottom)+1rem)] shrink-0">
               {sendError && (
                 <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200">
                   <p className="text-sm text-red-600 flex items-center gap-2">
@@ -1302,20 +1303,7 @@ export function MentorInbox({
                 )}
                 
                 {/* Input and buttons */}
-                <div className="flex gap-2 items-center">
-                  <button
-                    onClick={() => {
-                      if (isInboxReadOnly) return;
-                      setShowTemplates(!showTemplates);
-                    }}
-                    disabled={isInboxReadOnly}
-                    className="h-10 w-10 shrink-0 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                    title="Message templates"
-                  >
-                    <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </button>
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                   <div className="flex-1 relative min-h-10">
                     <textarea
                       ref={composerRef}
@@ -1331,7 +1319,7 @@ export function MentorInbox({
                       }
                       disabled={isInboxReadOnly || !!selectedParticipant.unassigned_at || selectedParticipant.is_active === false}
                       rows={1}
-                      className="block w-full min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2 text-base font-medium leading-5 transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto resize-none"
+                      className="block w-full min-h-[56px] sm:min-h-[40px] max-h-[180px] rounded-xl border-2 border-slate-200 bg-white px-4 py-2 text-base font-medium leading-5 transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto resize-none"
                     />
                     {/* Center-top resize handle (drag to resize; double-click to reset to auto). */}
                     <button
@@ -1361,22 +1349,41 @@ export function MentorInbox({
                       </span>
                     </button>
                   </div>
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={
-                      isInboxReadOnly ||
-                      !messageInput.trim() ||
-                      !!selectedParticipant.unassigned_at ||
-                      selectedParticipant.is_active === false
-                    }
-                    size="sm"
-                    className="h-10 bg-teal-500 hover:bg-teal-600 text-white px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                    Send
-                  </Button>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => {
+                        if (isInboxReadOnly) return;
+                        setShowTemplates(!showTemplates);
+                      }}
+                      disabled={isInboxReadOnly}
+                      className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Message templates"
+                      aria-label="Message templates"
+                      type="button"
+                    >
+                      <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </button>
+
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={
+                        isInboxReadOnly ||
+                        !messageInput.trim() ||
+                        !!selectedParticipant.unassigned_at ||
+                        selectedParticipant.is_active === false
+                      }
+                      size="sm"
+                      className="h-9 sm:h-10 bg-teal-500 hover:bg-teal-600 text-white px-4 sm:px-6 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      aria-label="Send message"
+                    >
+                      <svg className="w-5 h-5 sm:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
+                      <span className="hidden sm:inline">Send</span>
+                    </Button>
+                  </div>
                 </div>
                 {isInboxReadOnly ? (
                   <p className="text-xs text-center text-slate-500 mt-2">
