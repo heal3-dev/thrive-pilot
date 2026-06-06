@@ -34,11 +34,11 @@ export function MentorPanel() {
 
   return (
     <div className="h-full min-h-0 flex flex-col gap-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-3">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-slate-100 dark:border-slate-800 p-2 sm:p-3">
         <div className="flex gap-3">
           <button
             onClick={() => navigateToTab("inbox")}
-            className={`inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-sm font-semibold transition-colors flex-1 cursor-pointer ${
+            className={`inline-flex items-center justify-center gap-2 px-3 sm:px-8 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors flex-1 cursor-pointer ${
               activeTab === "inbox"
                 ? "bg-teal-500 text-white shadow-md shadow-teal-500/25"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
@@ -52,7 +52,7 @@ export function MentorPanel() {
 
           <button
             onClick={() => navigateToTab("health-trends")}
-            className={`inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-sm font-semibold transition-colors flex-1 cursor-pointer ${
+            className={`inline-flex items-center justify-center gap-2 px-3 sm:px-8 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors flex-1 cursor-pointer ${
               activeTab === "health-trends"
                 ? "bg-teal-500 text-white shadow-md shadow-teal-500/25"
                 : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
