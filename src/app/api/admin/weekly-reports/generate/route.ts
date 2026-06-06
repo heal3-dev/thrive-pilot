@@ -76,21 +76,13 @@ function expectedBadgeExplanationLine(badgeLabel: string): string {
   return "Keep an eye on rest, recovery, and stress.";
 }
 
-function normalizeBadgeLine(s: string): string {
-  return s
-    .replace(/\r\n/g, "\n")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+function badgeExplanationLine(params: { badgeLabel: string; badgeText: string }): string {
+  // Preferred: rely on model output.
+  const candidate = (params.badgeText ?? "").trim();
+  if (candidate.length > 0) return candidate;
 
-function selectBadgeExplanationLine(params: { badgeLabel: string; badgeText: string }): string {
-  const expected = expectedBadgeExplanationLine(params.badgeLabel);
-  const candidate = params.badgeText ?? "";
-  // Hybrid approach:
-  // - If the model produced the exact approved line (allowing whitespace/newline differences), use it.
-  // - Otherwise, fall back to the approved fixed line.
-  if (normalizeBadgeLine(candidate) === normalizeBadgeLine(expected)) return expected;
-  return expected;
+  // Fallback: if model omitted badgeText, use fixed approved copy for the computed flag.
+  return expectedBadgeExplanationLine(params.badgeLabel);
 }
 
 function ymdAddDays(ymd: string, deltaDays: number): string {
@@ -346,7 +338,7 @@ function fillOlgaTemplate(params: {
   html = replaceFirst(
     html,
     /(<p\s+class="badge-text"[^>]*>)([\s\S]*?)(<\/p>)/i,
-    escapeHtml(selectBadgeExplanationLine({ badgeLabel: params.badgeLabel, badgeText: params.content.badgeText }))
+    escapeHtml(badgeExplanationLine({ badgeLabel: params.badgeLabel, badgeText: params.content.badgeText }))
   );
 
   // Cards (exactly 3, in order: Stress, Sleep, Recovery)

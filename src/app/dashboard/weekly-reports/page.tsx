@@ -1340,7 +1340,8 @@ export default function WeeklyReportsPage() {
         subtitle="Edit the active prompt templates used by generation/revision. Changes apply immediately to new chat revisions."
         size="4xl"
         resizable
-        className="max-w-[96vw] md:max-w-5xl lg:max-w-6xl"
+        closeOnBackdropClick={false}
+        className="max-w-[96vw] md:max-w-5xl lg:max-w-6xl h-[88vh]"
         bodyClassName="p-4 sm:p-6"
       >
         <div className="flex flex-col gap-4 min-h-0">
