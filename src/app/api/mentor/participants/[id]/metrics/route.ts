@@ -129,7 +129,7 @@ export async function GET(
       )
       .eq("pseudonym_id", pseudonymId)
       .gte("metric_date", since)
-      .lte("metric_date", todayYmd)
+      .lte("metric_date", weekEnding)
       .order("metric_date", { ascending: false });
 
     const inferredWeekEnding =

@@ -8,8 +8,6 @@ import { DEFAULT_GENERATE_WRAPPER, DEFAULT_OLGA_HTML_BASE_TEMPLATE } from "@/lib
 
 const requestSchema = z.object({
   participantId: z.string().uuid(),
-  // Optional: regenerate a specific week (YYYY-MM-DD). Used when regenerating an existing saved report.
-  weekEnding: z.string().min(10).max(10).optional(),
 });
 
 type TemplateRow = { key: string; content: string };
@@ -89,10 +87,6 @@ function ymdAddDays(ymd: string, deltaDays: number): string {
   const d = new Date(`${ymd}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + deltaDays);
   return d.toISOString().slice(0, 10);
-}
-
-function minYmd(a: string, b: string): string {
-  return a <= b ? a : b;
 }
 
 function list7DaysEnding(weekEnding: string): string[] {
@@ -481,15 +475,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Participant is not connected (no health data yet)" }, { status: 400 });
   }
 
-  const requestedWeekEnding =
-    typeof payload.weekEnding === "string" && /^\d{4}-\d{2}-\d{2}$/.test(payload.weekEnding)
-      ? payload.weekEnding
-      : null;
-
   // Pull enough history to compute a stable weekly flag (baselines + last 7 days).
+  //
+  // Important: do NOT clamp by "today (UTC)" here. Garmin `metric_date` is a date (not timestamp)
+  // and can legitimately be "ahead" of UTC depending on locale/timezone. We instead anchor on the
+  // latest available metric_date (matching Participant Trends behavior).
   const todayYmd = new Date().toISOString().slice(0, 10);
-  const rangeEnd = requestedWeekEnding ? minYmd(requestedWeekEnding, todayYmd) : todayYmd;
-  const since = ymdAddDays(rangeEnd, -40);
+
+  const { data: latestRow, error: latestErr } = await admin
+    .from("garmin_metrics")
+    .select("metric_date")
+    .eq("pseudonym_id", pseudonymId)
+    .order("metric_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestErr) {
+    return NextResponse.json({ error: "Failed to fetch latest metric date" }, { status: 500 });
+  }
+
+  const weekEnding =
+    (latestRow && typeof (latestRow as unknown as { metric_date?: unknown }).metric_date === "string"
+      ? ((latestRow as unknown as { metric_date: string }).metric_date as string)
+      : todayYmd) || todayYmd;
+
+  const since = ymdAddDays(weekEnding, -40);
   const { data: rows, error: metricsError } = await admin
     .from("garmin_metrics")
     .select(
@@ -497,7 +507,7 @@ export async function POST(request: Request) {
     )
     .eq("pseudonym_id", pseudonymId)
     .gte("metric_date", since)
-    .lte("metric_date", rangeEnd)
+    .lte("metric_date", weekEnding)
     .order("metric_date", { ascending: false });
 
   if (metricsError) {
@@ -507,12 +517,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No health data available for participant" }, { status: 400 });
   }
 
-  const latestMetricDate = (rows[0] as unknown as { metric_date?: string }).metric_date ?? rangeEnd;
-  // Use a consistent default window: end on "yesterday (UTC)" when possible, but never after the latest available metric date.
-  const defaultWeekEnding = ymdAddDays(todayYmd, -1);
-  const weekEnding = requestedWeekEnding
-    ? minYmd(requestedWeekEnding, latestMetricDate)
-    : minYmd(latestMetricDate, defaultWeekEnding);
+  // weekEnding is anchored above from the latest metric_date.
 
   const typed: Metric[] = (rows ?? []).map((m) => {
     const mm = m as unknown as {

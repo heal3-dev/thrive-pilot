@@ -1739,10 +1739,7 @@ export default function WeeklyReportsPage() {
                             "Content-Type": "application/json",
                             Authorization: `Bearer ${token}`,
                           },
-                          body: JSON.stringify({
-                            participantId: selectedParticipant.id,
-                            weekEnding: selectedMeta?.weekEnding || undefined,
-                          }),
+                          body: JSON.stringify({ participantId: selectedParticipant.id }),
                         });
                         if (!res.ok) {
                           const j = (await res.json().catch(() => null)) as unknown;
