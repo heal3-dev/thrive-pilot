@@ -849,6 +849,7 @@ export async function POST(request: Request) {
         badge_label: badge.label,
         badge_icon: badge.icon,
         html: updatedHtml,
+        outreach_text: outreachText,
         status: "draft",
         approved_at: null,
         queued_at: null,

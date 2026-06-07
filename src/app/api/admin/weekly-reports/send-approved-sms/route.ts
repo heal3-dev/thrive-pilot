@@ -28,6 +28,7 @@ type WeeklyReportRow = {
   week_range: string;
   badge_label: string;
   badge_icon: string;
+  outreach_text: string | null;
   status: "draft" | "approved" | "queued" | "sent" | "failed";
   approved_at: string | null;
   html: string;
@@ -46,6 +47,23 @@ function normalizeBaseUrl(value: string | null | undefined): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+}
+
+function baseUrlFromRequest(request: Request): string | null {
+  // Prefer the URL provided by the runtime (works well locally and in many deployments).
+  try {
+    const u = new URL(request.url);
+    if (u.origin && u.origin !== "null") return normalizeBaseUrl(u.origin);
+  } catch {
+    // ignore
+  }
+
+  // Fall back to proxy headers (e.g. Vercel).
+  const proto = (request.headers.get("x-forwarded-proto") || "").trim();
+  const host = (request.headers.get("x-forwarded-host") || request.headers.get("host") || "").trim();
+  if (!host) return null;
+  const scheme = proto || (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+  return normalizeBaseUrl(`${scheme}://${host}`);
 }
 
 function firstName(label: string): string {
@@ -109,15 +127,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "TWILIO_PHONE_NUMBER is missing" }, { status: 500 });
   }
 
-  const siteUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL);
+  const siteUrl = baseUrlFromRequest(request) || normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL);
   if (!siteUrl) {
-    return NextResponse.json({ error: "NEXT_PUBLIC_SITE_URL is missing" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "Unable to determine site origin for share links. Ensure requests include Host headers (or set NEXT_PUBLIC_SITE_URL).",
+      },
+      { status: 500 }
+    );
   }
 
   // For SMS, treat any report with approved_at as approved, even if email flow moved it to queued/sent.
   let query = guard.admin
     .from("weekly_reports")
-    .select("id, participant_id, week_ending, week_range, badge_label, badge_icon, status, approved_at, html, sms_message_id")
+    .select(
+      "id, participant_id, week_ending, week_range, badge_label, badge_icon, outreach_text, status, approved_at, html, sms_message_id",
+    )
     .not("approved_at", "is", null);
 
   if (payload.weekEnding && /^\d{4}-\d{2}-\d{2}$/.test(payload.weekEnding)) {
@@ -208,10 +234,18 @@ export async function POST(request: Request) {
     }
 
     const shareUrl = `${siteUrl}/r/w/${encodeURIComponent(minted.token)}`;
-    const msg = [
-      `Hi ${firstName(participantName)}, here’s your Thrive weekly report (${report.week_range}) — ${report.badge_label} ${report.badge_icon}.`,
-      `View: ${shareUrl}`,
-    ].join(" ");
+    const baseRaw =
+      typeof report.outreach_text === "string" && report.outreach_text.trim().length > 0
+        ? report.outreach_text.trim()
+        : `Hi ${firstName(participantName)}, this week your Thrive weekly report (${report.week_range}) shows that you flagged ${report.badge_label} ${report.badge_icon}. Let us know if you have any questions after you’ve reviewed the report.`;
+
+    // Ensure the message references the report's current week range and doesn't include a stale link line.
+    const base = baseRaw
+      .replace(/\b(Thrive\s+weekly\s+report)\s*\(([^)]*)\)/i, `$1 (${report.week_range})`)
+      .replace(/\n+\s*Weekly report:\s*\S+\s*$/i, "")
+      .trim();
+
+    const msg = `${base}\n\nWeekly report: ${shareUrl}`;
 
     if (payload.dryRun) {
       preview.push({
