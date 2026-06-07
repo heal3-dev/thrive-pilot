@@ -48,6 +48,14 @@ function normalizeBaseUrl(value: string | null | undefined): string | null {
   return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }
 
+function baseUrlFromRequest(request: Request): string | null {
+  const proto = (request.headers.get("x-forwarded-proto") || "").trim();
+  const host = (request.headers.get("x-forwarded-host") || request.headers.get("host") || "").trim();
+  if (!host) return null;
+  const scheme = proto || "https";
+  return normalizeBaseUrl(`${scheme}://${host}`);
+}
+
 function firstName(label: string): string {
   const trimmed = label.trim();
   if (!trimmed) return "there";
@@ -109,9 +117,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "TWILIO_PHONE_NUMBER is missing" }, { status: 500 });
   }
 
-  const siteUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL);
+  const siteUrl = baseUrlFromRequest(request) || normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL);
   if (!siteUrl) {
-    return NextResponse.json({ error: "NEXT_PUBLIC_SITE_URL is missing" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "Unable to determine site origin for share links. Ensure requests include Host headers (or set NEXT_PUBLIC_SITE_URL).",
+      },
+      { status: 500 }
+    );
   }
 
   // For SMS, treat any report with approved_at as approved, even if email flow moved it to queued/sent.
@@ -208,10 +222,8 @@ export async function POST(request: Request) {
     }
 
     const shareUrl = `${siteUrl}/r/w/${encodeURIComponent(minted.token)}`;
-    const msg = [
-      `Hi ${firstName(participantName)}, here’s your Thrive weekly report (${report.week_range}) — ${report.badge_label} ${report.badge_icon}.`,
-      `View: ${shareUrl}`,
-    ].join(" ");
+    const msgBase = `Hi ${firstName(participantName)}, this week your Thrive weekly report (${report.week_range}) shows that you flagged ${report.badge_label} ${report.badge_icon}. Let us know if you have any questions after you’ve reviewed the report.`;
+    const msg = `${msgBase}\n\nWeekly report: ${shareUrl}`;
 
     if (payload.dryRun) {
       preview.push({
