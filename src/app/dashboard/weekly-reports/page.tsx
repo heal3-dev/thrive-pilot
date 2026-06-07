@@ -188,7 +188,6 @@ export default function WeeklyReportsPage() {
   const [isSendingSms, setIsSendingSms] = useState(false);
   const [smsPreview, setSmsPreview] = useState<null | {
     toSend: Array<{ reportId: string; participantId: string; participantName: string; toPhone: string; weekRange: string; shareUrl: string; expiresAt: string }>;
-    alreadySent: Array<{ reportId: string; participantId: string; weekRange: string }>;
   }>(null);
   const [selectedSmsReportIds, setSelectedSmsReportIds] = useState<Record<string, boolean>>({});
 
@@ -1081,12 +1080,7 @@ export default function WeeklyReportsPage() {
                       }>)
                     : [];
 
-                const alreadySent =
-                  j && typeof j === "object" && "skippedAlreadySent" in j
-                    ? [] // server returns counts only; keep empty list for now
-                    : [];
-
-                const preview = { toSend: list, alreadySent };
+                const preview = { toSend: list };
                 setSmsPreview(preview);
                 const initial: Record<string, boolean> = {};
                 for (const it of preview.toSend) initial[it.reportId] = true;
@@ -1670,7 +1664,8 @@ export default function WeeklyReportsPage() {
                       const token = sessionData?.session?.access_token;
                       if (!token) throw new Error("Authentication required");
 
-                      const nextStatus: ParticipantStatus = selectedStatus === "approved" ? "draft" : "approved";
+                      const nextStatus: ParticipantStatus =
+                        selectedStatus === "approved" || selectedStatus === "sent" ? "draft" : "approved";
                       const res = await fetch("/api/admin/weekly-reports/report/approve", {
                         method: "POST",
                         headers: {
@@ -1708,11 +1703,11 @@ export default function WeeklyReportsPage() {
                       alert(e instanceof Error ? e.message : "Failed to update status");
                     }
                   }}
-                  disabled={!selectedParticipant || !selectedMeta || selectedStatus === "queued" || selectedStatus === "sent"}
+                  disabled={!selectedParticipant || !selectedMeta || selectedStatus === "queued"}
                   size="sm"
                   className="border-slate-300"
                 >
-                  {selectedStatus === "approved" ? "Mark Draft" : "Approve"}
+                  {selectedStatus === "approved" || selectedStatus === "sent" ? "Mark Draft" : "Approve"}
                 </Button>
               </div>
             </div>
@@ -1865,23 +1860,25 @@ export default function WeeklyReportsPage() {
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-900">Outreach text (copy/paste)</p>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-slate-300 shrink-0"
-                        onClick={async () => {
-                          try {
-                            const text = composedOutreachText;
-                            await navigator.clipboard.writeText(text);
-                            setOutreachCopied(true);
-                            window.setTimeout(() => setOutreachCopied(false), 1200);
-                          } catch {
-                            // ignore
-                          }
-                        }}
-                      >
-                        {outreachCopied ? "Copied" : "Copy"}
-                      </Button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-slate-300"
+                          onClick={async () => {
+                            try {
+                              const text = composedOutreachText;
+                              await navigator.clipboard.writeText(text);
+                              setOutreachCopied(true);
+                              window.setTimeout(() => setOutreachCopied(false), 1200);
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                        >
+                          {outreachCopied ? "Copied" : "Copy"}
+                        </Button>
+                      </div>
                     </div>
                     <textarea
                       readOnly

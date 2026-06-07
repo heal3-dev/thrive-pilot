@@ -33,6 +33,9 @@ export async function POST(request: Request) {
     update.queued_at = null;
     update.sent_at = null;
     update.email_job_id = null;
+    update.sms_message_id = null;
+    update.sms_sent_at = null;
+    update.sms_last_error = null;
   }
 
   const { data, error } = await guard.admin
@@ -40,7 +43,9 @@ export async function POST(request: Request) {
     .update(update)
     .eq("participant_id", payload.participantId)
     .eq("week_ending", payload.weekEnding)
-    .select("id, participant_id, week_ending, status, approved_at, queued_at, sent_at, email_job_id, updated_at")
+    .select(
+      "id, participant_id, week_ending, status, approved_at, queued_at, sent_at, email_job_id, sms_message_id, sms_sent_at, sms_last_error, updated_at",
+    )
     .maybeSingle();
 
   if (error) {

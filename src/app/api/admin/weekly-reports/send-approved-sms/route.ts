@@ -183,6 +183,7 @@ export async function POST(request: Request) {
     messageBody: string;
     expiresAt: string;
   }> = [];
+  // No explicit resend mode: to re-send, admins mark Sent → Draft, re-approve, then send again.
 
   for (const report of rows) {
     const p = byId.get(report.participant_id);
@@ -272,6 +273,9 @@ export async function POST(request: Request) {
           sms_message_id: inserted.id,
           sms_sent_at: new Date().toISOString(),
           sms_last_error: null,
+          status: "sent",
+          sent_at: new Date().toISOString(),
+          last_error: null,
         })
         .eq("id", report.id);
 
