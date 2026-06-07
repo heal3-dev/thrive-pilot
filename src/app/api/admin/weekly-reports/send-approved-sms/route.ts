@@ -19,8 +19,6 @@ const requestSchema = z.object({
   weekEnding: z.string().min(10).max(10).optional(),
   // When true, returns a preview without sending.
   dryRun: z.boolean().optional(),
-  // When true, allows re-sending SMS even if one was previously sent.
-  allowResend: z.boolean().optional(),
 });
 
 type WeeklyReportRow = {
@@ -185,7 +183,7 @@ export async function POST(request: Request) {
     messageBody: string;
     expiresAt: string;
   }> = [];
-  const alreadySent: Array<{ reportId: string; participantId: string; participantName: string; toPhone: string; weekRange: string }> = [];
+  // No explicit resend mode: to re-send, admins mark Sent → Draft, re-approve, then send again.
 
   for (const report of rows) {
     const p = byId.get(report.participant_id);
@@ -197,11 +195,8 @@ export async function POST(request: Request) {
       continue;
     }
 
-    if (report.sms_message_id && !payload.allowResend) {
+    if (report.sms_message_id) {
       skippedAlreadySent++;
-      if (payload.dryRun) {
-        alreadySent.push({ reportId: report.id, participantId: report.participant_id, participantName, toPhone: e164, weekRange: report.week_range });
-      }
       continue;
     }
 
@@ -302,7 +297,6 @@ export async function POST(request: Request) {
     skippedAlreadySent,
     failed,
     preview: payload.dryRun ? preview : undefined,
-    alreadySent: payload.dryRun ? alreadySent : undefined,
     errors: errors.length > 0 ? errors : undefined,
   });
 }

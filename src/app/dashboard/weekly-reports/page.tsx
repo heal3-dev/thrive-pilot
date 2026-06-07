@@ -186,13 +186,10 @@ export default function WeeklyReportsPage() {
 
   const [isSendSmsOpen, setIsSendSmsOpen] = useState(false);
   const [isSendingSms, setIsSendingSms] = useState(false);
-  const [isResendingSms, setIsResendingSms] = useState(false);
   const [smsPreview, setSmsPreview] = useState<null | {
     toSend: Array<{ reportId: string; participantId: string; participantName: string; toPhone: string; weekRange: string; shareUrl: string; expiresAt: string }>;
-    alreadySent: Array<{ reportId: string; participantId: string; weekRange: string }>;
   }>(null);
   const [selectedSmsReportIds, setSelectedSmsReportIds] = useState<Record<string, boolean>>({});
-  const [smsAllowResend, setSmsAllowResend] = useState(false);
 
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
@@ -1048,7 +1045,6 @@ export default function WeeklyReportsPage() {
               setIsSendSmsOpen(true);
               setSmsPreview(null);
               setSelectedSmsReportIds({});
-              setSmsAllowResend(false);
               setIsSendingSms(true);
               try {
                 const { data: sessionData } = await supabase.auth.getSession();
@@ -1084,12 +1080,7 @@ export default function WeeklyReportsPage() {
                       }>)
                     : [];
 
-                const alreadySent =
-                  j && typeof j === "object" && "alreadySent" in j && Array.isArray((j as { alreadySent?: unknown }).alreadySent)
-                    ? ((j as { alreadySent: unknown[] }).alreadySent as Array<{ reportId: string; participantId: string; weekRange: string }>)
-                    : [];
-
-                const preview = { toSend: list, alreadySent };
+                const preview = { toSend: list };
                 setSmsPreview(preview);
                 const initial: Record<string, boolean> = {};
                 for (const it of preview.toSend) initial[it.reportId] = true;
@@ -1236,16 +1227,6 @@ export default function WeeklyReportsPage() {
                   Will send: {Object.values(selectedSmsReportIds).filter(Boolean).length} / {smsPreview.toSend.length}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">Links expire after 7 days.</p>
-                {smsPreview.alreadySent.length > 0 ? (
-                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={smsAllowResend}
-                      onChange={(e) => setSmsAllowResend(e.target.checked)}
-                    />
-                    Allow re-sending SMS for previously sent reports
-                  </label>
-                ) : null}
               </div>
 
               <div className="max-h-[340px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
@@ -1291,14 +1272,6 @@ export default function WeeklyReportsPage() {
                 )}
               </div>
 
-              {smsPreview.alreadySent.length > 0 ? (
-                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-600 space-y-2">
-                  <p>
-                    <span className="font-semibold">Previously sent (skipped):</span> {smsPreview.alreadySent.length}
-                  </p>
-                </div>
-              ) : null}
-
               <div className="flex items-center justify-end gap-2">
                 <Button variant="outline" className="border-slate-300" size="sm" onClick={() => setIsSendSmsOpen(false)}>
                   Cancel
@@ -1322,7 +1295,7 @@ export default function WeeklyReportsPage() {
                           "Content-Type": "application/json",
                           Authorization: `Bearer ${token}`,
                         },
-                        body: JSON.stringify({ reportIds, allowResend: smsAllowResend }),
+                        body: JSON.stringify({ reportIds }),
                       });
                       const j = (await res.json().catch(() => null)) as unknown;
                       if (!res.ok) {
@@ -1691,7 +1664,8 @@ export default function WeeklyReportsPage() {
                       const token = sessionData?.session?.access_token;
                       if (!token) throw new Error("Authentication required");
 
-                      const nextStatus: ParticipantStatus = selectedStatus === "approved" ? "draft" : "approved";
+                      const nextStatus: ParticipantStatus =
+                        selectedStatus === "approved" || selectedStatus === "sent" ? "draft" : "approved";
                       const res = await fetch("/api/admin/weekly-reports/report/approve", {
                         method: "POST",
                         headers: {
@@ -1729,11 +1703,11 @@ export default function WeeklyReportsPage() {
                       alert(e instanceof Error ? e.message : "Failed to update status");
                     }
                   }}
-                  disabled={!selectedParticipant || !selectedMeta || selectedStatus === "queued" || selectedStatus === "sent"}
+                  disabled={!selectedParticipant || !selectedMeta || selectedStatus === "queued"}
                   size="sm"
                   className="border-slate-300"
                 >
-                  {selectedStatus === "approved" ? "Mark Draft" : "Approve"}
+                  {selectedStatus === "approved" || selectedStatus === "sent" ? "Mark Draft" : "Approve"}
                 </Button>
               </div>
             </div>
@@ -1903,45 +1877,6 @@ export default function WeeklyReportsPage() {
                           }}
                         >
                           {outreachCopied ? "Copied" : "Copy"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-slate-300"
-                          disabled={!selectedMeta?.reportId || isResendingSms}
-                          onClick={async () => {
-                            if (!selectedMeta?.reportId) return;
-                            setIsResendingSms(true);
-                            try {
-                              const { data: sessionData } = await supabase.auth.getSession();
-                              const token = sessionData?.session?.access_token;
-                              if (!token) throw new Error("Authentication required");
-                              const res = await fetch("/api/admin/weekly-reports/send-approved-sms", {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                  Authorization: `Bearer ${token}`,
-                                },
-                                body: JSON.stringify({ reportIds: [selectedMeta.reportId], allowResend: true }),
-                              });
-                              const j = (await res.json().catch(() => null)) as unknown;
-                              if (!res.ok) {
-                                const msg =
-                                  j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
-                                    ? (j as { error: string }).error
-                                    : "Failed to resend SMS";
-                                throw new Error(msg);
-                              }
-                              alert("SMS sent.");
-                              await refreshParticipantStatuses();
-                            } catch (e) {
-                              alert(e instanceof Error ? e.message : "Failed to resend SMS");
-                            } finally {
-                              setIsResendingSms(false);
-                            }
-                          }}
-                        >
-                          {isResendingSms ? "Resending…" : "Resend SMS"}
                         </Button>
                       </div>
                     </div>
