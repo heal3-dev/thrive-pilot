@@ -856,6 +856,10 @@ export async function POST(request: Request) {
         sent_at: null,
         last_error: null,
         email_job_id: null,
+        // If the report is regenerated, it's a fresh draft and should be eligible for re-send after approval.
+        sms_message_id: null,
+        sms_sent_at: null,
+        sms_last_error: null,
       },
       { onConflict: "participant_id,week_ending" }
     )
