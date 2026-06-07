@@ -19,6 +19,8 @@ const requestSchema = z.object({
   weekEnding: z.string().min(10).max(10).optional(),
   // When true, returns a preview without sending.
   dryRun: z.boolean().optional(),
+  // When true, allows re-sending SMS even if one was previously sent.
+  allowResend: z.boolean().optional(),
 });
 
 type WeeklyReportRow = {
@@ -183,6 +185,7 @@ export async function POST(request: Request) {
     messageBody: string;
     expiresAt: string;
   }> = [];
+  const alreadySent: Array<{ reportId: string; participantId: string; participantName: string; toPhone: string; weekRange: string }> = [];
 
   for (const report of rows) {
     const p = byId.get(report.participant_id);
@@ -194,8 +197,11 @@ export async function POST(request: Request) {
       continue;
     }
 
-    if (report.sms_message_id) {
+    if (report.sms_message_id && !payload.allowResend) {
       skippedAlreadySent++;
+      if (payload.dryRun) {
+        alreadySent.push({ reportId: report.id, participantId: report.participant_id, participantName, toPhone: e164, weekRange: report.week_range });
+      }
       continue;
     }
 
@@ -272,6 +278,9 @@ export async function POST(request: Request) {
           sms_message_id: inserted.id,
           sms_sent_at: new Date().toISOString(),
           sms_last_error: null,
+          status: "sent",
+          sent_at: new Date().toISOString(),
+          last_error: null,
         })
         .eq("id", report.id);
 
@@ -293,6 +302,7 @@ export async function POST(request: Request) {
     skippedAlreadySent,
     failed,
     preview: payload.dryRun ? preview : undefined,
+    alreadySent: payload.dryRun ? alreadySent : undefined,
     errors: errors.length > 0 ? errors : undefined,
   });
 }

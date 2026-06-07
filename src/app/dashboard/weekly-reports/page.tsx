@@ -186,11 +186,13 @@ export default function WeeklyReportsPage() {
 
   const [isSendSmsOpen, setIsSendSmsOpen] = useState(false);
   const [isSendingSms, setIsSendingSms] = useState(false);
+  const [isResendingSms, setIsResendingSms] = useState(false);
   const [smsPreview, setSmsPreview] = useState<null | {
     toSend: Array<{ reportId: string; participantId: string; participantName: string; toPhone: string; weekRange: string; shareUrl: string; expiresAt: string }>;
     alreadySent: Array<{ reportId: string; participantId: string; weekRange: string }>;
   }>(null);
   const [selectedSmsReportIds, setSelectedSmsReportIds] = useState<Record<string, boolean>>({});
+  const [smsAllowResend, setSmsAllowResend] = useState(false);
 
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [templateKey, setTemplateKey] = useState<TemplateKey>("master_rules");
@@ -1046,6 +1048,7 @@ export default function WeeklyReportsPage() {
               setIsSendSmsOpen(true);
               setSmsPreview(null);
               setSelectedSmsReportIds({});
+              setSmsAllowResend(false);
               setIsSendingSms(true);
               try {
                 const { data: sessionData } = await supabase.auth.getSession();
@@ -1082,8 +1085,8 @@ export default function WeeklyReportsPage() {
                     : [];
 
                 const alreadySent =
-                  j && typeof j === "object" && "skippedAlreadySent" in j
-                    ? [] // server returns counts only; keep empty list for now
+                  j && typeof j === "object" && "alreadySent" in j && Array.isArray((j as { alreadySent?: unknown }).alreadySent)
+                    ? ((j as { alreadySent: unknown[] }).alreadySent as Array<{ reportId: string; participantId: string; weekRange: string }>)
                     : [];
 
                 const preview = { toSend: list, alreadySent };
@@ -1233,6 +1236,16 @@ export default function WeeklyReportsPage() {
                   Will send: {Object.values(selectedSmsReportIds).filter(Boolean).length} / {smsPreview.toSend.length}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">Links expire after 7 days.</p>
+                {smsPreview.alreadySent.length > 0 ? (
+                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={smsAllowResend}
+                      onChange={(e) => setSmsAllowResend(e.target.checked)}
+                    />
+                    Allow re-sending SMS for previously sent reports
+                  </label>
+                ) : null}
               </div>
 
               <div className="max-h-[340px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
@@ -1278,6 +1291,14 @@ export default function WeeklyReportsPage() {
                 )}
               </div>
 
+              {smsPreview.alreadySent.length > 0 ? (
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-600 space-y-2">
+                  <p>
+                    <span className="font-semibold">Previously sent (skipped):</span> {smsPreview.alreadySent.length}
+                  </p>
+                </div>
+              ) : null}
+
               <div className="flex items-center justify-end gap-2">
                 <Button variant="outline" className="border-slate-300" size="sm" onClick={() => setIsSendSmsOpen(false)}>
                   Cancel
@@ -1301,7 +1322,7 @@ export default function WeeklyReportsPage() {
                           "Content-Type": "application/json",
                           Authorization: `Bearer ${token}`,
                         },
-                        body: JSON.stringify({ reportIds }),
+                        body: JSON.stringify({ reportIds, allowResend: smsAllowResend }),
                       });
                       const j = (await res.json().catch(() => null)) as unknown;
                       if (!res.ok) {
@@ -1865,23 +1886,64 @@ export default function WeeklyReportsPage() {
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-900">Outreach text (copy/paste)</p>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-slate-300 shrink-0"
-                        onClick={async () => {
-                          try {
-                            const text = composedOutreachText;
-                            await navigator.clipboard.writeText(text);
-                            setOutreachCopied(true);
-                            window.setTimeout(() => setOutreachCopied(false), 1200);
-                          } catch {
-                            // ignore
-                          }
-                        }}
-                      >
-                        {outreachCopied ? "Copied" : "Copy"}
-                      </Button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-slate-300"
+                          onClick={async () => {
+                            try {
+                              const text = composedOutreachText;
+                              await navigator.clipboard.writeText(text);
+                              setOutreachCopied(true);
+                              window.setTimeout(() => setOutreachCopied(false), 1200);
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                        >
+                          {outreachCopied ? "Copied" : "Copy"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-slate-300"
+                          disabled={!selectedMeta?.reportId || isResendingSms}
+                          onClick={async () => {
+                            if (!selectedMeta?.reportId) return;
+                            setIsResendingSms(true);
+                            try {
+                              const { data: sessionData } = await supabase.auth.getSession();
+                              const token = sessionData?.session?.access_token;
+                              if (!token) throw new Error("Authentication required");
+                              const res = await fetch("/api/admin/weekly-reports/send-approved-sms", {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${token}`,
+                                },
+                                body: JSON.stringify({ reportIds: [selectedMeta.reportId], allowResend: true }),
+                              });
+                              const j = (await res.json().catch(() => null)) as unknown;
+                              if (!res.ok) {
+                                const msg =
+                                  j && typeof j === "object" && "error" in j && typeof (j as { error?: unknown }).error === "string"
+                                    ? (j as { error: string }).error
+                                    : "Failed to resend SMS";
+                                throw new Error(msg);
+                              }
+                              alert("SMS sent.");
+                              await refreshParticipantStatuses();
+                            } catch (e) {
+                              alert(e instanceof Error ? e.message : "Failed to resend SMS");
+                            } finally {
+                              setIsResendingSms(false);
+                            }
+                          }}
+                        >
+                          {isResendingSms ? "Resending…" : "Resend SMS"}
+                        </Button>
+                      </div>
                     </div>
                     <textarea
                       readOnly
