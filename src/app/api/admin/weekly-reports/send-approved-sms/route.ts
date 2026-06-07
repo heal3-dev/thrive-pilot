@@ -28,6 +28,7 @@ type WeeklyReportRow = {
   week_range: string;
   badge_label: string;
   badge_icon: string;
+  outreach_text: string | null;
   status: "draft" | "approved" | "queued" | "sent" | "failed";
   approved_at: string | null;
   html: string;
@@ -131,7 +132,9 @@ export async function POST(request: Request) {
   // For SMS, treat any report with approved_at as approved, even if email flow moved it to queued/sent.
   let query = guard.admin
     .from("weekly_reports")
-    .select("id, participant_id, week_ending, week_range, badge_label, badge_icon, status, approved_at, html, sms_message_id")
+    .select(
+      "id, participant_id, week_ending, week_range, badge_label, badge_icon, outreach_text, status, approved_at, html, sms_message_id",
+    )
     .not("approved_at", "is", null);
 
   if (payload.weekEnding && /^\d{4}-\d{2}-\d{2}$/.test(payload.weekEnding)) {
@@ -222,8 +225,18 @@ export async function POST(request: Request) {
     }
 
     const shareUrl = `${siteUrl}/r/w/${encodeURIComponent(minted.token)}`;
-    const msgBase = `Hi ${firstName(participantName)}, this week your Thrive weekly report (${report.week_range}) shows that you flagged ${report.badge_label} ${report.badge_icon}. Let us know if you have any questions after you’ve reviewed the report.`;
-    const msg = `${msgBase}\n\nWeekly report: ${shareUrl}`;
+    const baseRaw =
+      typeof report.outreach_text === "string" && report.outreach_text.trim().length > 0
+        ? report.outreach_text.trim()
+        : `Hi ${firstName(participantName)}, this week your Thrive weekly report (${report.week_range}) shows that you flagged ${report.badge_label} ${report.badge_icon}. Let us know if you have any questions after you’ve reviewed the report.`;
+
+    // Ensure the message references the report's current week range and doesn't include a stale link line.
+    const base = baseRaw
+      .replace(/\b(Thrive\s+weekly\s+report)\s*\(([^)]*)\)/i, `$1 (${report.week_range})`)
+      .replace(/\n+\s*Weekly report:\s*\S+\s*$/i, "")
+      .trim();
+
+    const msg = `${base}\n\nWeekly report: ${shareUrl}`;
 
     if (payload.dryRun) {
       preview.push({
