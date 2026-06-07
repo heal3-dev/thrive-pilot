@@ -50,10 +50,19 @@ function normalizeBaseUrl(value: string | null | undefined): string | null {
 }
 
 function baseUrlFromRequest(request: Request): string | null {
+  // Prefer the URL provided by the runtime (works well locally and in many deployments).
+  try {
+    const u = new URL(request.url);
+    if (u.origin && u.origin !== "null") return normalizeBaseUrl(u.origin);
+  } catch {
+    // ignore
+  }
+
+  // Fall back to proxy headers (e.g. Vercel).
   const proto = (request.headers.get("x-forwarded-proto") || "").trim();
   const host = (request.headers.get("x-forwarded-host") || request.headers.get("host") || "").trim();
   if (!host) return null;
-  const scheme = proto || "https";
+  const scheme = proto || (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
   return normalizeBaseUrl(`${scheme}://${host}`);
 }
 
