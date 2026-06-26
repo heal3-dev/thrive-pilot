@@ -87,7 +87,8 @@ export async function POST(request: Request) {
   let query = guard.admin
     .from("weekly_reports")
     .select("id, participant_id, week_ending, week_range, badge_label, badge_icon, html, status, email_job_id")
-    .eq("status", "approved");
+    .not("approved_at", "is", null)
+    .is("email_job_id", null);
 
   if (payload.weekEnding && /^\d{4}-\d{2}-\d{2}$/.test(payload.weekEnding)) {
     query = query.eq("week_ending", payload.weekEnding);

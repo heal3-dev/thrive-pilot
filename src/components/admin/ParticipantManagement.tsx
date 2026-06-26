@@ -49,6 +49,7 @@ type UpdateParticipantPayload = {
   email?: string | null;
   phone_number?: string | null;
   is_active?: boolean;
+  weekly_report_sms_enabled?: boolean;
 };
 
 function formatPhone(phone: string | null | undefined) {
@@ -1022,6 +1023,9 @@ function EditParticipantModal({
   const [name, setName] = useState(participant.name ?? "");
   const [email, setEmail] = useState(participant.email ?? "");
   const [phone, setPhone] = useState(participant.phone_number ?? "");
+  const [weeklyReportSmsEnabled, setWeeklyReportSmsEnabled] = useState(
+    participant.weekly_report_sms_enabled !== false
+  );
   const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1039,6 +1043,7 @@ function EditParticipantModal({
       email: email.trim() ? email.trim() : null,
       // Store in E.164 so Twilio can reliably deliver messages.
       phone_number: e164Phone,
+      weekly_report_sms_enabled: weeklyReportSmsEnabled,
     });
   };
 
@@ -1078,6 +1083,19 @@ function EditParticipantModal({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="participant@example.com"
           />
+        </div>
+
+        <div className="flex items-center gap-2 py-1">
+          <input
+            id="edit-sms-enabled"
+            type="checkbox"
+            checked={weeklyReportSmsEnabled}
+            onChange={(e) => setWeeklyReportSmsEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+          />
+          <Label htmlFor="edit-sms-enabled" className="text-sm font-semibold text-slate-700 cursor-pointer select-none">
+            Send weekly reports via SMS
+          </Label>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">

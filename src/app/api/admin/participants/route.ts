@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   const { data: participantsData, error: participantsError } = await admin
     .from("participants")
     .select(
-      "id, name, phone_number, email, is_active, garmin_user_id, consent_given, created_at, updated_at"
+      "id, name, phone_number, email, is_active, garmin_user_id, consent_given, created_at, updated_at, weekly_report_sms_enabled"
     )
     .order("created_at", { ascending: false });
 
@@ -259,6 +259,7 @@ export async function GET(request: Request) {
             invite_expires_at,
             assigned_mentor: null,
             weekly_flag: null,
+            weekly_report_sms_enabled: true,
           };
         });
     }

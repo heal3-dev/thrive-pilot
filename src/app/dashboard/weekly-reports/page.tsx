@@ -317,17 +317,17 @@ export default function WeeklyReportsPage() {
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, "text/html");
 
-      const badgeText = (doc.querySelector(".badge-text")?.textContent ?? "").trim();
+      const badgeText = doc.querySelector(".badge-text")?.textContent ?? "";
 
       const sections = Array.from(doc.querySelectorAll("section.card")).slice(0, 3);
       const defaultTitles = ["STRESS", "SLEEP", "RECOVERY"] as const;
       const hasSupportBoxes = sections.some((s) => Boolean(s.querySelector(".support")));
       const cards = sections.map((section, idx) => {
         const title = (section.querySelector("h3")?.textContent ?? defaultTitles[idx] ?? `CARD ${idx + 1}`).trim();
-        const state = (section.querySelector(".state")?.textContent ?? "").trim();
-        const body = (section.querySelector(".body")?.textContent ?? "").trim();
-        const labels = Array.from(section.querySelectorAll(".support-label")).map((n) => (n.textContent ?? "").trim());
-        const texts = Array.from(section.querySelectorAll(".support-text")).map((n) => (n.textContent ?? "").trim());
+        const state = section.querySelector(".state")?.textContent ?? "";
+        const body = section.querySelector(".body")?.textContent ?? "";
+        const labels = Array.from(section.querySelectorAll(".support-label")).map((n) => n.textContent ?? "");
+        const texts = Array.from(section.querySelectorAll(".support-text")).map((n) => n.textContent ?? "");
         return {
           title,
           state,
@@ -341,7 +341,7 @@ export default function WeeklyReportsPage() {
 
       const meaning = doc.querySelector("section.meaning");
       const meaningParagraph =
-        Array.from(meaning?.querySelectorAll("p") ?? []).find((p) => !p.classList.contains("footer-line"))?.textContent?.trim() ?? "";
+        Array.from(meaning?.querySelectorAll("p") ?? []).find((p) => !p.classList.contains("footer-line"))?.textContent ?? "";
 
       if (cards.length < 3) return null;
 

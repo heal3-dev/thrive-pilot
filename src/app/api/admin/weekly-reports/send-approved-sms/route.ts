@@ -40,6 +40,7 @@ type ParticipantRow = {
   name: string | null;
   phone_number: string | null;
   email: string | null;
+  weekly_report_sms_enabled?: boolean | null;
 };
 
 function normalizeBaseUrl(value: string | null | undefined): string | null {
@@ -169,7 +170,7 @@ export async function POST(request: Request) {
   const participantIds = Array.from(new Set(rows.map((r) => r.participant_id)));
   const { data: participants, error: participantsErr } = await guard.admin
     .from("participants")
-    .select("id, name, phone_number, email")
+    .select("id, name, phone_number, email, weekly_report_sms_enabled")
     .in("id", participantIds);
 
   if (participantsErr) {
@@ -213,6 +214,9 @@ export async function POST(request: Request) {
 
   for (const report of rows) {
     const p = byId.get(report.participant_id);
+    if (p && p.weekly_report_sms_enabled === false) {
+      continue;
+    }
     const participantName = p?.name?.trim() || p?.email?.trim() || "Participant";
     const rawPhone = (p?.phone_number ?? "").trim();
     const e164 = rawPhone ? toE164(rawPhone) : null;

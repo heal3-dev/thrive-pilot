@@ -14,7 +14,8 @@ export async function GET(request: Request) {
   let query = guard.admin
     .from("weekly_reports")
     .select("id", { count: "exact", head: true })
-    .eq("status", "approved");
+    .not("approved_at", "is", null)
+    .is("email_job_id", null);
 
   if (weekEnding && /^\d{4}-\d{2}-\d{2}$/.test(weekEnding)) {
     query = query.eq("week_ending", weekEnding);

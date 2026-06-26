@@ -45,6 +45,8 @@ export interface Participant {
   created_at?: string;
   /** Timestamp when the participant was last updated */
   updated_at?: string;
+  /** Whether the participant wants weekly reports sent via SMS */
+  weekly_report_sms_enabled?: boolean;
 }
 
 /**
