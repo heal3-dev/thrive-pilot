@@ -221,6 +221,95 @@ export function MessageViewer({ onBack }: { onBack: () => void }) {
     }
   }, [selectedParticipantId, fetchThread]);
 
+  // Realtime subscription for the active thread
+  useEffect(() => {
+    if (!selectedParticipantId) return;
+
+    const channel = supabase
+      .channel(`admin-thread-${selectedParticipantId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "sms_messages",
+          filter: `participant_id=eq.${selectedParticipantId}`,
+        },
+        (payload) => {
+          const newMessage = payload.new as Message;
+          if (newMessage.message_type === "system_auto_reply") return;
+
+          setThreadData((prev) => {
+            if (!prev) return prev;
+            if (prev.messages.some((m) => m.id === newMessage.id)) return prev;
+
+            const updatedMessages = [...prev.messages, newMessage].sort(
+              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+
+            return {
+              ...prev,
+              messages: updatedMessages,
+              stats: {
+                ...prev.stats,
+                totalMessages: prev.stats.totalMessages + 1,
+                inboundCount: prev.stats.inboundCount + (newMessage.direction === "inbound" ? 1 : 0),
+                outboundCount: prev.stats.outboundCount + (newMessage.direction === "outbound" ? 1 : 0),
+                lastMessageDate: newMessage.created_at,
+                firstMessageDate: prev.stats.firstMessageDate || newMessage.created_at,
+              },
+            };
+          });
+
+          setAllParticipants((prevList) => {
+            return prevList.map((p) => {
+              if (p.id === selectedParticipantId) {
+                return { ...p, lastMessage: newMessage };
+              }
+              return p;
+            });
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "sms_messages",
+          filter: `participant_id=eq.${selectedParticipantId}`,
+        },
+        (payload) => {
+          const updatedMessage = payload.new as Message;
+          setThreadData((prev) => {
+            if (!prev) return prev;
+            const idx = prev.messages.findIndex((m) => m.id === updatedMessage.id);
+            if (idx === -1) return prev;
+            const nextMessages = [...prev.messages];
+            nextMessages[idx] = { ...nextMessages[idx], ...updatedMessage };
+            return {
+              ...prev,
+              messages: nextMessages,
+            };
+          });
+
+          setAllParticipants((prevList) => {
+            return prevList.map((p) => {
+              if (p.id === selectedParticipantId && p.lastMessage?.id === updatedMessage.id) {
+                return { ...p, lastMessage: updatedMessage };
+              }
+              return p;
+            });
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [selectedParticipantId]);
+
   // Toggle mentor section
   const toggleMentor = (mentorId: string) => {
     setExpandedMentors((prev) => {

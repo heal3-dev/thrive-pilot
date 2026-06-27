@@ -18,6 +18,13 @@ type WeeklyReportMini = {
   badge_icon: string;
   status: "draft" | "approved" | "queued" | "sent" | "failed";
   email_job_id: string | null;
+  sms_message_id: string | null;
+  sms_sent_at: string | null;
+  sms_last_error: string | null;
+  email_jobs: {
+    status: string;
+    last_error: string | null;
+  }[] | null;
   updated_at?: string;
 };
 
@@ -34,7 +41,24 @@ export async function POST(request: Request) {
 
   const { data, error } = await guard.admin
     .from("weekly_reports")
-    .select("id, participant_id, week_ending, week_range, badge_label, badge_icon, status, email_job_id, updated_at")
+    .select(`
+      id,
+      participant_id,
+      week_ending,
+      week_range,
+      badge_label,
+      badge_icon,
+      status,
+      email_job_id,
+      updated_at,
+      sms_message_id,
+      sms_sent_at,
+      sms_last_error,
+      email_jobs (
+        status,
+        last_error
+      )
+    `)
     .in("participant_id", payload.participantIds)
     .order("week_ending", { ascending: false })
     .order("updated_at", { ascending: false })

@@ -113,6 +113,100 @@ function formatUpdatedAtUtc(iso: string): string {
   }).format(d);
 }
 
+interface WeeklyReportMini {
+  id: string;
+  participant_id: string;
+  week_ending: string;
+  week_range: string;
+  badge_label: string;
+  badge_icon: string;
+  status: "draft" | "approved" | "queued" | "sent" | "failed";
+  email_job_id: string | null;
+  sms_message_id: string | null;
+  sms_sent_at: string | null;
+  sms_last_error: string | null;
+  email_jobs?: {
+    status: string;
+    last_error: string | null;
+  }[] | null;
+  updated_at?: string;
+}
+
+type DisplayStatus = {
+  status: string;
+  label: string;
+  colorClass: string;
+  errorMsg?: string | null;
+};
+
+function getDisplayStatus(
+  status: ParticipantStatus,
+  report: WeeklyReportMini | null | undefined
+): DisplayStatus {
+  if (status === "draft") {
+    return { status: "draft", label: "Draft", colorClass: "text-amber-700 font-semibold" };
+  }
+  if (status === "approved") {
+    return { status: "approved", label: "Approved", colorClass: "text-emerald-600 font-semibold" };
+  }
+
+  if (!report) {
+    if (status === "queued") {
+      return { status: "queued", label: "Queued", colorClass: "text-teal-700 font-semibold" };
+    }
+    if (status === "failed") {
+      return { status: "failed", label: "Failed", colorClass: "text-red-700 font-semibold" };
+    }
+    return { status: "sent", label: "Sent", colorClass: "text-emerald-700 font-semibold" };
+  }
+
+  const emailJobsObj = Array.isArray(report.email_jobs) ? report.email_jobs[0] : report.email_jobs;
+  const emailSent = report.email_job_id && emailJobsObj?.status === "sent";
+  const smsSent = report.sms_message_id && report.sms_sent_at && !report.sms_last_error;
+
+  const emailFailed = report.email_job_id && emailJobsObj?.status === "failed";
+  const smsFailed = report.sms_message_id && report.sms_last_error;
+
+  const emailQueued = report.email_job_id && (emailJobsObj?.status === "pending" || emailJobsObj?.status === "sending");
+
+  if (emailSent && smsSent) {
+    return { status: "email_sms_sent", label: "Email & SMS Sent", colorClass: "text-emerald-700 font-semibold" };
+  }
+  if (emailSent && smsFailed) {
+    return { status: "email_sent_sms_failed", label: "Email Sent, SMS Failed", colorClass: "text-rose-700 font-semibold", errorMsg: `SMS failed: ${report.sms_last_error}` };
+  }
+  if (smsSent && emailFailed) {
+    return { status: "sms_sent_email_failed", label: "SMS Sent, Email Failed", colorClass: "text-rose-700 font-semibold", errorMsg: `Email failed: ${emailJobsObj?.last_error || "Unknown error"}` };
+  }
+  if (smsSent && emailQueued) {
+    return { status: "sms_sent_email_queued", label: "SMS Sent, Email Queued", colorClass: "text-teal-700 font-semibold" };
+  }
+  if (emailSent) {
+    return { status: "email_sent", label: "Email Sent", colorClass: "text-teal-700 font-semibold" };
+  }
+  if (smsSent) {
+    return { status: "sms_sent", label: "SMS Sent", colorClass: "text-cyan-700 font-semibold" };
+  }
+  if (emailFailed && smsFailed) {
+    return { status: "both_failed", label: "Both Failed", colorClass: "text-red-700 font-semibold", errorMsg: `Email: ${emailJobsObj?.last_error || "error"} | SMS: ${report.sms_last_error}` };
+  }
+  if (emailFailed) {
+    return { status: "email_failed", label: "Email Failed", colorClass: "text-red-700 font-semibold", errorMsg: emailJobsObj?.last_error || "Unknown error" };
+  }
+  if (smsFailed) {
+    return { status: "sms_failed", label: "SMS Failed", colorClass: "text-red-700 font-semibold", errorMsg: report.sms_last_error };
+  }
+  if (emailQueued) {
+    return { status: "email_queued", label: "Email Queued", colorClass: "text-teal-600 font-semibold" };
+  }
+
+  if (status === "queued") return { status: "queued", label: "Queued", colorClass: "text-teal-700 font-semibold" };
+  if (status === "failed") return { status: "failed", label: "Failed", colorClass: "text-red-700 font-semibold" };
+  if (status === "sent") return { status: "sent", label: "Sent", colorClass: "text-emerald-700 font-semibold" };
+
+  return { status: "draft", label: "Draft", colorClass: "text-amber-700 font-semibold" };
+}
+
 export default function WeeklyReportsPage() {
   const router = useRouter();
   const { mentor } = useDashboard();
@@ -162,10 +256,50 @@ export default function WeeklyReportsPage() {
   const hasSelectedDraft = Boolean(selectedParticipant && (htmlByParticipant[selectedParticipant.id] ?? "").trim().length > 0);
 
   const [statusByParticipant, setStatusByParticipant] = useState<Record<string, ParticipantStatus>>({});
+  const [reportsByParticipant, setReportsByParticipant] = useState<Record<string, WeeklyReportMini>>({});
+
   const selectedStatus: ParticipantStatus =
     (selectedParticipant ? statusByParticipant[selectedParticipant.id] : undefined) ?? "draft";
 
-  const [approvedCount, setApprovedCount] = useState(0);
+  const emailApprovedCount = useMemo(() => {
+    return Object.values(reportsByParticipant).filter((r) => {
+      const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
+      return currentUiStatus !== "draft" && r.email_job_id === null;
+    }).length;
+  }, [reportsByParticipant, statusByParticipant]);
+
+  const smsApprovedCount = useMemo(() => {
+    return Object.values(reportsByParticipant).filter((r) => {
+      const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
+      return currentUiStatus !== "draft" && r.sms_message_id === null;
+    }).length;
+  }, [reportsByParticipant, statusByParticipant]);
+
+  const totalApprovedCount = useMemo(() => {
+    return Object.values(reportsByParticipant).filter((r) => {
+      const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
+      if (currentUiStatus === "draft") return false;
+      return r.email_job_id === null || r.sms_message_id === null;
+    }).length;
+  }, [reportsByParticipant, statusByParticipant]);
+
+  const approvedEmailReportIds = useMemo(() => {
+    return Object.values(reportsByParticipant)
+      .filter((r) => {
+        const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
+        return currentUiStatus !== "draft" && r.email_job_id === null;
+      })
+      .map((r) => r.id);
+  }, [reportsByParticipant, statusByParticipant]);
+
+  const approvedSmsReportIds = useMemo(() => {
+    return Object.values(reportsByParticipant)
+      .filter((r) => {
+        const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
+        return currentUiStatus !== "draft" && r.sms_message_id === null;
+      })
+      .map((r) => r.id);
+  }, [reportsByParticipant, statusByParticipant]);
 
   const [chatByParticipant, setChatByParticipant] = useState<Record<string, ChatMessage[]>>({});
   const chat = selectedParticipant ? chatByParticipant[selectedParticipant.id] ?? [] : [];
@@ -614,17 +748,8 @@ export default function WeeklyReportsPage() {
   }, [isAdmin, loadTemplates]);
 
   const refreshApprovedCount = useCallback(async () => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) return;
-      const res = await fetch("/api/admin/weekly-reports/summary", { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) return;
-      const j = (await res.json()) as { approvedCount?: number };
-      setApprovedCount(typeof j.approvedCount === "number" ? j.approvedCount : 0);
-    } catch {
-      // ignore
-    }
+    // Computed dynamically from reportsByParticipant state
+    return Promise.resolve();
   }, []);
 
   const refreshParticipantStatuses = useCallback(async () => {
@@ -636,7 +761,7 @@ export default function WeeklyReportsPage() {
 
       const ids = participants.map((p) => p.id);
       const chunkSize = 150;
-      const merged: Record<string, unknown> = {};
+      const merged: Record<string, WeeklyReportMini> = {};
       for (let i = 0; i < ids.length; i += chunkSize) {
         const chunk = ids.slice(i, i + chunkSize);
         const res = await fetch("/api/admin/weekly-reports/list", {
@@ -653,14 +778,16 @@ export default function WeeklyReportsPage() {
           j && typeof j === "object" && "latestByParticipant" in j
             ? (j as { latestByParticipant?: unknown }).latestByParticipant
             : null;
-        if (map && typeof map === "object") Object.assign(merged, map as Record<string, unknown>);
+        if (map && typeof map === "object") Object.assign(merged, map as Record<string, WeeklyReportMini>);
       }
+
+      setReportsByParticipant(merged);
 
       setStatusByParticipant((prev) => {
         const next = { ...prev };
         for (const [pid, row] of Object.entries(merged)) {
           if (!row || typeof row !== "object") continue;
-          const s = (row as Record<string, unknown>).status;
+          const s = row.status;
           const status: ParticipantStatus =
             s === "approved" || s === "queued" || s === "sent" || s === "failed" || s === "draft" ? s : "draft";
           next[pid] = status;
@@ -1001,7 +1128,7 @@ export default function WeeklyReportsPage() {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                   },
-                  body: JSON.stringify({ dryRun: true }),
+                  body: JSON.stringify({ dryRun: true, reportIds: approvedEmailReportIds }),
                 });
                 const j = (await res.json().catch(() => null)) as unknown;
                 if (!res.ok) {
@@ -1033,10 +1160,10 @@ export default function WeeklyReportsPage() {
                 setIsSendingApproved(false);
               }
             }}
-            disabled={approvedCount === 0}
+            disabled={emailApprovedCount === 0}
             className="bg-teal-500 hover:bg-teal-600 text-white"
           >
-            {isSendingApproved ? "Sending…" : `Send Email (${approvedCount})`}
+            {isSendingApproved ? "Sending…" : `Send Email (${emailApprovedCount})`}
           </Button>
 
           <Button
@@ -1056,7 +1183,7 @@ export default function WeeklyReportsPage() {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                   },
-                  body: JSON.stringify({ dryRun: true }),
+                  body: JSON.stringify({ dryRun: true, reportIds: approvedSmsReportIds }),
                 });
                 const j = (await res.json().catch(() => null)) as unknown;
                 if (!res.ok) {
@@ -1092,10 +1219,10 @@ export default function WeeklyReportsPage() {
                 setIsSendingSms(false);
               }
             }}
-            disabled={approvedCount === 0}
+            disabled={smsApprovedCount === 0}
             className="bg-teal-500 hover:bg-teal-600 text-white"
           >
-            {isSendingSms ? "Sending…" : `Send SMS (${approvedCount})`}
+            {isSendingSms ? "Sending…" : `Send SMS (${smsApprovedCount})`}
           </Button>
         </div>
       </div>
@@ -1533,13 +1660,13 @@ export default function WeeklyReportsPage() {
                   total
                 </p>
               </div>
-              {approvedCount > 0 ? (
+               {totalApprovedCount > 0 ? (
                 <span className="inline-flex min-w-8 h-7 px-2 bg-teal-500 text-white text-sm font-bold rounded-full items-center justify-center">
-                  {approvedCount}
+                  {totalApprovedCount}
                 </span>
               ) : null}
             </div>
-
+ 
             <div className="mt-3">
               <Input
                 value={participantSearchQuery}
@@ -1559,16 +1686,7 @@ export default function WeeklyReportsPage() {
             ) : (
               filteredParticipants.map((p) => {
                 const status: ParticipantStatus = statusByParticipant[p.id] ?? "draft";
-                const statusLabel =
-                  status === "draft"
-                    ? "Draft"
-                    : status === "approved"
-                      ? "Approved"
-                      : status === "queued"
-                        ? "Queued"
-                        : status === "sent"
-                          ? "Sent"
-                          : "Failed";
+                const display = getDisplayStatus(status, reportsByParticipant[p.id]);
                 const selected = p.id === selectedParticipantId;
                 return (
                   <button
@@ -1584,20 +1702,8 @@ export default function WeeklyReportsPage() {
                           {formatParticipantLabel(p)}
                         </p>
                         <p className="text-[11px] font-semibold uppercase tracking-wide mt-1">
-                          <span
-                            className={
-                              status === "sent"
-                                ? "text-emerald-700"
-                                : status === "queued"
-                                  ? "text-teal-700"
-                                  : status === "approved"
-                                    ? "text-emerald-700"
-                                    : status === "failed"
-                                      ? "text-red-700"
-                                      : "text-amber-700"
-                            }
-                          >
-                            {statusLabel}
+                          <span className={display.colorClass} title={display.errorMsg || undefined}>
+                            {display.label}
                           </span>
                         </p>
                       </div>
@@ -1629,27 +1735,19 @@ export default function WeeklyReportsPage() {
                 <p className="text-xs text-slate-500 mt-0.5">
                   Status:{" "}
                   <span
-                    className={
-                      selectedStatus === "sent"
-                        ? "text-emerald-700 font-semibold"
-                        : selectedStatus === "queued"
-                          ? "text-teal-700 font-semibold"
-                          : selectedStatus === "approved"
-                            ? "text-emerald-700 font-semibold"
-                            : selectedStatus === "failed"
-                              ? "text-red-700 font-semibold"
-                              : "text-amber-700 font-semibold"
-                    }
+                    className={(() => {
+                      const display = getDisplayStatus(selectedStatus, selectedParticipant ? reportsByParticipant[selectedParticipant.id] : null);
+                      return display.colorClass;
+                    })()}
+                    title={(() => {
+                      const display = getDisplayStatus(selectedStatus, selectedParticipant ? reportsByParticipant[selectedParticipant.id] : null);
+                      return display.errorMsg || undefined;
+                    })()}
                   >
-                    {selectedStatus === "draft"
-                      ? "Draft"
-                      : selectedStatus === "approved"
-                        ? "Approved"
-                        : selectedStatus === "queued"
-                          ? "Queued"
-                          : selectedStatus === "sent"
-                            ? "Sent"
-                            : "Failed"}
+                    {(() => {
+                      const display = getDisplayStatus(selectedStatus, selectedParticipant ? reportsByParticipant[selectedParticipant.id] : null);
+                      return display.label;
+                    })()}
                   </span>
                 </p>
               </div>

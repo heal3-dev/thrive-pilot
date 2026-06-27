@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { Metric, WeeklyFlag, WeeklyMetricKey } from "@/lib/flags/rules";
 
-type RangeDays = 7 | 14 | 30;
+type RangeDays = 7 | 30 | 60 | 90 | 120 | 180;
 type ViewMetricKey = WeeklyMetricKey;
 
 type Props = {
@@ -198,7 +198,7 @@ export function ParticipantMetricsCharts({ metrics, weeklyFlag, hasMore, isLoadi
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-slate-700">Range</span>
           <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-            {([7, 14, 30] as const).map((d) => {
+            {([7, 30, 60, 90, 120, 180] as const).map((d) => {
               const active = rangeDays === d;
               return (
                 <button

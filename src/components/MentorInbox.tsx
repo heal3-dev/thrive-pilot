@@ -625,13 +625,9 @@ export function MentorInbox({
 
     // Get participant IDs for filtering
     const participantIds = participants.map((p) => p.id);
-    const participantFilter =
-      participantIds.length > 0
-        ? `participant_id=in.(${participantIds.map((id) => `"${id}"`).join(",")})`
-        : undefined;
 
-    // Create subscription with explicit filter for our participants
-    // This is more reliable than relying purely on RLS for realtime
+    // Create subscription.
+    // Row-level security automatically ensures users only receive events for messages they are authorized to see.
     const channel = supabase
       .channel("inbox-messages")
       .on(
@@ -640,10 +636,11 @@ export function MentorInbox({
           event: 'INSERT',
           schema: 'public',
           table: 'sms_messages',
-          ...(participantFilter ? { filter: participantFilter } : {}),
         },
         (payload) => {
           const newMessage = payload.new as SMSMessage;
+          if (!participantIds.includes(newMessage.participant_id)) return;
+
           const commitTsRaw = (payload as unknown as { commit_timestamp?: unknown }).commit_timestamp;
           const commitTs = typeof commitTsRaw === "string" ? commitTsRaw : null;
 
@@ -703,7 +700,7 @@ export function MentorInbox({
               if (newMessage.direction === "outbound" && newMessage.twilio_sid) {
                 const optimisticIdx = prev.findIndex(
                   (m) =>
-                    String(m.id).startsWith("temp-") &&
+                     String(m.id).startsWith("temp-") &&
                     m.direction === "outbound" &&
                     m.participant_id === newMessage.participant_id &&
                     m.message_body === newMessage.message_body
@@ -750,11 +747,11 @@ export function MentorInbox({
           event: "UPDATE",
           schema: "public",
           table: "sms_messages",
-          ...(participantFilter ? { filter: participantFilter } : {}),
         },
         (payload) => {
           // Status callbacks update existing rows (e.g. queued -> delivered)
           const updatedMessage = payload.new as SMSMessage;
+          if (!participantIds.includes(updatedMessage.participant_id)) return;
 
           if (updatedMessage.message_type === "system_auto_reply") {
             return;
