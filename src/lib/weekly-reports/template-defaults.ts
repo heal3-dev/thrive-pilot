@@ -556,6 +556,26 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
       font-weight:650;
       margin-bottom:18px;
     }
+    .comparison-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      border-radius: 16px;
+      padding: 10px 16px;
+      font-size: 16px;
+      font-weight: 650;
+      color: #475569;
+      margin-bottom: 18px;
+      margin-left: 8px;
+    }
+    .comparison-bar strong {
+      color: #0f172a;
+    }
+    .comp-divider {
+      color: rgba(15, 23, 42, 0.15);
+    }
     .body{
       font-size:18px;
       line-height:1.8;
@@ -633,7 +653,7 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
     <div class="eyebrow">Thrive Weekly Report</div>
     <h1>Deanna</h1>
     <p class="sub">April 25 – May 1, 2025</p>
-
+ 
     <div class="badge">
       <div class="icon">🟡</div>
       <div>
@@ -641,9 +661,9 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
         <p class="badge-text">Your dashboard shows a yellow weekly score, with some mild strain showing up mainly through uneven sleep and less steady recovery.</p>
       </div>
     </div>
-
+ 
     <h2 class="section-title">How your week looked</h2>
-
+ 
     <section class="card">
       <div class="card-grid">
         <div class="icon-circle">❤️</div>
@@ -651,6 +671,11 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
           <h3>STRESS</h3>
           <p class="card-sub">How steady your system looked this week</p>
           <div class="state">Low to Moderate</div>
+          <div class="comparison-bar">
+            <span>Your Average: <strong>{{USER_STRESS_AVG}}</strong></span>
+            <span class="comp-divider">|</span>
+            <span>Group Average: <strong>{{GROUP_STRESS_AVG}}</strong></span>
+          </div>
           <p class="body">Your week looked fairly steady overall. Daily stress stayed mostly in a manageable range, with no strong sign that stress was the main issue this week.</p>
           <div class="graph">
             <div class="graph-head">
@@ -662,7 +687,7 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
         </div>
       </div>
     </section>
-
+ 
     <section class="card">
       <div class="card-grid">
         <div class="icon-circle">🌙</div>
@@ -670,6 +695,11 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
           <h3>SLEEP</h3>
           <p class="card-sub">How much and how well your body rested overnight</p>
           <div class="state">Mixed</div>
+          <div class="comparison-bar">
+            <span>Your Average: <strong>{{USER_SLEEP_AVG}}</strong></span>
+            <span class="comp-divider">|</span>
+            <span>Group Average: <strong>{{GROUP_SLEEP_AVG}}</strong></span>
+          </div>
           <p class="body">Sleep looked uneven this week. Several nights were solid, but one clearly short night and a low sleep score in the middle of the week stood out and likely made it harder to feel fully settled.</p>
           <div class="graph">
             <div class="graph-head">
@@ -681,7 +711,7 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
         </div>
       </div>
     </section>
-
+ 
     <section class="card">
       <div class="card-grid">
         <div class="icon-circle">🔋</div>
@@ -689,6 +719,11 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
           <h3>RECOVERY</h3>
           <p class="card-sub">How well your body recharged across the week</p>
           <div class="state">Partial</div>
+          <div class="comparison-bar">
+            <span>Your Average: <strong>{{USER_RECOVERY_AVG}}</strong></span>
+            <span class="comp-divider">|</span>
+            <span>Group Average: <strong>{{GROUP_RECOVERY_AVG}}</strong></span>
+          </div>
           <p class="body">Recovery looked only partly consistent this week. While some days showed decent recharge, your system did not stay as settled across the full week, which is the main area to watch.</p>
           <div class="graph">
             <div class="graph-head">
@@ -1364,6 +1399,26 @@ export const DEFAULT_MONTHLY_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
       font-weight:650;
       margin-bottom:18px;
     }
+    .comparison-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      border-radius: 16px;
+      padding: 10px 16px;
+      font-size: 16px;
+      font-weight: 650;
+      color: #475569;
+      margin-bottom: 18px;
+      margin-left: 8px;
+    }
+    .comparison-bar strong {
+      color: #0f172a;
+    }
+    .comp-divider {
+      color: rgba(15, 23, 42, 0.15);
+    }
     .body{
       font-size:18px;
       line-height:1.8;
@@ -1459,6 +1514,11 @@ export const DEFAULT_MONTHLY_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
           <h3>STRESS</h3>
           <p class="card-sub">How steady your system looked this month</p>
           <div class="state">Low to Moderate</div>
+          <div class="comparison-bar">
+            <span>Your Average: <strong>{{USER_STRESS_AVG}}</strong></span>
+            <span class="comp-divider">|</span>
+            <span>Group Average: <strong>{{GROUP_STRESS_AVG}}</strong></span>
+          </div>
           <p class="body">Your month looked fairly steady overall. Daily stress stayed mostly in a manageable range, with no strong sign that stress was the main issue this month.</p>
           <div class="graph">
             <div class="graph-head">
@@ -1478,6 +1538,11 @@ export const DEFAULT_MONTHLY_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
           <h3>SLEEP</h3>
           <p class="card-sub">How much and how well your body rested overnight</p>
           <div class="state">Mixed</div>
+          <div class="comparison-bar">
+            <span>Your Average: <strong>{{USER_SLEEP_AVG}}</strong></span>
+            <span class="comp-divider">|</span>
+            <span>Group Average: <strong>{{GROUP_SLEEP_AVG}}</strong></span>
+          </div>
           <p class="body">Sleep looked uneven this month. Several nights were solid, but a few clearly short nights and low sleep scores stood out and likely made it harder to feel fully settled.</p>
           <div class="graph">
             <div class="graph-head">
@@ -1497,6 +1562,11 @@ export const DEFAULT_MONTHLY_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
           <h3>RECOVERY</h3>
           <p class="card-sub">How well your body recharged across the month</p>
           <div class="state">Partial</div>
+          <div class="comparison-bar">
+            <span>Your Average: <strong>{{USER_RECOVERY_AVG}}</strong></span>
+            <span class="comp-divider">|</span>
+            <span>Group Average: <strong>{{GROUP_RECOVERY_AVG}}</strong></span>
+          </div>
           <p class="body">Recovery looked only partly consistent this month. While some days showed decent recharge, your system did not stay as settled across the full month, which is the main area to watch.</p>
           <div class="graph">
             <div class="graph-head">

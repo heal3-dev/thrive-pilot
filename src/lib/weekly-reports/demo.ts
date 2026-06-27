@@ -122,6 +122,13 @@ export function buildWeeklyReportDemoHtml(): string {
   );
   html = html.replace(/(<div class="graph-range">)([\s\S]*?)(<\/div>)/gi, `$1${escapeHtml(weekRange)}$3`);
 
+  html = html.replace(/\{\{USER_STRESS_AVG\}\}/g, "48.2");
+  html = html.replace(/\{\{GROUP_STRESS_AVG\}\}/g, "42.5");
+  html = html.replace(/\{\{USER_SLEEP_AVG\}\}/g, "71.4");
+  html = html.replace(/\{\{GROUP_SLEEP_AVG\}\}/g, "74.8");
+  html = html.replace(/\{\{USER_RECOVERY_AVG\}\}/g, "56.3");
+  html = html.replace(/\{\{GROUP_RECOVERY_AVG\}\}/g, "62.1");
+
   html = replaceGraphSlot(html, "stress", stress);
   html = replaceGraphSlot(html, "sleep_score", sleepScore);
   html = replaceGraphSlot(html, "body_battery", bodyBattery);
@@ -163,6 +170,13 @@ export function buildMonthlyReportDemoHtml(): string {
     `<p class="badge-text">Your system is feeling a bit taxed. Keep an eye on rest, recovery, and stress.</p>`
   );
   html = html.replace(/(<div class="graph-range">)([\s\S]*?)(<\/div>)/gi, `$1${escapeHtml(monthRange)}$3`);
+
+  html = html.replace(/\{\{USER_STRESS_AVG\}\}/g, "44.6");
+  html = html.replace(/\{\{GROUP_STRESS_AVG\}\}/g, "41.9");
+  html = html.replace(/\{\{USER_SLEEP_AVG\}\}/g, "73.2");
+  html = html.replace(/\{\{GROUP_SLEEP_AVG\}\}/g, "75.1");
+  html = html.replace(/\{\{USER_RECOVERY_AVG\}\}/g, "58.4");
+  html = html.replace(/\{\{GROUP_RECOVERY_AVG\}\}/g, "61.3");
 
   html = replaceGraphSlot(html, "stress", stress);
   html = replaceGraphSlot(html, "sleep_score", sleepScore);

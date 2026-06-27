@@ -352,11 +352,29 @@ function fillOlgaTemplate(params: {
     sleepScore: SeriesPoint[];
     bodyBattery: SeriesPoint[];
   };
+  userAverages: {
+    average_stress_level: number | null;
+    sleep_score: number | null;
+    body_battery_start: number | null;
+  };
+  groupAverages: {
+    average_stress_level: number | null;
+    sleep_score: number | null;
+    body_battery_start: number | null;
+  };
 }): string {
   const safeName = escapeHtml(params.participantName);
   const safeRange = escapeHtml(params.weekRange);
 
   let html = params.baseHtml;
+
+  // Replace averages placeholders
+  html = html.replace(/\{\{USER_STRESS_AVG\}\}/g, params.userAverages.average_stress_level != null ? String(params.userAverages.average_stress_level) : "—");
+  html = html.replace(/\{\{GROUP_STRESS_AVG\}\}/g, params.groupAverages.average_stress_level != null ? String(params.groupAverages.average_stress_level) : "—");
+  html = html.replace(/\{\{USER_SLEEP_AVG\}\}/g, params.userAverages.sleep_score != null ? String(params.userAverages.sleep_score) : "—");
+  html = html.replace(/\{\{GROUP_SLEEP_AVG\}\}/g, params.groupAverages.sleep_score != null ? String(params.groupAverages.sleep_score) : "—");
+  html = html.replace(/\{\{USER_RECOVERY_AVG\}\}/g, params.userAverages.body_battery_start != null ? String(params.userAverages.body_battery_start) : "—");
+  html = html.replace(/\{\{GROUP_RECOVERY_AVG\}\}/g, params.groupAverages.body_battery_start != null ? String(params.groupAverages.body_battery_start) : "—");
 
   // Top section
   html = replaceFirst(html, /(<h1[^>]*>)([\s\S]*?)(<\/h1>)/i, safeName);
@@ -591,6 +609,36 @@ export async function POST(request: Request) {
     );
   }
 
+  // Calculate database group averages for active participants this week (7 days)
+  const since7Days = ymdAddDays(weekEnding, -6);
+  const { data: groupMetrics, error: groupErr } = await admin
+    .from("garmin_metrics")
+    .select("resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, hrv_last_night_average, body_battery_start")
+    .gte("metric_date", since7Days)
+    .lte("metric_date", weekEnding);
+
+  const avgFn = (vals: number[]) => vals.length > 0 ? Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)) : null;
+  const groupMetricsRaw = groupMetrics ?? [];
+  const groupAverages = {
+    average_stress_level: avgFn(groupMetricsRaw.map(m => m.average_stress_level).filter((v): v is number => v != null)),
+    resting_heart_rate: avgFn(groupMetricsRaw.map(m => m.resting_heart_rate).filter((v): v is number => v != null)),
+    sleep_duration_seconds: avgFn(groupMetricsRaw.map(m => m.sleep_duration_seconds).filter((v): v is number => v != null)),
+    sleep_score: avgFn(groupMetricsRaw.map(m => m.sleep_score).filter((v): v is number => v != null)),
+    awake_seconds: avgFn(groupMetricsRaw.map(m => m.awake_seconds).filter((v): v is number => v != null)),
+    hrv_last_night_average: avgFn(groupMetricsRaw.map(m => m.hrv_last_night_average).filter((v): v is number => v != null)),
+    body_battery_start: avgFn(groupMetricsRaw.map(m => {
+      const mm = m as unknown as { body_battery_highest?: number | null; body_battery_start?: number | null };
+      return mm.body_battery_highest ?? mm.body_battery_start ?? null;
+    }).filter((v): v is number => v != null)),
+  };
+
+  const weekMetrics = typed.filter(m => m.metric_date >= since7Days && m.metric_date <= weekEnding);
+  const userAverages = {
+    average_stress_level: avgFn(weekMetrics.map(m => m.average_stress_level).filter((v): v is number => v != null)),
+    sleep_score: avgFn(weekMetrics.map(m => m.sleep_score).filter((v): v is number => v != null)),
+    body_battery_start: avgFn(weekMetrics.map(m => m.body_battery_start).filter((v): v is number => v != null)),
+  };
+
   // Load templates
   let masterRules = "";
   let generateWrapper = "";
@@ -645,6 +693,12 @@ export async function POST(request: Request) {
     "",
     "RAW_METRICS_RECENT_JSON (most recent rows):",
     JSON.stringify(metricWindow, null, 2),
+    "",
+    "GROUP_AVERAGES_7_DAYS (benchmarks for comparison):",
+    JSON.stringify(groupAverages, null, 2),
+    "",
+    "USER_WEEKLY_AVERAGES (participant averages this week):",
+    JSON.stringify(userAverages, null, 2),
     "",
     "IMPORTANT:",
     "- Use the weekly_flag metrics colors to drive your narrative.",
@@ -840,6 +894,8 @@ export async function POST(request: Request) {
     badgeIcon: badge.icon,
     content: parsed,
     graphs,
+    userAverages,
+    groupAverages,
   });
 
   // Persist the draft for approval/sending.
