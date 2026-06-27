@@ -200,7 +200,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Database write failed" }, { status: 500 });
   }
 
-  // Propagate status update to weekly_reports if this message was a weekly report
+  // Propagate status update to weekly_reports or monthly_reports if this message was a report
   if (messageStatus === "failed" || messageStatus === "undelivered") {
     const reason = errorMessage || errorCode || "Twilio delivery failed";
     await supabase
@@ -211,9 +211,26 @@ export async function POST(request: Request) {
         last_error: reason,
       })
       .eq("sms_message_id", existing.id);
+
+    await supabase
+      .from("monthly_reports")
+      .update({
+        status: "failed",
+        sms_last_error: reason,
+        last_error: reason,
+      })
+      .eq("sms_message_id", existing.id);
   } else if (messageStatus === "delivered") {
     await supabase
       .from("weekly_reports")
+      .update({
+        status: "sent",
+        sms_last_error: null,
+      })
+      .eq("sms_message_id", existing.id);
+
+    await supabase
+      .from("monthly_reports")
       .update({
         status: "sent",
         sms_last_error: null,

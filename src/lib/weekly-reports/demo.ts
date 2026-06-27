@@ -129,3 +129,45 @@ export function buildWeeklyReportDemoHtml(): string {
   return html;
 }
 
+import { DEFAULT_MONTHLY_OLGA_HTML_BASE_TEMPLATE } from "./template-defaults";
+
+export function buildMonthlyReportDemoHtml(): string {
+  const monthRange = "April 1 – April 28, 2025";
+
+  // Create 28 days of mock points
+  const stressPoints = Array.from({ length: 28 }, (_, i) => ({
+    label: i === 0 ? "Apr 1" : i === 27 ? "Apr 28" : "",
+    value: Math.round(35 + Math.sin(i / 2) * 15 + Math.cos(i / 5) * 5),
+  }));
+
+  const sleepPoints = Array.from({ length: 28 }, (_, i) => ({
+    label: i === 0 ? "Apr 1" : i === 27 ? "Apr 28" : "",
+    value: Math.round(72 + Math.cos(i / 3) * 10 + Math.sin(i / 6) * 4),
+  }));
+
+  const bbPoints = Array.from({ length: 28 }, (_, i) => ({
+    label: i === 0 ? "Apr 1" : i === 27 ? "Apr 28" : "",
+    value: Math.round(55 + Math.sin(i / 4) * 12 + Math.cos(i / 7) * 6),
+  }));
+
+  const stress = renderSparklineSvg(stressPoints, "#e11d48");
+  const sleepScore = renderSparklineSvg(sleepPoints, "#2563eb");
+  const bodyBattery = renderSparklineSvg(bbPoints, "#0f766e");
+
+  let html = DEFAULT_MONTHLY_OLGA_HTML_BASE_TEMPLATE;
+  html = html.replace(/<h1>[\s\S]*?<\/h1>/i, "<h1>Demo Participant</h1>");
+  html = html.replace(/<p class="sub">[\s\S]*?<\/p>/i, `<p class="sub">${escapeHtml(monthRange)}</p>`);
+  html = html.replace(/<p class="badge-title">[\s\S]*?<\/p>/i, `<p class="badge-title">Mild Strain</p>`);
+  html = html.replace(
+    /<p class="badge-text">[\s\S]*?<\/p>/i,
+    `<p class="badge-text">Your system is feeling a bit taxed. Keep an eye on rest, recovery, and stress.</p>`
+  );
+  html = html.replace(/(<div class="graph-range">)([\s\S]*?)(<\/div>)/gi, `$1${escapeHtml(monthRange)}$3`);
+
+  html = replaceGraphSlot(html, "stress", stress);
+  html = replaceGraphSlot(html, "sleep_score", sleepScore);
+  html = replaceGraphSlot(html, "body_battery", bodyBattery);
+
+  return html;
+}
+

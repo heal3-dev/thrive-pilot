@@ -17,12 +17,27 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   const admin = getSupabaseAdmin();
 
-  const { data, error } = await admin
+  let { data, error } = await admin
     .from("weekly_report_shares")
     .select("id, token, is_active, expires_at, access_count, weekly_report_id")
     .eq("token", t)
     .eq("is_active", true)
     .maybeSingle();
+
+  let isMonthly = false;
+  if (!data) {
+    const { data: monData, error: monErr } = await admin
+      .from("monthly_report_shares")
+      .select("id, token, is_active, expires_at, access_count, monthly_report_id")
+      .eq("token", t)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (monData) {
+      data = monData as any;
+      isMonthly = true;
+    }
+  }
 
   if (error || !data) {
     // Hide existence details for invalid tokens.
@@ -35,28 +50,51 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Expired" }, { status: 410 });
   }
 
-  const { data: report, error: reportErr } = await admin
-    .from("weekly_reports")
-    .select("html")
-    .eq("id", data.weekly_report_id)
-    .maybeSingle();
-  if (reportErr || !report) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  let html = "";
+  if (isMonthly) {
+    const { data: report, error: reportErr } = await admin
+      .from("monthly_reports")
+      .select("html")
+      .eq("id", (data as any).monthly_report_id)
+      .maybeSingle();
+    if (reportErr || !report) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    html = report.html ?? "";
+  } else {
+    const { data: report, error: reportErr } = await admin
+      .from("weekly_reports")
+      .select("html")
+      .eq("id", data.weekly_report_id)
+      .maybeSingle();
+    if (reportErr || !report) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    html = report.html ?? "";
   }
 
-  const html = report.html ?? "";
   if (!html || html.trim().length === 0) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   // Best-effort audit.
-  void admin
-    .from("weekly_report_shares")
-    .update({
-      last_accessed_at: new Date().toISOString(),
-      access_count: (data.access_count ?? 0) + 1,
-    })
-    .eq("id", data.id);
+  if (isMonthly) {
+    void admin
+      .from("monthly_report_shares")
+      .update({
+        last_accessed_at: new Date().toISOString(),
+        access_count: (data.access_count ?? 0) + 1,
+      })
+      .eq("id", data.id);
+  } else {
+    void admin
+      .from("weekly_report_shares")
+      .update({
+        last_accessed_at: new Date().toISOString(),
+        access_count: (data.access_count ?? 0) + 1,
+      })
+      .eq("id", data.id);
+  }
 
   const res = new NextResponse(html, {
     status: 200,
