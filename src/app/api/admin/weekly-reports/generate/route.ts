@@ -627,6 +627,10 @@ export async function POST(request: Request) {
     .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1))
     .slice(0, 14); // most recent days/nights for concrete language
 
+  // Sort back to chronological order (oldest first) so that the LLM reads and references
+  // dates and trends in the natural forward direction (which aligns with left-to-right graphs).
+  metricWindow.sort((a, b) => (a.metric_date > b.metric_date ? 1 : -1));
+
   const user = [
     `Participant: ${participantLabel}`,
     `Week ending: ${weekEnding}`,
