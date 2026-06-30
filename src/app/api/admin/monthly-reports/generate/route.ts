@@ -144,6 +144,8 @@ function renderSparklineSvg(params: {
   width?: number;
   height?: number;
   stroke?: string;
+  fixedMin?: number;
+  fixedMax?: number;
 }): string {
   const width = params.width ?? 860;
   const height = params.height ?? 170;
@@ -155,11 +157,9 @@ function renderSparklineSvg(params: {
     return `<div style="padding:12px 0;color:#64748b;font-size:13px">Not enough data to graph this month.</div>`;
   }
 
-  const minV = Math.min(...vals);
-  const maxV = Math.max(...vals);
-  const range = Math.max(1, maxV - minV);
-  const lo = Math.max(0, minV - range * 0.12);
-  const hi = maxV + range * 0.12;
+  // Use fixed scale when provided so graphs match the dashboard charts (0–100).
+  const lo = params.fixedMin ?? Math.max(0, Math.min(...vals) - Math.max(1, Math.max(...vals) - Math.min(...vals)) * 0.12);
+  const hi = params.fixedMax ?? (Math.max(...vals) + Math.max(1, Math.max(...vals) - Math.min(...vals)) * 0.12);
 
   const innerW = width - padX * 2;
   const innerH = height - padY * 2;
@@ -419,7 +419,7 @@ function fillMonthlyOlgaTemplate(params: {
       );
       s = replaceFirst(s, /(<p\s+class="body"[^>]*>)([\s\S]*?)(<\/p>)/i, escapeHtml(cc.body));
 
-      const svg = renderSparklineSvg({ points: g.points, stroke: g.stroke });
+      const svg = renderSparklineSvg({ points: g.points, stroke: g.stroke, fixedMin: 0, fixedMax: 100 });
       const slotRe = new RegExp(
         `(<div\\s+class="graph-slot"[^>]*data-graph="${g.slot}"[^>]*>)([\\s\\S]*?)(<\\/div>)`,
         "i"
