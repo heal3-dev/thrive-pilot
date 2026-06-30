@@ -1796,7 +1796,8 @@ export default function MonthlyReportsPage() {
                           ? statusRaw
                           : "draft";
                       setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: normalized }));
-                      await refreshApprovedCount();
+                      // Re-fetch reportsByParticipant so Send Email / Send SMS counts update.
+                      await refreshParticipantStatuses();
                     } catch (e) {
                       alert(e instanceof Error ? e.message : "Failed to update status");
                     }
