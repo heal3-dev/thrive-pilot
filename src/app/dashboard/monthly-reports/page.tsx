@@ -1092,7 +1092,10 @@ export default function MonthlyReportsPage() {
   return (
     <div className="h-full min-h-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <BackButton onClick={() => router.push("/dashboard")} className="border-slate-300" />
+        <div className="flex items-center gap-4">
+          <BackButton onClick={() => router.push("/dashboard")} className="border-slate-300" />
+          <h1 className="text-lg font-bold text-slate-800">Monthly Reports</h1>
+        </div>
 
         <div className="flex items-center gap-2">
           <Button
