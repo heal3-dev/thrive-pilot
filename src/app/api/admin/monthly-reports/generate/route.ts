@@ -157,7 +157,6 @@ function renderSparklineSvg(params: {
     return `<div style="padding:12px 0;color:#64748b;font-size:13px">Not enough data to graph this month.</div>`;
   }
 
-  // Use fixed scale when provided so graphs match the dashboard charts (0–100).
   const lo = params.fixedMin ?? Math.max(0, Math.min(...vals) - Math.max(1, Math.max(...vals) - Math.min(...vals)) * 0.12);
   const hi = params.fixedMax ?? (Math.max(...vals) + Math.max(1, Math.max(...vals) - Math.min(...vals)) * 0.12);
 
@@ -166,29 +165,85 @@ function renderSparklineSvg(params: {
   const xFor = (i: number) => padX + (innerW * i) / Math.max(1, params.points.length - 1);
   const yFor = (v: number) => padY + innerH * (1 - (v - lo) / Math.max(1e-6, hi - lo));
 
-  const pathParts: string[] = [];
-  let started = false;
+  const segments: { x: number; y: number }[][] = [];
+  let currentSegment: { x: number; y: number }[] = [];
+
   params.points.forEach((p, i) => {
     const v = p.value;
     if (typeof v !== "number" || !Number.isFinite(v)) {
-      started = false;
+      if (currentSegment.length >= 2) {
+        segments.push(currentSegment);
+      }
+      currentSegment = [];
       return;
     }
-    const x = xFor(i);
-    const y = yFor(v);
-    if (!started) {
-      pathParts.push(`M ${x.toFixed(2)} ${y.toFixed(2)}`);
-      started = true;
-    } else {
-      pathParts.push(`L ${x.toFixed(2)} ${y.toFixed(2)}`);
-    }
+    currentSegment.push({ x: xFor(i), y: yFor(v) });
   });
+  if (currentSegment.length >= 2) {
+    segments.push(currentSegment);
+  }
 
   const stroke = params.stroke ?? "#0f766e";
+  let fillColor = "rgba(20, 184, 166, 0.14)";
+  if (stroke.toLowerCase() === "#e11d48") fillColor = "rgba(225, 29, 72, 0.12)";
+  else if (stroke.toLowerCase() === "#2563eb") fillColor = "rgba(37, 99, 235, 0.12)";
+  else if (stroke.toLowerCase() === "#0f766e") fillColor = "rgba(15, 118, 110, 0.12)";
+
+  const bottomY = height - padY;
+  const paths: string[] = [];
+
+  segments.forEach((pts) => {
+    const n = pts.length;
+    if (n === 2) {
+      const linePath = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)} L ${pts[1].x.toFixed(2)} ${pts[1].y.toFixed(2)}`;
+      const areaPath = `${linePath} L ${pts[1].x.toFixed(2)} ${bottomY.toFixed(2)} L ${pts[0].x.toFixed(2)} ${bottomY.toFixed(2)} Z`;
+      paths.push(`
+        <path d="${areaPath}" fill="${fillColor}" />
+        <path d="${linePath}" fill="none" stroke="${stroke}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      `);
+      return;
+    }
+
+    const h: number[] = [];
+    const s: number[] = [];
+    for (let i = 0; i < n - 1; i++) {
+      h.push(pts[i+1].x - pts[i].x);
+      s.push((pts[i+1].y - pts[i].y) / h[i]);
+    }
+
+    const d: number[] = [];
+    d.push(s[0]);
+    for (let i = 1; i < n - 1; i++) {
+      if (s[i-1] * s[i] <= 0) {
+        d.push(0);
+      } else {
+        const sum = h[i-1] + h[i];
+        d.push((3 * sum) / ((sum + h[i]) / s[i-1] + (sum + h[i-1]) / s[i]));
+      }
+    }
+    d.push(s[s.length - 1]);
+
+    let linePath = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+    for (let i = 0; i < n - 1; i++) {
+      const cp1x = pts[i].x + h[i] / 3;
+      const cp1y = pts[i].y + (h[i] * d[i]) / 3;
+      const cp2x = pts[i+1].x - h[i] / 3;
+      const cp2y = pts[i+1].y - (h[i] * d[i+1]) / 3;
+
+      linePath += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${pts[i+1].x.toFixed(2)} ${pts[i+1].y.toFixed(2)}`;
+    }
+
+    const areaPath = `${linePath} L ${pts[n - 1].x.toFixed(2)} ${bottomY.toFixed(2)} L ${pts[0].x.toFixed(2)} ${bottomY.toFixed(2)} Z`;
+    paths.push(`
+      <path d="${areaPath}" fill="${fillColor}" />
+      <path d="${linePath}" fill="none" stroke="${stroke}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    `);
+  });
+
   const grid = [0.25, 0.5, 0.75]
     .map((t) => {
       const y = padY + innerH * t;
-      return `<line x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}" stroke="rgba(15,23,42,0.08)" stroke-width="1" />`;
+      return `<line x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}" stroke="rgba(15,23,42,0.06)" stroke-width="1" />`;
     })
     .join("");
 
@@ -205,7 +260,7 @@ function renderSparklineSvg(params: {
 <svg viewBox="0 0 ${width} ${height}" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Monthly trend">
   <rect x="0" y="0" width="${width}" height="${height}" rx="14" fill="rgba(255,255,255,0.55)" stroke="rgba(255,255,255,0.75)" />
   ${grid}
-  <path d="${pathParts.join(" ")}" fill="none" stroke="${stroke}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  ${paths.join("")}
   ${labels}
 </svg>
 `.trim();
