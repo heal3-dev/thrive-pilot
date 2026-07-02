@@ -1257,56 +1257,22 @@ export default function WeeklyReportsPage() {
                   <div className="p-4 text-sm text-slate-600">No approved reports ready to enqueue.</div>
                 ) : (
                   sendPreview.toEnqueue.map((it) => (
-                    <div key={it.reportId} className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
-                      <label className="flex items-start gap-3 flex-1 min-w-0">
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={Boolean(selectedSendReportIds[it.reportId])}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setSelectedSendReportIds((prev) => ({ ...prev, [it.reportId]: checked }));
-                          }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-slate-900 truncate">{it.participantName}</p>
-                          <p className="text-xs text-slate-500 truncate">{it.toEmail}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">{it.weekRange}</p>
-                        </div>
-                      </label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-slate-400 hover:text-red-500 hover:bg-red-50 shrink-0"
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (!confirm(`Are you sure you want to skip email sending for ${it.participantName}?`)) return;
-                          try {
-                            const { data: sessionData } = await supabase.auth.getSession();
-                            const token = sessionData?.session?.access_token;
-                            if (!token) throw new Error("Authentication required");
-                            const res = await fetch("/api/admin/weekly-reports/report/skip", {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                                Authorization: `Bearer ${token}`,
-                              },
-                              body: JSON.stringify({ reportId: it.reportId, type: "email" }),
-                            });
-                            if (!res.ok) throw new Error("Failed to skip sending");
-                            await refreshParticipantStatuses();
-                            setIsSendApprovedOpen(false);
-                            alert("Marked as skipped.");
-                          } catch (e) {
-                            alert(e instanceof Error ? e.message : "Error skipping report");
-                          }
+                    <label key={it.reportId} className="flex items-start gap-3 px-4 py-3 border-b border-slate-100">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={Boolean(selectedSendReportIds[it.reportId])}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedSendReportIds((prev) => ({ ...prev, [it.reportId]: checked }));
                         }}
-                      >
-                        Skip
-                      </Button>
-                    </div>
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{it.participantName}</p>
+                        <p className="text-xs text-slate-500 truncate">{it.toEmail}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{it.weekRange}</p>
+                      </div>
+                    </label>
                   ))
                 )}
               </div>
@@ -1414,57 +1380,23 @@ export default function WeeklyReportsPage() {
                         <p className="text-xs text-slate-500 mt-0.5">{it.weekRange}</p>
                         <p className="text-[11px] text-slate-400 mt-1 truncate">{it.shareUrl}</p>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="border-slate-300"
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            try {
-                              await navigator.clipboard.writeText(it.shareUrl);
-                            } catch {
-                              // ignore
-                            }
-                          }}
-                        >
-                          Copy link
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-slate-400 hover:text-red-500 hover:bg-red-50"
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (!confirm(`Are you sure you want to skip SMS sending for ${it.participantName}?`)) return;
-                            try {
-                              const { data: sessionData } = await supabase.auth.getSession();
-                              const token = sessionData?.session?.access_token;
-                              if (!token) throw new Error("Authentication required");
-                              const res = await fetch("/api/admin/weekly-reports/report/skip", {
-                                method: "POST",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                  Authorization: `Bearer ${token}`,
-                                },
-                                body: JSON.stringify({ reportId: it.reportId, type: "sms" }),
-                              });
-                              if (!res.ok) throw new Error("Failed to skip sending");
-                              await refreshParticipantStatuses();
-                              setIsSendSmsOpen(false);
-                              alert("Marked as skipped.");
-                            } catch (e) {
-                              alert(e instanceof Error ? e.message : "Error skipping report");
-                            }
-                          }}
-                        >
-                          Skip
-                        </Button>
-                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-slate-300 shrink-0"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          try {
+                            await navigator.clipboard.writeText(it.shareUrl);
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                      >
+                        Copy link
+                      </Button>
                     </label>
                   ))
                 )}
