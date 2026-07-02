@@ -29,7 +29,7 @@ type WeeklyReportRow = {
   email_job_id: string | null;
 };
 
-type ParticipantRow = { id: string; email: string | null; name: string | null };
+type ParticipantRow = { id: string; email: string | null; name: string | null; weekly_report_email_enabled?: boolean | null };
 
 async function ensureEmailJob(params: {
   admin: SupabaseClient;
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
   const participantIds = Array.from(new Set(rows.map((r) => r.participant_id)));
   const { data: participants, error: participantsErr } = await guard.admin
     .from("participants")
-    .select("id, email, name")
+    .select("id, email, name, weekly_report_email_enabled")
     .in("id", participantIds);
 
   if (participantsErr) {
@@ -148,6 +148,13 @@ export async function POST(request: Request) {
 
     const toEmail = (participant.email ?? "").trim();
     const participantName = participant.name?.trim() || participant.email?.trim() || "Participant";
+    
+    if (participant.weekly_report_email_enabled === false) {
+      skippedNoEmail++;
+      noEmail.push({ reportId: report.id, participantId: report.participant_id, participantName, weekRange: report.week_range });
+      continue;
+    }
+
     if (!toEmail) {
       skippedNoEmail++;
       noEmail.push({ reportId: report.id, participantId: report.participant_id, participantName, weekRange: report.week_range });

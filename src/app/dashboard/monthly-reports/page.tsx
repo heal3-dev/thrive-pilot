@@ -16,6 +16,8 @@ type ParticipantMini = {
   name: string | null;
   email: string | null;
   phone_number: string | null;
+  weekly_report_sms_enabled?: boolean;
+  weekly_report_email_enabled?: boolean;
 };
 
 type ParticipantStatus = "draft" | "approved" | "queued" | "sent" | "failed";
@@ -264,42 +266,53 @@ export default function MonthlyReportsPage() {
   const emailApprovedCount = useMemo(() => {
     return Object.values(reportsByParticipant).filter((r) => {
       const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
-      return currentUiStatus !== "draft" && r.email_job_id === null;
+      const part = participants.find((p) => p.id === r.participant_id);
+      const emailEnabled = part?.weekly_report_email_enabled !== false;
+      return currentUiStatus !== "draft" && r.email_job_id === null && emailEnabled;
     }).length;
-  }, [reportsByParticipant, statusByParticipant]);
+  }, [reportsByParticipant, statusByParticipant, participants]);
 
   const smsApprovedCount = useMemo(() => {
     return Object.values(reportsByParticipant).filter((r) => {
       const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
-      return currentUiStatus !== "draft" && r.sms_message_id === null;
+      const part = participants.find((p) => p.id === r.participant_id);
+      const smsEnabled = part?.weekly_report_sms_enabled !== false;
+      return currentUiStatus !== "draft" && r.sms_message_id === null && smsEnabled;
     }).length;
-  }, [reportsByParticipant, statusByParticipant]);
+  }, [reportsByParticipant, statusByParticipant, participants]);
 
   const totalApprovedCount = useMemo(() => {
     return Object.values(reportsByParticipant).filter((r) => {
       const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
       if (currentUiStatus === "draft") return false;
-      return r.email_job_id === null || r.sms_message_id === null;
+      const part = participants.find((p) => p.id === r.participant_id);
+      const emailEnabled = part?.weekly_report_email_enabled !== false;
+      const smsEnabled = part?.weekly_report_sms_enabled !== false;
+      return (r.email_job_id === null && emailEnabled) || (r.sms_message_id === null && smsEnabled);
     }).length;
-  }, [reportsByParticipant, statusByParticipant]);
+  }, [reportsByParticipant, statusByParticipant, participants]);
 
   const approvedEmailReportIds = useMemo(() => {
     return Object.values(reportsByParticipant)
       .filter((r) => {
         const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
-        return currentUiStatus !== "draft" && r.email_job_id === null;
+        const part = participants.find((p) => p.id === r.participant_id);
+        const emailEnabled = part?.weekly_report_email_enabled !== false;
+        return currentUiStatus !== "draft" && r.email_job_id === null && emailEnabled;
       })
       .map((r) => r.id);
-  }, [reportsByParticipant, statusByParticipant]);
+  }, [reportsByParticipant, statusByParticipant, participants]);
 
   const approvedSmsReportIds = useMemo(() => {
     return Object.values(reportsByParticipant)
       .filter((r) => {
         const currentUiStatus = statusByParticipant[r.participant_id] ?? r.status;
-        return currentUiStatus !== "draft" && r.sms_message_id === null;
+        const part = participants.find((p) => p.id === r.participant_id);
+        const smsEnabled = part?.weekly_report_sms_enabled !== false;
+        return currentUiStatus !== "draft" && r.sms_message_id === null && smsEnabled;
       })
       .map((r) => r.id);
-  }, [reportsByParticipant, statusByParticipant]);
+  }, [reportsByParticipant, statusByParticipant, participants]);
 
   const [chatByParticipant, setChatByParticipant] = useState<Record<string, ChatMessage[]>>({});
   const chat = selectedParticipant ? chatByParticipant[selectedParticipant.id] ?? [] : [];
@@ -719,7 +732,7 @@ export default function MonthlyReportsPage() {
       try {
         const { data, error } = await supabase
           .from("participants")
-          .select("id, name, email, phone_number")
+          .select("id, name, email, phone_number, weekly_report_sms_enabled, weekly_report_email_enabled")
           .order("created_at", { ascending: false })
           .limit(500);
         if (error) throw error;
@@ -1753,6 +1766,77 @@ export default function MonthlyReportsPage() {
                     })()}
                   </span>
                 </p>
+                {selectedParticipant && (
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-600">
+                    <span className="font-medium">Send via:</span>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedParticipant.weekly_report_email_enabled !== false}
+                        onChange={async (e) => {
+                          const checked = e.target.checked;
+                          try {
+                            const { data: sessionData } = await supabase.auth.getSession();
+                            const token = sessionData?.session?.access_token;
+                            if (!token) throw new Error("Authentication required");
+                            const res = await fetch(`/api/admin/participants/${selectedParticipant.id}`, {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({ weekly_report_email_enabled: checked }),
+                            });
+                            if (!res.ok) throw new Error("Failed to update preference");
+                            setParticipants((prev) =>
+                              prev.map((p) =>
+                                p.id === selectedParticipant.id
+                                  ? { ...p, weekly_report_email_enabled: checked }
+                                  : p
+                              )
+                            );
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : "Failed to update preference");
+                          }
+                        }}
+                      />
+                      Email
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedParticipant.weekly_report_sms_enabled !== false}
+                        onChange={async (e) => {
+                          const checked = e.target.checked;
+                          try {
+                            const { data: sessionData } = await supabase.auth.getSession();
+                            const token = sessionData?.session?.access_token;
+                            if (!token) throw new Error("Authentication required");
+                            const res = await fetch(`/api/admin/participants/${selectedParticipant.id}`, {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({ weekly_report_sms_enabled: checked }),
+                            });
+                            if (!res.ok) throw new Error("Failed to update preference");
+                            setParticipants((prev) =>
+                              prev.map((p) =>
+                                p.id === selectedParticipant.id
+                                  ? { ...p, weekly_report_sms_enabled: checked }
+                                  : p
+                              )
+                            );
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : "Failed to update preference");
+                          }
+                        }}
+                      />
+                      SMS
+                    </label>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2 shrink-0">

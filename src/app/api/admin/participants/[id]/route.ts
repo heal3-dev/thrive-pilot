@@ -25,7 +25,7 @@ export async function GET(
   // 1. Fetch Participant (PII zone)
   const { data: participant, error: pError } = await supabase
     .from("participants")
-    .select("id, name, email, garmin_user_id, garmin_connected_at")
+    .select("id, name, email, phone_number, garmin_user_id, garmin_connected_at, weekly_report_sms_enabled, weekly_report_email_enabled")
     .eq("id", id)
     .single();
 
@@ -164,7 +164,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const allowedKeys = new Set(["name", "email", "phone_number", "is_active", "weekly_report_sms_enabled"]);
+  const allowedKeys = new Set(["name", "email", "phone_number", "is_active", "weekly_report_sms_enabled", "weekly_report_email_enabled"]);
   const update: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(payload)) {
     if (!allowedKeys.has(k)) continue;
