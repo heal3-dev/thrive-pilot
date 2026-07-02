@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { requireAdmin } from "@/app/api/admin/_utils";
 import { hashParticipantId } from "@/lib/pseudonym-crypto";
-import { computeWeeklyFlagFromMetrics, type Metric, type WeeklyFlag } from "@/lib/flags/rules";
+import { computeMonthlyFlagFromMetrics, type Metric, type MonthlyFlag } from "@/lib/flags/rules";
 import {
   DEFAULT_MONTHLY_GENERATE_WRAPPER,
   DEFAULT_MONTHLY_OLGA_HTML_BASE_TEMPLATE,
@@ -327,7 +327,7 @@ function formatMonthRange(monthEnding: string): string {
   return `${startText} – ${endText}, ${yearText}`;
 }
 
-function badgeFromFinalColor(color: WeeklyFlag["finalColor"]): { label: string; icon: string } {
+function badgeFromFinalColor(color: MonthlyFlag["finalColor"]): { label: string; icon: string } {
   switch (color) {
     case "green":
       return { label: "Mostly Stable", icon: "🟢" };
@@ -629,16 +629,16 @@ export async function POST(request: Request) {
     };
   });
 
-  const weeklyFlag = computeWeeklyFlagFromMetrics(typed, monthEnding);
+  const monthlyFlag = computeMonthlyFlagFromMetrics(typed, monthEnding);
   const monthRange = formatMonthRange(monthEnding);
-  const badge = badgeFromFinalColor(weeklyFlag.finalColor);
+  const badge = badgeFromFinalColor(monthlyFlag.finalColor);
   const completeness = computeCompleteness(typed, monthEnding);
 
-  const hasAnyRecent = completeness.calendarDaysPresent > 0 || completeness.sleepNightsPresent > 0;
-  if (!hasAnyRecent) {
+  const hasMonthlyData = completeness.calendarDaysPresent > 7 || completeness.sleepNightsPresent > 7;
+  if (!hasMonthlyData) {
     return NextResponse.json(
       {
-        error: "No recent health data in the last 28 days",
+        error: "Insufficient data to generate monthly report. Only weekly data is available (need more than 7 days of active data in the 28-day window).",
         monthEnding,
         monthRange,
         completeness,
@@ -723,8 +723,8 @@ export async function POST(request: Request) {
     "DATA_COMPLETENESS_JSON:",
     JSON.stringify(completeness, null, 2),
     "",
-    "WEEKLY_FLAG_JSON (computed state from final week of the month):",
-    JSON.stringify(weeklyFlag, null, 2),
+    "MONTHLY_FLAG_JSON (computed state across all 4 weeks of the month):",
+    JSON.stringify(monthlyFlag, null, 2),
     "",
     "RAW_METRICS_RECENT_JSON (chronological list of metric records for participant):",
     JSON.stringify(metricWindow, null, 2),
@@ -736,7 +736,7 @@ export async function POST(request: Request) {
     JSON.stringify(userAverages, null, 2),
     "",
     "IMPORTANT:",
-    "- Use the weekly_flag metrics colors to drive your narrative.",
+    "- Use the monthly_flag metrics colors to drive your narrative.",
     "- Stress card should reflect stress metric; Sleep card should reflect sleep duration/score/WASO; Recovery card should reflect body battery + HRV + HRV stability + RHR where relevant.",
   ].join("\n");
 
@@ -827,21 +827,21 @@ export async function POST(request: Request) {
   }
 
   const o = (typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {}) as Record<string, unknown>;
-  const stressColor = weeklyFlag.metrics.stress?.color ?? null;
+  const stressColor = monthlyFlag.metrics.stress?.color ?? null;
   const sleepColor = (() => {
     const colors = [
-      weeklyFlag.metrics.sleep_duration?.color,
-      weeklyFlag.metrics.sleep_score?.color,
-      weeklyFlag.metrics.waso?.color,
+      monthlyFlag.metrics.sleep_duration?.color,
+      monthlyFlag.metrics.sleep_score?.color,
+      monthlyFlag.metrics.waso?.color,
     ];
     return colors.sort((a, b) => severityRank(b) - severityRank(a))[0] ?? null;
   })();
   const recoveryColor = (() => {
     const colors = [
-      weeklyFlag.metrics.body_battery?.color,
-      weeklyFlag.metrics.hrv?.color,
-      weeklyFlag.metrics.hrv_stability?.color,
-      weeklyFlag.metrics.rhr?.color,
+      monthlyFlag.metrics.body_battery?.color,
+      monthlyFlag.metrics.hrv?.color,
+      monthlyFlag.metrics.hrv_stability?.color,
+      monthlyFlag.metrics.rhr?.color,
     ];
     return colors.sort((a, b) => severityRank(b) - severityRank(a))[0] ?? null;
   })();
@@ -880,11 +880,11 @@ export async function POST(request: Request) {
     }),
   };
 
-  const primaryDrivers = Object.values(weeklyFlag.metrics)
+  const primaryDrivers = Object.values(monthlyFlag.metrics)
     .filter((m) => m.color === "red" || m.color === "orange")
     .sort((a, b) => b.points - a.points);
 
-  const driverPhrase = (metric: WeeklyFlag["metrics"][keyof WeeklyFlag["metrics"]]["metric"]): string | null => {
+  const driverPhrase = (metric: MonthlyFlag["metrics"][keyof MonthlyFlag["metrics"]]["metric"]): string | null => {
     switch (metric) {
       case "sleep_score":
         return "low sleep score";
@@ -968,7 +968,7 @@ export async function POST(request: Request) {
     monthRange,
     badgeLabel: badge.label,
     badgeIcon: badge.icon,
-    weeklyFlag,
+    monthlyFlag,
     completeness,
     assistantMessage,
     updatedHtml,

@@ -819,9 +819,9 @@ MONTHLY SCORE RULE
 
 Do not infer the monthly score from raw data alone.
 
-Use the monthly color/status shown in the weekly_flag/status whenever it is provided.
+Use the monthly color/status shown in the monthly_flag/status whenever it is provided.
 
-If the weekly_flag/status shows the status, that status controls the report.
+If the monthly_flag/status shows the status, that status controls the report.
 
 BADGE DECISION RULE
 

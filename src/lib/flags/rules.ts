@@ -527,3 +527,84 @@ export function computeWeeklyFlagFromMetrics(metrics: Metric[], weekEnding: stri
     metrics: metricsRes,
   };
 }
+
+export type MonthlyFlag = {
+  monthEnding: string;
+  monthlyScore: number;
+  baseColor: WeeklyColor;
+  finalColor: WeeklyColor;
+  metrics: Record<WeeklyMetricKey, { metric: WeeklyMetricKey; color: WeeklyColor | 'no_data'; points: number }>;
+  weeklyFlags: WeeklyFlag[];
+};
+
+export function computeMonthlyFlagFromMetrics(metrics: Metric[], monthEnding: string): MonthlyFlag {
+  const w4 = computeWeeklyFlagFromMetrics(metrics, monthEnding);
+  const w3 = computeWeeklyFlagFromMetrics(metrics, addDaysYmd(monthEnding, -7));
+  const w2 = computeWeeklyFlagFromMetrics(metrics, addDaysYmd(monthEnding, -14));
+  const w1 = computeWeeklyFlagFromMetrics(metrics, addDaysYmd(monthEnding, -21));
+
+  const weeklyFlags = [w1, w2, w3, w4];
+  const scores = weeklyFlags.map((w) => w.weeklyScore);
+  const monthlyScore = Number((scores.reduce((a, b) => a + b, 0) / 4).toFixed(1));
+
+  const baseColor = baseColorFromScore(monthlyScore);
+
+  const metricsKeys: WeeklyMetricKey[] = [
+    'body_battery',
+    'stress',
+    'sleep_duration',
+    'sleep_score',
+    'waso',
+    'hrv',
+    'rhr',
+    'hrv_stability'
+  ];
+
+  const metricsRes = {} as Record<WeeklyMetricKey, { metric: WeeklyMetricKey; color: WeeklyColor | 'no_data'; points: number }>;
+
+  for (const key of metricsKeys) {
+    const wColors = weeklyFlags.map((w) => w.metrics[key].color);
+    const wPoints = weeklyFlags.map((w) => w.metrics[key].points);
+
+    const validPoints = wPoints.filter((_, idx) => wColors[idx] !== 'no_data' && wColors[idx] !== 'insufficient_baseline_data');
+
+    if (validPoints.length === 0) {
+      metricsRes[key] = { metric: key, color: 'no_data', points: 0 };
+      continue;
+    }
+
+    const avgPoints = (validPoints as number[]).reduce((a, b) => a + b, 0) / validPoints.length;
+    let color: WeeklyColor = 'green';
+    if (avgPoints <= 0.5) color = 'green';
+    else if (avgPoints <= 1.5) color = 'yellow';
+    else if (avgPoints <= 2.5) color = 'orange';
+    else color = 'red';
+
+    metricsRes[key] = {
+      metric: key,
+      color,
+      points: Math.round(avgPoints)
+    };
+  }
+
+  const monthlyColors = Object.fromEntries(
+    Object.entries(metricsRes).map(([k, v]) => [k, v.color])
+  ) as Record<WeeklyMetricKey, WeeklyColor | 'no_data'>;
+
+  const cleanColors = {} as Record<WeeklyMetricKey, WeeklyColor>;
+  for (const k of metricsKeys) {
+    const c = monthlyColors[k];
+    cleanColors[k] = (c === 'no_data' ? 'green' : c) as WeeklyColor;
+  }
+
+  const { finalColor } = applyOverrides(baseColor, cleanColors);
+
+  return {
+    monthEnding,
+    monthlyScore,
+    baseColor,
+    finalColor,
+    metrics: metricsRes,
+    weeklyFlags,
+  };
+}

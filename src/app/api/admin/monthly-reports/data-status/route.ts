@@ -153,12 +153,12 @@ export async function GET(request: Request) {
   });
 
   const completeness = computeCompleteness(typed, monthEnding);
-  const hasAnyRecent = completeness.calendarDaysPresent > 0 || completeness.sleepNightsPresent > 0;
+  const hasMonthlyData = completeness.calendarDaysPresent > 7 || completeness.sleepNightsPresent > 7;
 
   return NextResponse.json({
     connected: true,
-    canGenerate: hasAnyRecent,
-    reason: hasAnyRecent ? null : "No recent health data in the last 28 days",
+    canGenerate: hasMonthlyData,
+    reason: hasMonthlyData ? null : "Insufficient data to generate monthly report. Only weekly data is available (need more than 7 days of active data).",
     monthEnding,
     completeness,
     latestMetricDate,
