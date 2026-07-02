@@ -117,16 +117,42 @@ function ymdAddDays(ymd: string, deltaDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function list28DaysEnding(monthEnding: string): string[] {
-  return Array.from({ length: 28 }, (_, i) => ymdAddDays(monthEnding, -27 + i));
+/** Returns the last day (YYYY-MM-DD) of the calendar month *before* the given date. */
+function lastDayOfPrevMonth(referenceYmd: string): string {
+  const d = new Date(`${referenceYmd}T00:00:00.000Z`);
+  // Setting day=0 of the current month gives the last day of the previous month.
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0));
+  return last.toISOString().slice(0, 10);
 }
 
-function buildSeries28Days(params: {
+/** Returns the first day (YYYY-MM-DD) of the calendar month containing the given date. */
+function firstDayOfMonth(ymd: string): string {
+  return ymd.slice(0, 7) + "-01";
+}
+
+/** Returns the number of days in the month containing the given date. */
+function daysInMonth(ymd: string): number {
+  const d = new Date(`${ymd}T00:00:00.000Z`);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+}
+
+function listDaysInRange(startYmd: string, endYmd: string): string[] {
+  const days: string[] = [];
+  let cur = startYmd;
+  while (cur <= endYmd) {
+    days.push(cur);
+    cur = ymdAddDays(cur, 1);
+  }
+  return days;
+}
+
+function buildSeriesForRange(params: {
   metrics: Metric[];
-  monthEnding: string;
+  startYmd: string;
+  endYmd: string;
   getValue: (m: Metric) => number | null;
 }): SeriesPoint[] {
-  const days = list28DaysEnding(params.monthEnding);
+  const days = listDaysInRange(params.startYmd, params.endYmd);
   const byDate = new Map(params.metrics.map((m) => [m.metric_date, m]));
   return days.map((d) => {
     const m = byDate.get(d);
@@ -266,8 +292,9 @@ function renderSparklineSvg(params: {
 `.trim();
 }
 
-function computeCompleteness(metrics: Metric[], monthEnding: string): DataCompleteness {
-  const days = list28DaysEnding(monthEnding);
+function computeCompleteness(metrics: Metric[], monthStart: string, monthEnding: string): DataCompleteness {
+  const days = listDaysInRange(monthStart, monthEnding);
+  const expectedDays = days.length;
   const byDate = new Map(metrics.map((m) => [m.metric_date, m]));
 
   const presentBodyBattery = days.filter((d) => (byDate.get(d)?.body_battery_start ?? null) != null).length;
@@ -280,9 +307,8 @@ function computeCompleteness(metrics: Metric[], monthEnding: string): DataComple
   }).length;
 
   const nights = metrics
-    .filter((m) => m.metric_date <= monthEnding)
-    .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1))
-    .slice(0, 28);
+    .filter((m) => m.metric_date >= monthStart && m.metric_date <= monthEnding)
+    .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1));
 
   const presentSleepDur = nights.filter((m) => m.sleep_duration_seconds != null).length;
   const presentSleepScore = nights.filter((m) => m.sleep_duration_seconds != null && m.sleep_score != null).length;
@@ -301,9 +327,9 @@ function computeCompleteness(metrics: Metric[], monthEnding: string): DataComple
   return {
     monthEnding,
     calendarDaysPresent: calPresentAny,
-    calendarDaysExpected: 28,
+    calendarDaysExpected: expectedDays,
     sleepNightsPresent: nightsPresentAny,
-    sleepNightsExpected: 28,
+    sleepNightsExpected: expectedDays,
     presentByMetric: {
       body_battery_start_days: presentBodyBattery,
       stress_days: presentStress,
@@ -316,10 +342,9 @@ function computeCompleteness(metrics: Metric[], monthEnding: string): DataComple
   };
 }
 
-function formatMonthRange(monthEnding: string): string {
+function formatMonthRange(monthStart: string, monthEnding: string): string {
+  const start = new Date(`${monthStart}T00:00:00.000Z`);
   const end = new Date(`${monthEnding}T00:00:00.000Z`);
-  const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - 27);
   const fmt = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" });
   const startText = fmt.format(start);
   const endText = fmt.format(end);
@@ -569,25 +594,18 @@ export async function POST(request: Request) {
 
   const todayYmd = new Date().toISOString().slice(0, 10);
 
-  const { data: latestRow, error: latestErr } = await admin
-    .from("garmin_metrics")
-    .select("metric_date")
-    .eq("pseudonym_id", pseudonymId)
-    .order("metric_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Default to the last full calendar month.
+  // e.g. if today is July 2, monthEnding = "2026-06-30", monthStart = "2026-06-01".
+  // This ensures the four weekly scoring windows stay within the reported calendar month
+  // rather than bleeding into the current (incomplete) week.
+  const defaultMonthEnding = lastDayOfPrevMonth(todayYmd);
+  const monthEnding = defaultMonthEnding;
+  const monthStart = firstDayOfMonth(monthEnding);
+  const monthDays = daysInMonth(monthEnding);
 
-  if (latestErr) {
-    return NextResponse.json({ error: "Failed to fetch latest metric date" }, { status: 500 });
-  }
-
-  const monthEnding =
-    (latestRow && typeof (latestRow as unknown as { metric_date?: unknown }).metric_date === "string"
-      ? ((latestRow as unknown as { metric_date: string }).metric_date as string)
-      : todayYmd) || todayYmd;
-
-  // Pull 40 days to calculate a stable weekly flag for the final week of the month.
-  const since = ymdAddDays(monthEnding, -40);
+  // Pull extra days before the month start so that RHR/HRV baselines
+  // (which require ~10-12 days before the evaluation window) are available for week 1.
+  const since = ymdAddDays(monthStart, -13);
   const { data: rows, error: metricsError } = await admin
     .from("garmin_metrics")
     .select(
@@ -630,15 +648,15 @@ export async function POST(request: Request) {
   });
 
   const monthlyFlag = computeMonthlyFlagFromMetrics(typed, monthEnding);
-  const monthRange = formatMonthRange(monthEnding);
+  const monthRange = formatMonthRange(monthStart, monthEnding);
   const badge = badgeFromFinalColor(monthlyFlag.finalColor);
-  const completeness = computeCompleteness(typed, monthEnding);
+  const completeness = computeCompleteness(typed, monthStart, monthEnding);
 
   const hasMonthlyData = completeness.calendarDaysPresent > 7 || completeness.sleepNightsPresent > 7;
   if (!hasMonthlyData) {
     return NextResponse.json(
       {
-        error: "Insufficient data to generate monthly report. Only weekly data is available (need more than 7 days of active data in the 28-day window).",
+        error: `Insufficient data to generate monthly report. Only weekly data is available (need more than 7 days of active data in the ${monthDays}-day window).`,
         monthEnding,
         monthRange,
         completeness,
@@ -647,12 +665,11 @@ export async function POST(request: Request) {
     );
   }
 
-  // Calculate database group averages for active participants this month (28 days)
-  const since28Days = ymdAddDays(monthEnding, -27);
+  // Calculate database group averages for the reported calendar month
   const { data: groupMetrics, error: groupErr } = await admin
     .from("garmin_metrics")
     .select("resting_heart_rate, average_stress_level, sleep_duration_seconds, sleep_score, awake_seconds, hrv_last_night_average, body_battery_highest, body_battery_start")
-    .gte("metric_date", since28Days)
+    .gte("metric_date", monthStart)
     .lte("metric_date", monthEnding);
 
   const avgFn = (vals: number[]) => vals.length > 0 ? Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)) : null;
@@ -670,7 +687,7 @@ export async function POST(request: Request) {
     }).filter((v): v is number => v != null)),
   };
 
-  const monthMetrics = typed.filter(m => m.metric_date >= since28Days && m.metric_date <= monthEnding);
+  const monthMetrics = typed.filter(m => m.metric_date >= monthStart && m.metric_date <= monthEnding);
   const userAverages = {
     average_stress_level: avgFn(monthMetrics.map(m => (m as unknown as { average_stress_level?: number | null }).average_stress_level ?? null).filter((v): v is number => v != null)),
     sleep_score: avgFn(monthMetrics.map(m => (m as unknown as { sleep_score?: number | null }).sleep_score ?? null).filter((v): v is number => v != null)),
@@ -707,12 +724,10 @@ export async function POST(request: Request) {
     .filter(Boolean)
     .join("\n\n");
 
-  // Participant's metrics for the last 28 days (sliced and then sorted chronologically for the LLM)
+  // Participant's metrics for the calendar month window (sorted chronologically for the LLM)
   const metricWindow = typed
-    .filter((m) => m.metric_date <= monthEnding)
-    .sort((a, b) => (a.metric_date < b.metric_date ? 1 : -1))
-    .slice(0, 28);
-  metricWindow.sort((a, b) => (a.metric_date > b.metric_date ? 1 : -1));
+    .filter((m) => m.metric_date >= monthStart && m.metric_date <= monthEnding)
+    .sort((a, b) => (a.metric_date > b.metric_date ? 1 : -1));
 
   const user = [
     `Participant: ${participantLabel}`,
@@ -862,20 +877,23 @@ export async function POST(request: Request) {
   const assistantMessage = typeof parsed.assistantMessage === "string" ? parsed.assistantMessage : "Generated the monthly report draft.";
 
   const graphs = {
-    stress: buildSeries28Days({
+    stress: buildSeriesForRange({
       metrics: typed,
-      monthEnding,
+      startYmd: monthStart,
+      endYmd: monthEnding,
       getValue: (m) => (m.average_stress_level != null ? Number(m.average_stress_level) : null),
     }),
-    sleepScore: buildSeries28Days({
+    sleepScore: buildSeriesForRange({
       metrics: typed,
-      monthEnding,
+      startYmd: monthStart,
+      endYmd: monthEnding,
       getValue: (m) =>
         m.sleep_duration_seconds != null && m.sleep_score != null ? Number(m.sleep_score) : null,
     }),
-    bodyBattery: buildSeries28Days({
+    bodyBattery: buildSeriesForRange({
       metrics: typed,
-      monthEnding,
+      startYmd: monthStart,
+      endYmd: monthEnding,
       getValue: (m) => (m.body_battery_start != null ? Number(m.body_battery_start) : null),
     }),
   };
