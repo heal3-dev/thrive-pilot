@@ -794,16 +794,29 @@ export default function WeeklyReportsPage() {
         if (map && typeof map === "object") Object.assign(merged, map as Record<string, WeeklyReportMini>);
       }
 
-      setReportsByParticipant(merged);
+      setReportsByParticipant((prev) => {
+        const next = { ...prev };
+        for (const [pid, row] of Object.entries(merged)) {
+          if (!row || typeof row !== "object") continue;
+          const activeReportId = metaByParticipant[pid]?.reportId;
+          if (!activeReportId || row.id === activeReportId) {
+            next[pid] = row;
+          }
+        }
+        return next;
+      });
 
       setStatusByParticipant((prev) => {
         const next = { ...prev };
         for (const [pid, row] of Object.entries(merged)) {
           if (!row || typeof row !== "object") continue;
-          const s = row.status;
-          const status: ParticipantStatus =
-            s === "approved" || s === "queued" || s === "sent" || s === "failed" || s === "draft" ? s : "draft";
-          next[pid] = status;
+          const activeReportId = metaByParticipant[pid]?.reportId;
+          if (!activeReportId || row.id === activeReportId) {
+            const s = row.status;
+            const status: ParticipantStatus =
+              s === "approved" || s === "queued" || s === "sent" || s === "failed" || s === "draft" ? s : "draft";
+            next[pid] = status;
+          }
         }
         return next;
       });
@@ -813,7 +826,7 @@ export default function WeeklyReportsPage() {
     } catch {
       // ignore
     }
-  }, [participants, refreshApprovedCount]);
+  }, [participants, refreshApprovedCount, metaByParticipant]);
 
   useEffect(() => {
     // Avoid triggering `react-hooks/set-state-in-effect` by deferring.
