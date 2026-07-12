@@ -384,7 +384,7 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1 sm:gap-2">
                             {assignment.status === "never_assigned" ? (
                               <Button
                                 variant="ghost"
