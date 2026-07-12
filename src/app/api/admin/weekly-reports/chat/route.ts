@@ -7,6 +7,7 @@ const requestSchema = z.object({
   participantLabel: z.string().min(1).max(200),
   currentHtml: z.string().min(1).max(200_000),
   feedback: z.string().min(1).max(2000),
+  currentOutreachText: z.string().max(2000).optional(),
 });
 
 function escapeHtml(s: string) {
@@ -70,9 +71,11 @@ export async function POST(request: Request) {
 
   const defaultReviseWrapper = [
     "You are an assistant helping an admin refine a weekly wellbeing report for a participant.",
-    "Return JSON only with keys: assistantMessage (string), updatedHtml (string).",
+    "Return JSON only with keys: assistantMessage (string), updatedHtml (string), updatedOutreachText (string).",
     "Keep updatedHtml as a complete HTML document. Preserve the overall structure and avoid adding any scripts.",
+    "CRITICAL: Do NOT modify, alter, or reformat any <svg> elements, their coordinates, paths, colors, or text. Copy all <svg>...</svg> blocks exactly, character-for-character, from the input HTML.",
     "Apply the admin feedback to improve tone/clarity while staying concise and supportive.",
+    "updatedOutreachText should be a supportive, concise text message summarizing the report to be sent to the participant via SMS. If the dates, badge score, or main details of the report have changed in the HTML, ensure the outreach text is regenerated to match the new details.",
   ].join(" ");
 
   let masterRules = "";
@@ -103,6 +106,7 @@ export async function POST(request: Request) {
   const user = [
     `Participant: ${payload.participantLabel}`,
     `Admin feedback: ${payload.feedback}`,
+    `Current outreach text: ${payload.currentOutreachText || ""}`,
     "Current HTML:",
     payload.currentHtml,
   ].join("\n\n");
@@ -147,7 +151,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "OpenAI returned empty response" }, { status: 502 });
   }
 
-  let parsed: { assistantMessage?: unknown; updatedHtml?: unknown; updatedMarkdown?: unknown };
+  let parsed: { assistantMessage?: unknown; updatedHtml?: unknown; updatedMarkdown?: unknown; updatedOutreachText?: unknown };
   try {
     parsed = JSON.parse(content);
   } catch {
@@ -165,7 +169,13 @@ export async function POST(request: Request) {
       : typeof parsed.updatedMarkdown === "string"
         ? parsed.updatedMarkdown
         : payload.currentHtml;
+  const updatedOutreachText =
+    typeof parsed.updatedOutreachText === "string" ? parsed.updatedOutreachText : undefined;
 
-  return NextResponse.json({ assistantMessage, updatedHtml: normalizeHtmlStateLabels(updatedHtml) });
+  return NextResponse.json({
+    assistantMessage,
+    updatedHtml: normalizeHtmlStateLabels(updatedHtml),
+    updatedOutreachText,
+  });
 }
 

@@ -12,6 +12,7 @@ const upsertSchema = z.object({
   badgeLabel: z.string().min(1).max(64),
   badgeIcon: z.string().min(1).max(8),
   html: z.string().min(1).max(500_000),
+  outreachText: z.string().max(2000).optional(),
 });
 
 export async function GET(request: Request) {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await guard.admin
     .from("monthly_reports")
-    .select("id, participant_id, month_ending, month_range, badge_label, badge_icon, html, status, approved_at, queued_at, sent_at, last_error, email_job_id, updated_at")
+    .select("id, participant_id, month_ending, month_range, badge_label, badge_icon, html, outreach_text, status, approved_at, queued_at, sent_at, last_error, email_job_id, updated_at")
     .eq("participant_id", participantId)
     .order("month_ending", { ascending: false })
     .limit(1)
@@ -60,6 +61,7 @@ export async function PUT(request: Request) {
         badge_label: payload.badgeLabel,
         badge_icon: payload.badgeIcon,
         html: payload.html,
+        outreach_text: payload.outreachText || null,
         status: "draft",
         approved_at: null,
         queued_at: null,

@@ -324,6 +324,7 @@ export default function WeeklyReportsPage() {
   const feedbackTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [isSendingApproved, setIsSendingApproved] = useState(false);
   const lastSavedHtmlRef = useRef<Record<string, string>>({});
+  const lastSavedOutreachRef = useRef<Record<string, string>>({});
   const [isSendApprovedOpen, setIsSendApprovedOpen] = useState(false);
   const [sendPreview, setSendPreview] = useState<null | {
     toEnqueue: Array<{ reportId: string; participantId: string; toEmail: string; participantName: string; weekRange: string }>;
@@ -401,17 +402,19 @@ export default function WeeklyReportsPage() {
     ].join(" ");
   }, []);
 
+  const currentOutreachTextValue = useMemo(() => {
+    if (!selectedParticipant) return "";
+    const custom = outreachByParticipant[selectedParticipant.id] ?? "";
+    if (custom.trim().length > 0) return custom;
+    return selectedMeta ? buildOutreachText(selectedMeta) : "";
+  }, [selectedParticipant, outreachByParticipant, selectedMeta, buildOutreachText]);
+
   const composedOutreachText = useMemo(() => {
     if (!selectedMeta) return "";
-    const rawBase = (outreachText.trim().length > 0 ? outreachText : buildOutreachText(selectedMeta)).trim();
-    // Outreach text is cached per-participant in UI state; ensure the visible week range always matches the selected report.
-    const base = rawBase.replace(
-      /\b(Thrive\s+weekly\s+report)\s*\(([^)]*)\)/i,
-      `$1 (${selectedMeta.weekRange})`
-    );
+    const base = currentOutreachTextValue.trim();
     if (!shareUrl.trim()) return base;
     return `${base}\n\nWeekly report: ${shareUrl.trim()}`;
-  }, [buildOutreachText, outreachText, selectedMeta, shareUrl]);
+  }, [currentOutreachTextValue, shareUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -846,8 +849,12 @@ export default function WeeklyReportsPage() {
     if (!selectedParticipant || !selectedMeta) return;
     const pid = selectedParticipant.id;
     const currentHtml = (html ?? "").trim();
-    if (!currentHtml) return;
-    if (lastSavedHtmlRef.current[pid] === currentHtml) return;
+    const currentOutreach = (outreachByParticipant[pid] ?? "").trim();
+
+    const htmlChanged = currentHtml && lastSavedHtmlRef.current[pid] !== currentHtml;
+    const outreachChanged = lastSavedOutreachRef.current[pid] !== currentOutreach;
+
+    if (!htmlChanged && !outreachChanged) return;
 
     const handle = window.setTimeout(async () => {
       try {
@@ -867,12 +874,14 @@ export default function WeeklyReportsPage() {
             weekRange: selectedMeta.weekRange,
             badgeLabel: selectedMeta.badgeLabel,
             badgeIcon: selectedMeta.badgeIcon,
-            html: currentHtml,
+            html: currentHtml || undefined,
+            outreachText: currentOutreach || undefined,
           }),
         });
         if (!res.ok) return;
 
-        lastSavedHtmlRef.current[pid] = currentHtml;
+        if (currentHtml) lastSavedHtmlRef.current[pid] = currentHtml;
+        lastSavedOutreachRef.current[pid] = currentOutreach;
         setStatusByParticipant((prev) => ({ ...prev, [pid]: "draft" }));
         void refreshApprovedCount();
       } catch {
@@ -886,6 +895,7 @@ export default function WeeklyReportsPage() {
     selectedMeta,
     selectedParticipant,
     html,
+    outreachByParticipant,
   ]);
 
   useEffect(() => {
@@ -923,6 +933,12 @@ export default function WeeklyReportsPage() {
             if (html.trim().length > 0) {
               setHtmlByParticipant((prev) => ({ ...prev, [p.id]: html }));
               lastSavedHtmlRef.current[p.id] = html.trim();
+
+              const outreachText = typeof r.outreach_text === "string" ? r.outreach_text : "";
+              if (outreachText) {
+                setOutreachByParticipant((prev) => ({ ...prev, [p.id]: outreachText }));
+                lastSavedOutreachRef.current[p.id] = outreachText;
+              }
 
               const weekRange = typeof r.week_range === "string" ? r.week_range : null;
               const badgeLabel = typeof r.badge_label === "string" ? r.badge_label : null;
@@ -1036,6 +1052,7 @@ export default function WeeklyReportsPage() {
         setStatusByParticipant((prev) => ({ ...prev, [p.id]: "draft" }));
         if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
           setOutreachByParticipant((prev) => ({ ...prev, [p.id]: j.outreachText!.trim() }));
+          lastSavedOutreachRef.current[p.id] = j.outreachText!.trim();
         }
         if (j.weekRange && j.badgeLabel && j.badgeIcon && j.reportId) {
           const weekRange = j.weekRange;
@@ -1996,6 +2013,7 @@ export default function WeeklyReportsPage() {
                         setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "draft" }));
                         if (typeof j.outreachText === "string" && j.outreachText.trim().length > 0) {
                           setOutreachByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: j.outreachText!.trim() }));
+                          lastSavedOutreachRef.current[selectedParticipant.id] = j.outreachText!.trim();
                         }
                         if (j.weekRange && j.badgeLabel && j.badgeIcon && j.reportId) {
                           const weekRange = j.weekRange;
@@ -2080,9 +2098,17 @@ export default function WeeklyReportsPage() {
                       </div>
                     </div>
                     <textarea
-                      readOnly
-                      value={composedOutreachText}
-                      className="mt-3 w-full min-h-[124px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 resize-none"
+                      value={currentOutreachTextValue}
+                      onChange={(e) => {
+                        if (selectedParticipant) {
+                          const v = e.target.value;
+                          setOutreachByParticipant((prev) => ({
+                            ...prev,
+                            [selectedParticipant.id]: v,
+                          }));
+                        }
+                      }}
+                      className="mt-3 w-full min-h-[124px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-slate-300"
                     />
                   </div>
                 ) : null}
@@ -2400,6 +2426,7 @@ export default function WeeklyReportsPage() {
                               participantLabel,
                               currentHtml: htmlByParticipant[selectedParticipant.id] ?? "",
                               feedback: text,
+                              currentOutreachText: currentOutreachTextValue || undefined,
                             }),
                           });
 
@@ -2415,7 +2442,7 @@ export default function WeeklyReportsPage() {
                             throw new Error(msg || "Failed to generate update");
                           }
 
-                          const j = (await res.json()) as { assistantMessage: string; updatedHtml: string };
+                          const j = (await res.json()) as { assistantMessage: string; updatedHtml: string; updatedOutreachText?: string };
                           const assistantMsg: ChatMessage = {
                             id: createId("ai"),
                             role: "assistant",
@@ -2437,10 +2464,44 @@ export default function WeeklyReportsPage() {
                             el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
                           });
 
+                          const nextHtml = j.updatedHtml ?? "";
                           setHtmlByParticipant((prev) => ({
                             ...prev,
-                            [selectedParticipant.id]: j.updatedHtml ?? prev[selectedParticipant.id] ?? "",
+                            [selectedParticipant.id]: nextHtml || prev[selectedParticipant.id] || "",
                           }));
+
+                          if (typeof j.updatedOutreachText === "string" && j.updatedOutreachText.trim().length > 0) {
+                            setOutreachByParticipant((prev) => ({
+                              ...prev,
+                              [selectedParticipant.id]: j.updatedOutreachText!.trim(),
+                            }));
+                          }
+
+                          if (nextHtml.trim()) {
+                            try {
+                              const parser = new DOMParser();
+                              const doc = parser.parseFromString(nextHtml, "text/html");
+                              const weekRange = doc.querySelector("p.sub")?.textContent?.trim() || "";
+                              const badgeLabel = doc.querySelector(".badge-title")?.textContent?.trim() || "";
+                              const badgeIcon = doc.querySelector(".badge .icon")?.textContent?.trim() || "";
+                              const h1Text = doc.querySelector("h1")?.textContent?.trim() || "";
+                              if (weekRange && badgeLabel && badgeIcon) {
+                                setMetaByParticipant((prev) => ({
+                                  ...prev,
+                                  [selectedParticipant.id]: {
+                                    ...(prev[selectedParticipant.id] || {}),
+                                    weekRange,
+                                    badgeLabel,
+                                    badgeIcon,
+                                    participantLabel: h1Text || prev[selectedParticipant.id]?.participantLabel || formatParticipantLabel(selectedParticipant),
+                                  },
+                                }));
+                              }
+                            } catch (e) {
+                              console.error("Failed to parse updated HTML metadata", e);
+                            }
+                          }
+
                           setStatusByParticipant((prev) => ({ ...prev, [selectedParticipant.id]: "draft" }));
                         } catch (e) {
                           setFeedbackError(e instanceof Error ? e.message : "Failed to send feedback");
