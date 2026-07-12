@@ -680,13 +680,13 @@ export function ParticipantManagement({
         <div className={rowsScrollOnly ? "h-full overflow-auto" : "overflow-x-auto"}>
           <table className="w-full table-fixed min-w-[1000px]">
             <colgroup>
+              <col className="w-[12%]" />
               <col className="w-[14%]" />
               <col className="w-[15%]" />
-              <col className="w-[18%]" />
-              <col className="w-[17%]" />
+              <col className="w-[15%]" />
               <col className="w-[12%]" />
               <col className="w-[9%]" />
-              <col className="w-[14%]" />
+              <col className="w-[23%]" />
             </colgroup>
             <thead className={`bg-slate-100 border-b border-slate-100 ${rowsScrollOnly ? "sticky top-0 z-10" : ""}`}>
               <tr>

@@ -320,11 +320,11 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
           <div className="h-full overflow-auto">
             <table className="w-full table-fixed min-w-[800px]">
               <colgroup>
-                <col className="w-[25%]" />
-                <col className="w-[25%]" />
-                <col className="w-[15%]" />
-                <col className="w-[18%]" />
-                <col className="w-[17%]" />
+                <col className="w-[22%]" />
+                <col className="w-[22%]" />
+                <col className="w-[14%]" />
+                <col className="w-[16%]" />
+                <col className="w-[26%]" />
               </colgroup>
               <thead className="bg-slate-100 border-b border-slate-100 sticky top-0 z-10">
                 <tr>
