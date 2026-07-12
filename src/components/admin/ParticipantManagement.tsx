@@ -678,7 +678,7 @@ export function ParticipantManagement({
 
       <div className={`bg-white rounded-2xl border-2 border-slate-100 overflow-hidden ${rowsScrollOnly ? "flex-1 min-h-0" : ""}`}>
         <div className={rowsScrollOnly ? "h-full overflow-auto" : "overflow-x-auto"}>
-          <table className="w-full table-fixed">
+          <table className="w-full table-fixed min-w-[1000px]">
             <colgroup>
               <col className="w-[14%]" />
               <col className="w-[15%]" />
