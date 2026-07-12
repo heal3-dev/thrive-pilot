@@ -678,15 +678,15 @@ export function ParticipantManagement({
 
       <div className={`bg-white rounded-2xl border-2 border-slate-100 overflow-hidden ${rowsScrollOnly ? "flex-1 min-h-0" : ""}`}>
         <div className={rowsScrollOnly ? "h-full overflow-auto" : "overflow-x-auto"}>
-          <table className="w-full table-fixed min-w-[1000px]">
+          <table className="w-full table-fixed">
             <colgroup>
-              <col className="w-[12%]" />
               <col className="w-[14%]" />
               <col className="w-[15%]" />
-              <col className="w-[15%]" />
+              <col className="w-[18%]" />
+              <col className="w-[17%]" />
               <col className="w-[12%]" />
               <col className="w-[9%]" />
-              <col className="w-[23%]" />
+              <col className="w-[14%]" />
             </colgroup>
             <thead className={`bg-slate-100 border-b border-slate-100 ${rowsScrollOnly ? "sticky top-0 z-10" : ""}`}>
               <tr>

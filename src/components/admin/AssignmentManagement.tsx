@@ -320,11 +320,11 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
           <div className="h-full overflow-auto">
             <table className="w-full table-fixed min-w-[800px]">
               <colgroup>
-                <col className="w-[22%]" />
-                <col className="w-[22%]" />
-                <col className="w-[14%]" />
+                <col className="w-[24%]" />
+                <col className="w-[24%]" />
+                <col className="w-[15%]" />
                 <col className="w-[16%]" />
-                <col className="w-[26%]" />
+                <col className="w-[21%]" />
               </colgroup>
               <thead className="bg-slate-100 border-b border-slate-100 sticky top-0 z-10">
                 <tr>
@@ -332,7 +332,7 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
                   <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase">Mentor</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase">Assigned</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase">Status</th>
-                  <th className="text-right px-6 py-4 text-xs font-bold text-slate-700 uppercase">Actions</th>
+                  <th className="text-right px-4 py-4 text-xs font-bold text-slate-700 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -383,7 +383,7 @@ export function AssignmentManagement({ initialModal }: { initialModal?: "assign"
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-4">
                           <div className="flex items-center justify-end gap-2">
                             {assignment.status === "never_assigned" ? (
                               <Button

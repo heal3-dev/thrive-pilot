@@ -249,13 +249,13 @@ export function MentorManagement({ initialModal }: { initialModal?: "add" }) {
       {/* Mentors Table */}
       <div className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden flex-1 min-h-0">
         <div className="h-full overflow-auto">
-          <table className="w-full table-fixed min-w-[800px]">
+          <table className="w-full table-fixed">
             <colgroup>
-              <col className="w-[20%]" />
               <col className="w-[22%]" />
-              <col className="w-[14%]" />
-              <col className="w-[16%]" />
               <col className="w-[28%]" />
+              <col className="w-[15%]" />
+              <col className="w-[15%]" />
+              <col className="w-[20%]" />
             </colgroup>
             <thead className="bg-slate-100 border-b border-slate-100 sticky top-0 z-10">
               <tr>
