@@ -77,6 +77,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Strip legacy hardcoded placeholder name ("Deanna" / "Deana") from <title> in already-generated reports.
+  html = html.replace(/(<title[^>]*>[\s\S]*?)\s*[-–—]\s*Deann?a\s*(<\/title>)/i, "$1$2");
+
   // Best-effort audit.
   if (isMonthly) {
     void admin

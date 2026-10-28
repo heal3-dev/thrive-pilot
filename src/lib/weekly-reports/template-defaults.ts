@@ -451,7 +451,7 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Thrive Weekly Report - Deanna</title>
+  <title>Thrive Weekly Report</title>
   <style>
     :root{
       --page:#fffdf7;
@@ -651,7 +651,7 @@ export const DEFAULT_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
 <body>
   <div class="wrap">
     <div class="eyebrow">Thrive Weekly Report</div>
-    <h1>Deanna</h1>
+    <h1>Participant</h1>
     <p class="sub">April 25 – May 1, 2025</p>
  
     <div class="badge">
@@ -1294,7 +1294,7 @@ export const DEFAULT_MONTHLY_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Thrive Monthly Report - Deanna</title>
+  <title>Thrive Monthly Report</title>
   <style>
     :root{
       --page:#fffdf7;
@@ -1494,7 +1494,7 @@ export const DEFAULT_MONTHLY_OLGA_HTML_BASE_TEMPLATE = `<!DOCTYPE html>
 <body>
   <div class="wrap">
     <div class="eyebrow">Thrive Monthly Report</div>
-    <h1>Deanna</h1>
+    <h1>Participant</h1>
     <p class="sub">April 1 – April 28, 2025</p>
 
     <div class="badge">

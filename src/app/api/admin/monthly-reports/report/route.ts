@@ -37,6 +37,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: `Failed to load monthly report: ${error.message}` }, { status: 500 });
   }
 
+  if (data && typeof data.html === "string") {
+    data.html = data.html.replace(/(<title[^>]*>[\s\S]*?)\s*[-–—]\s*Deann?a\s*(<\/title>)/i, "$1$2");
+  }
+
   return NextResponse.json({ report: data ?? null });
 }
 
@@ -51,6 +55,8 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
+  const cleanedHtml = payload.html.replace(/(<title[^>]*>[\s\S]*?)\s*[-–—]\s*Deann?a\s*(<\/title>)/i, "$1$2");
+
   const { data, error } = await guard.admin
     .from("monthly_reports")
     .upsert(
@@ -60,7 +66,7 @@ export async function PUT(request: Request) {
         month_range: payload.monthRange,
         badge_label: payload.badgeLabel,
         badge_icon: payload.badgeIcon,
-        html: payload.html,
+        html: cleanedHtml,
         outreach_text: payload.outreachText || null,
         status: "draft",
         approved_at: null,

@@ -435,6 +435,7 @@ function fillOlgaTemplate(params: {
   html = html.replace(/\{\{GROUP_RECOVERY_AVG\}\}/g, params.groupAverages.body_battery_start != null ? String(params.groupAverages.body_battery_start) : "—");
 
   // Top section
+  html = replaceFirst(html, /(<title[^>]*>)([\s\S]*?)(<\/title>)/i, "Thrive Weekly Report");
   html = replaceFirst(html, /(<h1[^>]*>)([\s\S]*?)(<\/h1>)/i, safeName);
   html = replaceFirst(html, /(<p\s+class="sub"[^>]*>)([\s\S]*?)(<\/p>)/i, safeRange);
   html = replaceFirst(html, /(<div\s+class="icon"[^>]*>)([\s\S]*?)(<\/div>)/i, escapeHtml(params.badgeIcon));

@@ -34,7 +34,8 @@ function normalizeCardStateLabel(input: string): string | null {
 }
 
 function normalizeHtmlStateLabels(html: string): string {
-  return html.replace(/(<div\s+class="state"[^>]*>)([\s\S]*?)(<\/div>)/gi, (_m, p1: string, inner: string, p3: string) => {
+  const cleanedTitle = html.replace(/(<title[^>]*>[\s\S]*?)\s*[-–—]\s*Deann?a\s*(<\/title>)/i, "$1$2");
+  return cleanedTitle.replace(/(<div\s+class="state"[^>]*>)([\s\S]*?)(<\/div>)/gi, (_m, p1: string, inner: string, p3: string) => {
     const stripped = inner.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
     const normalized = normalizeCardStateLabel(stripped);
     if (!normalized) return `${p1}${inner}${p3}`;

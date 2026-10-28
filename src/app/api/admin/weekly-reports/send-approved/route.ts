@@ -42,6 +42,7 @@ async function ensureEmailJob(params: {
 
   const subject = `Thrive Weekly Report (${report.week_range})`;
   const idempotencyKey = `weekly-report:${report.id}`;
+  const cleanedHtml = report.html.replace(/(<title[^>]*>[\s\S]*?)\s*[-–—]\s*Deann?a\s*(<\/title>)/i, "$1$2");
 
   const { data: inserted, error: insertErr } = await admin
     .from("email_jobs")
@@ -50,7 +51,7 @@ async function ensureEmailJob(params: {
         kind: "weekly_report",
         to_email: to,
         subject,
-        html: report.html,
+        html: cleanedHtml,
         idempotency_key: idempotencyKey,
       },
       { onConflict: "idempotency_key", ignoreDuplicates: true }
