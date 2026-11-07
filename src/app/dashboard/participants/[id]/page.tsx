@@ -38,6 +38,48 @@ export default function ParticipantDetailsPage() {
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [metricsView, setMetricsView] = useState<"table" | "charts">("table");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportParticipantCsv = useCallback(async () => {
+    if (isExporting || !participant) return;
+    setIsExporting(true);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+
+      const res = await fetch(
+        `/api/admin/export?category=biometrics&participantId=${encodeURIComponent(participant.id)}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!res.ok) return;
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = /filename="([^"]+)"/i.exec(disposition);
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const filename = match?.[1] ?? `thrive-biometrics-${participant.id}-${dateStamp}.csv`;
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Failed to export participant metrics CSV:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting, participant]);
 
   const getEndpoint = useCallback(
     (offset: number) => {
@@ -242,29 +284,45 @@ export default function ParticipantDetailsPage() {
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
           <h3 className="font-semibold text-slate-800">Daily Metrics</h3>
 
-          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-            <button
-              type="button"
-              onClick={() => setMetricsView("table")}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${
-                metricsView === "table"
-                  ? "bg-slate-200 text-slate-900 shadow-inner"
-                  : "text-slate-600 hover:bg-white"
-              }`}
-            >
-              Table
-            </button>
-            <button
-              type="button"
-              onClick={() => setMetricsView("charts")}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${
-                metricsView === "charts"
-                  ? "bg-slate-200 text-slate-900 shadow-inner"
-                  : "text-slate-600 hover:bg-white"
-              }`}
-            >
-              Charts
-            </button>
+          <div className="flex items-center gap-3">
+            {mentor.role === "admin" && !id.startsWith("demo-") && metrics.length > 0 && (
+              <button
+                type="button"
+                onClick={handleExportParticipantCsv}
+                disabled={isExporting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60"
+              >
+                <svg className="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {isExporting ? "Exporting..." : "Export CSV"}
+              </button>
+            )}
+
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setMetricsView("table")}
+                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                  metricsView === "table"
+                    ? "bg-slate-200 text-slate-900 shadow-inner"
+                    : "text-slate-600 hover:bg-white"
+                }`}
+              >
+                Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetricsView("charts")}
+                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                  metricsView === "charts"
+                    ? "bg-slate-200 text-slate-900 shadow-inner"
+                    : "text-slate-600 hover:bg-white"
+                }`}
+              >
+                Charts
+              </button>
+            </div>
           </div>
         </div>
 

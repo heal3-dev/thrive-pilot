@@ -122,6 +122,31 @@ export default async function GarminConnectPage({
     state,
   });
 
-  // Step 7: Redirect to Garmin for user authorization
-  redirect(authUrl);
+  // Step 7: Render a client-side navigation handoff with an explicit fallback link.
+  // On Android (especially Gmail/Outlook in-app WebViews or when the Garmin Connect app is installed),
+  // a server-side 307 redirect chain to connect.garmin.com/oauthConfirm can be intercepted or dropped,
+  // resulting in a blank white screen.
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 shadow-lg p-6 text-center">
+        <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-teal-600 mb-4" />
+        <h1 className="text-xl font-bold text-slate-900 mb-2">Connecting to Garmin…</h1>
+        <p className="text-sm text-slate-600 mb-6">
+          You are being redirected to Garmin Connect to sign in and authorize Thrive Pilot.
+        </p>
+        <button
+          id="garmin-continue-btn"
+          type="button"
+          className="inline-flex items-center justify-center w-full px-4 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm transition-colors cursor-pointer"
+        >
+          Continue to Garmin Sign In
+        </button>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var u=${JSON.stringify(authUrl)};var b=document.getElementById("garmin-continue-btn");if(b){b.onclick=function(){window.location.assign(u);};}window.location.replace(u);})();`,
+          }}
+        />
+      </div>
+    </div>
+  );
 }

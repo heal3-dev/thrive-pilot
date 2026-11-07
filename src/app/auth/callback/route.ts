@@ -120,11 +120,11 @@ export async function POST(request: Request) {
     if (error) {
       console.error('[AUTH_CALLBACK] Code exchange error:', error)
       if (isGarminConnect) {
-        return NextResponse.redirect(new URL('/garmin/error?reason=invalid_link', requestUrl.origin))
+        return NextResponse.redirect(new URL('/garmin/error?reason=invalid_link', requestUrl.origin), { status: 303 })
       }
-      return NextResponse.redirect(new URL('/?error=auth_code_error', requestUrl.origin))
+      return NextResponse.redirect(new URL('/?error=auth_code_error', requestUrl.origin), { status: 303 })
     }
-    return NextResponse.redirect(new URL(next, requestUrl.origin))
+    return NextResponse.redirect(new URL(next, requestUrl.origin), { status: 303 })
   }
 
   // OTP/token hash flow (magic links, invites with token_hash)
@@ -137,13 +137,13 @@ export async function POST(request: Request) {
     if (error) {
       console.error('[AUTH_CALLBACK] OTP verification error:', error)
       if (isGarminConnect) {
-        return NextResponse.redirect(new URL('/garmin/error?reason=invalid_link', requestUrl.origin))
+        return NextResponse.redirect(new URL('/garmin/error?reason=invalid_link', requestUrl.origin), { status: 303 })
       }
-      return NextResponse.redirect(new URL('/?error=invalid_token', requestUrl.origin))
+      return NextResponse.redirect(new URL('/?error=invalid_token', requestUrl.origin), { status: 303 })
     }
-    return NextResponse.redirect(new URL(next, requestUrl.origin))
+    return NextResponse.redirect(new URL(next, requestUrl.origin), { status: 303 })
   }
 
   console.error('[AUTH_CALLBACK] No code or token_hash provided (POST)')
-  return NextResponse.redirect(new URL('/', requestUrl.origin))
+  return NextResponse.redirect(new URL('/', requestUrl.origin), { status: 303 })
 }
