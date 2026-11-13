@@ -253,6 +253,25 @@ function compareByParticipantThenDateDesc(
   return b.dateStr.localeCompare(a.dateStr);
 }
 
+/**
+ * Excel on Windows renders colored-circle emoji (🟢🟡🟠🔴) in monochrome, so exports
+ * include a plain-text color name alongside the stored emoji.
+ */
+function badgeColorName(icon: unknown, label?: unknown): string {
+  const s = typeof icon === "string" ? icon : "";
+  if (s.includes("🟢")) return "Green";
+  if (s.includes("🟡")) return "Yellow";
+  if (s.includes("🟠")) return "Orange";
+  if (s.includes("🔴")) return "Red";
+  if (s.includes("⚪")) return "Grey";
+  const l = typeof label === "string" ? label.toLowerCase() : "";
+  if (/\bgreen\b/.test(l)) return "Green";
+  if (/\byellow\b/.test(l)) return "Yellow";
+  if (/\borange\b/.test(l)) return "Orange";
+  if (/\bred\b/.test(l)) return "Red";
+  return "";
+}
+
 function buildParticipantSlug(pInfo: ParticipantInfo | undefined, fallbackId: string): string {
   return (
     (pInfo?.name || pInfo?.email || fallbackId)
@@ -789,6 +808,7 @@ export async function GET(request: Request) {
         "week_ending",
         "week_range",
         "badge_label",
+        "badge_color",
         "badge_icon",
         "status",
         "outreach_text",
@@ -822,6 +842,7 @@ export async function GET(request: Request) {
             week_ending: r.week_ending ?? "",
             participant_name: participant?.name ?? "",
             participant_email: participant?.email ?? "",
+            badge_color: badgeColorName(r.badge_icon, r.badge_label),
             share_token: share?.token ?? "",
             share_access_count: share?.access_count ?? "",
             share_last_accessed_at: share?.last_accessed_at ?? "",
@@ -883,6 +904,7 @@ export async function GET(request: Request) {
         "month_ending",
         "month_range",
         "badge_label",
+        "badge_color",
         "badge_icon",
         "status",
         "outreach_text",
@@ -916,6 +938,7 @@ export async function GET(request: Request) {
             month_ending: r.month_ending ?? "",
             participant_name: participant?.name ?? "",
             participant_email: participant?.email ?? "",
+            badge_color: badgeColorName(r.badge_icon, r.badge_label),
             share_token: share?.token ?? "",
             share_access_count: share?.access_count ?? "",
             share_last_accessed_at: share?.last_accessed_at ?? "",
